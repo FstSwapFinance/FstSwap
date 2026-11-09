@@ -1,0 +1,200 @@
+// Snapshot of the default GitHub list; fallback for offline startup.
+export default {
+  "name": "FstSwap",
+  "logoURI": "https://fstswap11.netlify.app/imgs/FstSwap.png",
+  "keywords": [
+    "defi"
+  ],
+  "timestamp": "2026-11-09T21:28:20.552Z",
+  "tokens": [
+    {
+      "chainId": 56,
+      "address": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+      "name": "WBNB Token",
+      "symbol": "WBNB",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d",
+      "name": "World Liberty Financial USD1",
+      "symbol": "USD1",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0x55d398326f99059fF775485246999027B3197955",
+      "name": "Binance Pegged USDT",
+      "symbol": "USDT",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0x55d398326f99059fF775485246999027B3197955.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56",
+      "name": "Binance Pegged BUSD",
+      "symbol": "BUSD",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0xC9882dEF23bc42D53895b8361D0b1EDC7570Bc6A",
+      "name": "FistToken",
+      "symbol": "FIST",
+      "decimals": 6,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0xc9882def23bc42d53895b8361d0b1edc7570bc6a.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+      "name": "Binance Pegged USD Coin",
+      "symbol": "USDC",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",
+      "name": "Binance Pegged Bitcoin",
+      "symbol": "BTCB",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0xd25bd6f78e4043ff166468e16bdd4b3aa31e022d",
+      "name": "MoDa",
+      "symbol": "MoDa",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0xd25bd6f78e4043ff166468e16bdd4b3aa31e022d.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0xD8B3EF86AFCE18EdbA91fED481ABE22F173597C1",
+      "name": "MSN",
+      "symbol": "MSN",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0xD8B3EF86AFCE18EdbA91fED481ABE22F173597C1.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0x04fa9eb295266d9d4650edcb879da204887dc3da",
+      "name": "OSK Token",
+      "symbol": "OSK",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0x04fa9eb295266d9d4650edcb879da204887dc3da.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0x12a055d95855b4ec2cd70c1a5eadb1ed43eaef65",
+      "name": "Fonvity Token",
+      "symbol": "FON",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0x12a055d95855b4ec2cd70c1a5eadb1ed43eaef65.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0xb3260119514f2d9645de050fb33874fb4d4d0ae1",
+      "name": "Bull coin Club",
+      "symbol": "BCC",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0xb3260119514f2d9645de050fb33874fb4d4d0ae1.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0xeaaf0923562a192bf1eab0e8f7e7977fbef99999",
+      "name": "BCC",
+      "symbol": "BCC",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0xeaaf0923562a192bf1eab0e8f7e7977fbef99999.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0xcf9f47937af27a19b656dbcc462e1f99ec999999",
+      "name": "炎黄币",
+      "symbol": "YH",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0xcf9f47937af27a19b656dbcc462e1f99ec999999.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0x4b1aacd47bed1bd9f91935abe149dfd8b2777777",
+      "name": "atwrwa",
+      "symbol": "AW",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0x4b1aacd47bed1bd9f91935abe149dfd8b2777777.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0xf680a123a18b076b305bd420de5f7b7ebeb56666",
+      "name": "HGDAO",
+      "symbol": "HGDAO",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0xf680a123a18b076b305bd420de5f7b7ebeb56666.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0xe4bcb3bcbb76c3531d1e8d2e9ddbdbe8fcab38e5",
+      "name": "ZTDAO",
+      "symbol": "ZT",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0xe4bcb3bcbb76c3531d1e8d2e9ddbdbe8fcab38e5.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0x20ca0158ae3b37df5aa8f1c32a9a253654131419",
+      "name": "吉祥小马",
+      "symbol": "吉祥小马",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0x20ca0158ae3b37df5aa8f1c32a9a253654131419.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0xaf51951dF5782fa6EB529c173b10A973E4871F92",
+      "name": "msn",
+      "symbol": "msn",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0xaf51951dF5782fa6EB529c173b10A973E4871F92.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0xe68a62531202222ebd67e2f5688be0d22831eddd",
+      "name": "FP",
+      "symbol": "FP",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0xe68a62531202222ebd67e2f5688be0d22831eddd.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0xe46990b25e8a9aef4451b972365f1945de7a9999",
+      "name": "花木兰",
+      "symbol": "花木兰",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0xe46990b25e8a9aef4451b972365f1945de7a9999.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0x6cb626c895381F8AF4f580392c3D6CF8DD331A22",
+      "name": "Cmsn",
+      "symbol": "Cmsn",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0x6cb626c895381F8AF4f580392c3D6CF8DD331A22.png"
+    },
+    {
+      "chainId": 56,
+      "address": "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",
+      "name": "Binance Pegged ETH",
+      "symbol": "ETH",
+      "decimals": 18,
+      "logoURI": "https://fstswap11.netlify.app/imgs/0x2170Ed0880ac9A755fd29B2688956BD959F933F8.png"
+    }
+  ],
+  "version": {
+    "major": 2,
+    "minor": 0,
+    "patch": 22
+  }
+};

@@ -1,0 +1,20 @@
+{
+  "chainId": 56,
+  "owner": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+  "feeReceiver": "0x66f2B90E9fAEf07E5931A3483882804B78f92Ae9",
+  "platformFeeBps": 30,
+  "defaultFeeToken": "0x55d398326f99059fF775485246999027B3197955",
+  "status": "deployed",
+  "userConfirmed": "2026-11-10",
+  "deployer": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+  "deployedConfig": {
+    "router": "0x6b149377b0d68c7cF09DDa6B6467861D997C9646",
+    "adapters": {
+      "fst": "0xB3F425939E0bef2E1312376dF2288CF8a39A63E5",
+      "pancake": "0xe3f83002413c029BA7F194a878b8C36B03d3d8a0",
+      "biswap": "0xA2Be5520ef3FE334fCB68E649787636b3ff84A65",
+      "v3": "0x43B2Ede2217ACd3de6542F7C4baFEb488cbbC7a2"
+    }
+  },
+  "deploymentRecord": "mainnet-record.json"
+}

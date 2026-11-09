@@ -1,0 +1,8 @@
+Bundled license information:
+
+@scure/base/lib/esm/index.js:
+  /*! scure-base - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+
+@walletconnect/relay-auth/dist/index.es.js:
+  /*! noble-hashes - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+  /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */

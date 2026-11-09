@@ -1,0 +1,160 @@
+{
+  "network": "BSC MAINNET",
+  "chainId": 56,
+  "verifiedAt": "2026-11-09T21:48:19.128Z",
+  "config": {
+    "router": "0x6b149377b0d68c7cF09DDa6B6467861D997C9646",
+    "adapters": {
+      "fst": "0xB3F425939E0bef2E1312376dF2288CF8a39A63E5",
+      "pancake": "0xe3f83002413c029BA7F194a878b8C36B03d3d8a0",
+      "biswap": "0xA2Be5520ef3FE334fCB68E649787636b3ff84A65",
+      "v3": "0x43B2Ede2217ACd3de6542F7C4baFEb488cbbC7a2"
+    }
+  },
+  "parameters": {
+    "owner": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+    "feeReceiver": "0x66f2B90E9fAEf07E5931A3483882804B78f92Ae9",
+    "platformFeeBps": "30",
+    "defaultFeeToken": "0x55d398326f99059fF775485246999027B3197955",
+    "feeConfigVersion": "1",
+    "VERSION": "1.11",
+    "WBNB": "0x0efb5FD2402A0967B92551d6AF54De148504A115",
+    "routeEngine": "0x94792e859ffeDbAa0b789E438Ed27FF1b92601A2"
+  },
+  "codeChecks": [
+    {
+      "address": "0x6b149377b0d68c7cF09DDa6B6467861D997C9646",
+      "name": "AggregatedRouterV10",
+      "bytes": 22254,
+      "runtimeLogicMatch": true,
+      "metadataMatch": false
+    },
+    {
+      "address": "0xB3F425939E0bef2E1312376dF2288CF8a39A63E5",
+      "name": "FstSwapAdapter56",
+      "bytes": 3961,
+      "runtimeLogicMatch": true,
+      "metadataMatch": false
+    },
+    {
+      "address": "0xe3f83002413c029BA7F194a878b8C36B03d3d8a0",
+      "name": "PancakeAdapter56",
+      "bytes": 3961,
+      "runtimeLogicMatch": true,
+      "metadataMatch": false
+    },
+    {
+      "address": "0xA2Be5520ef3FE334fCB68E649787636b3ff84A65",
+      "name": "BiSwapAdapter56",
+      "bytes": 3960,
+      "runtimeLogicMatch": true,
+      "metadataMatch": false
+    },
+    {
+      "address": "0x43B2Ede2217ACd3de6542F7C4baFEb488cbbC7a2",
+      "name": "PancakeV3Adapter",
+      "bytes": 4703,
+      "runtimeLogicMatch": true,
+      "metadataMatch": false
+    },
+    {
+      "address": "0x94792e859ffeDbAa0b789E438Ed27FF1b92601A2",
+      "name": "V10RouteEngine",
+      "bytes": 11110,
+      "runtimeLogicMatch": true,
+      "metadataMatch": false
+    }
+  ],
+  "transactions": [
+    {
+      "nonce": 0,
+      "hash": "0x48055c8eb85a73bd8734a35ce2db2915b3ced73a3c5d984840b2146988275907",
+      "blockNumber": 132653248,
+      "blockHash": "0x9f3e53a41a715a99793d2dae2011aa55952b9be90ce2f88f25aa8a442c4fed53",
+      "contractAddress": "0x6b149377b0d68c7cf09dda6b6467861d997c9646",
+      "to": null,
+      "status": "0x1",
+      "gasUsed": "0x70cd88"
+    },
+    {
+      "nonce": 1,
+      "hash": "0x62f15a8ff73a97e21477043c34e78aac37598248549c7ffc9cc5fcf5d0a57b8d",
+      "blockNumber": 132653298,
+      "blockHash": "0xaf270f5d21ffafdc010b789f2761ebe847f9a25335d4366d7aacc861c89c56dd",
+      "contractAddress": "0xb3f425939e0bef2e1312376df2288cf8a39a63e5",
+      "to": null,
+      "status": "0x1",
+      "gasUsed": "0xde24d"
+    },
+    {
+      "nonce": 2,
+      "hash": "0x9f151e96484a58e1b87b7b03df88c66358ac26b6e1b7aba2757abc20eedf122a",
+      "blockNumber": 132653343,
+      "blockHash": "0x521713906f317bf8a8ab6afee09b8b5baad528cceaa1e0e4a641e827a9a60874",
+      "contractAddress": "0xe3f83002413c029ba7f194a878b8c36b03d3d8a0",
+      "to": null,
+      "status": "0x1",
+      "gasUsed": "0xde24d"
+    },
+    {
+      "nonce": 3,
+      "hash": "0x63d245988af4eb80bf9d016d2eb0f92932378a678fe81ccb4a13785c85e3827c",
+      "blockNumber": 132653541,
+      "blockHash": "0x5d136b93ccc82d0fda24b67f07314e82fe8afa3eb880cacab087cd9a169e44a4",
+      "contractAddress": "0xa2be5520ef3fe334fcb68e649787636b3ff84a65",
+      "to": null,
+      "status": "0x1",
+      "gasUsed": "0xde169"
+    },
+    {
+      "nonce": 4,
+      "hash": "0x8b403f3b5790875534300ec8b65c44ba23f3476985a9bfb61caa7322e4e6e53a",
+      "blockNumber": 132653623,
+      "blockHash": "0x6f735a215a2c5187ab6a93de6577d98d83773cede613ceadab8b6ca7e2439891",
+      "contractAddress": "0x43b2ede2217acd3de6542f7c4bafeb488cbbc7a2",
+      "to": null,
+      "status": "0x1",
+      "gasUsed": "0x106321"
+    },
+    {
+      "nonce": 5,
+      "hash": "0x1184b816e5c769c085b412f94e43e2179de5c8f6e372a6ff4b0183799081dd5a",
+      "blockNumber": 132653752,
+      "blockHash": "0x2f1fbb99f578ae12ff4bbbe9b1ebaadd316315d6d5b1dd019d713d44e348f474",
+      "contractAddress": null,
+      "to": "0x6b149377b0d68c7cf09dda6b6467861d997c9646",
+      "status": "0x1",
+      "gasUsed": "0xf09c"
+    },
+    {
+      "nonce": 6,
+      "hash": "0xbe9d1c2012ecb8595f2aa5789cf686194cb5878bfa838f370f7bb9215ebd9d0c",
+      "blockNumber": 132654014,
+      "blockHash": "0xd3d5421a5082d5006007cdbcb600e06f0b1abc40b69d19256c7521a5747fcab9",
+      "contractAddress": null,
+      "to": "0x6b149377b0d68c7cf09dda6b6467861d997c9646",
+      "status": "0x1",
+      "gasUsed": "0xf09c"
+    },
+    {
+      "nonce": 7,
+      "hash": "0x7f37c7aa0143108561c01165a24517421034255fe3903678f7410ef63a1a7795",
+      "blockNumber": 132654156,
+      "blockHash": "0xb4bcb8c815e7dd042e4ae3d970a491b76a7d0c91cddd11bb6e813a41b5066a92",
+      "contractAddress": null,
+      "to": "0x6b149377b0d68c7cf09dda6b6467861d997c9646",
+      "status": "0x1",
+      "gasUsed": "0xf09c"
+    },
+    {
+      "nonce": 8,
+      "hash": "0x0985e8e1dbd485478cc2ca7dc4f74ab9e88b84e5f6243df054ff15f94ad3dfae",
+      "blockNumber": 132654408,
+      "blockHash": "0x06ca67aeba8fef8684db51cddbf3b64168b6d9c351b8e528b2105782a2c73715",
+      "contractAddress": null,
+      "to": "0x6b149377b0d68c7cf09dda6b6467861d997c9646",
+      "status": "0x1",
+      "gasUsed": "0xf0a8"
+    }
+  ]
+}

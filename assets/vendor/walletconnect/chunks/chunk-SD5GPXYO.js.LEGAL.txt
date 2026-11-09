@@ -1,0 +1,19 @@
+Bundled license information:
+
+@lit/reactive-element/css-tag.mjs:
+  /**
+   * @license
+   * Copyright 2019 Google LLC
+   * SPDX-License-Identifier: BSD-3-Clause
+   */
+
+@lit/reactive-element/reactive-element.mjs:
+lit-html/lit-html.mjs:
+lit-element/lit-element.mjs:
+@lit/reactive-element/decorators/custom-element.mjs:
+@lit/reactive-element/decorators/property.mjs:
+  /**
+   * @license
+   * Copyright 2017 Google LLC
+   * SPDX-License-Identifier: BSD-3-Clause
+   */

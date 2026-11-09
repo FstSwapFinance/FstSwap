@@ -1,0 +1,804 @@
+[
+  {
+    "name": "@adraffy/ens-normalize",
+    "version": "1.11.1",
+    "license": "MIT",
+    "files": [
+      "licenses/adraffy-ens-normalize-1.11.1-LICENSE"
+    ]
+  },
+  {
+    "name": "@lit/reactive-element",
+    "version": "2.1.2",
+    "license": "BSD-3-Clause",
+    "files": [
+      "licenses/lit-reactive-element-2.1.2-LICENSE"
+    ]
+  },
+  {
+    "name": "@msgpack/msgpack",
+    "version": "3.1.3",
+    "license": "ISC",
+    "files": [
+      "licenses/msgpack-msgpack-3.1.3-LICENSE"
+    ]
+  },
+  {
+    "name": "@noble/ciphers",
+    "version": "1.3.0",
+    "license": "MIT",
+    "files": [
+      "licenses/noble-ciphers-1.3.0-LICENSE"
+    ]
+  },
+  {
+    "name": "@phosphor-icons/webcomponents",
+    "version": "2.1.5",
+    "license": "MIT",
+    "files": [
+      "licenses/phosphor-icons-webcomponents-2.1.5-LICENSE"
+    ]
+  },
+  {
+    "name": "@reown/appkit",
+    "version": "1.8.19",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/reown-appkit-1.8.19-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@reown/appkit-common",
+    "version": "1.8.19",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/reown-appkit-common-1.8.19-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@reown/appkit-controllers",
+    "version": "1.8.19",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/reown-appkit-controllers-1.8.19-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@noble/hashes",
+    "version": "1.8.0",
+    "license": "MIT",
+    "files": [
+      "licenses/noble-hashes-1.8.0-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/core",
+    "version": "2.23.7",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-core-2.23.7-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@walletconnect/sign-client",
+    "version": "2.23.7",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-sign-client-2.23.7-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@walletconnect/types",
+    "version": "2.23.7",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-types-2.23.7-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@walletconnect/universal-provider",
+    "version": "2.23.7",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-universal-provider-2.23.7-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@walletconnect/utils",
+    "version": "2.23.7",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-utils-2.23.7-LICENSE.md"
+    ]
+  },
+  {
+    "name": "abitype",
+    "version": "1.3.0",
+    "license": "MIT",
+    "files": [
+      "licenses/abitype-1.3.0-LICENSE"
+    ]
+  },
+  {
+    "name": "ox",
+    "version": "0.9.3",
+    "license": "MIT",
+    "files": [
+      "licenses/ox-0.9.3-LICENSE"
+    ]
+  },
+  {
+    "name": "@noble/curves",
+    "version": "1.9.1",
+    "license": "MIT",
+    "files": [
+      "licenses/noble-curves-1.9.1-LICENSE"
+    ]
+  },
+  {
+    "name": "@reown/appkit-pay",
+    "version": "1.8.19",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/reown-appkit-pay-1.8.19-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@reown/appkit-polyfills",
+    "version": "1.8.19",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/reown-appkit-polyfills-1.8.19-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@reown/appkit-scaffold-ui",
+    "version": "1.8.19",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/reown-appkit-scaffold-ui-1.8.19-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@reown/appkit-ui",
+    "version": "1.8.19",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/reown-appkit-ui-1.8.19-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@reown/appkit-utils",
+    "version": "1.8.19",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/reown-appkit-utils-1.8.19-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@reown/appkit-wallet",
+    "version": "1.8.19",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/reown-appkit-wallet-1.8.19-LICENSE.md"
+    ]
+  },
+  {
+    "name": "zod",
+    "version": "3.22.4",
+    "license": "MIT",
+    "files": [
+      "licenses/zod-3.22.4-LICENSE"
+    ]
+  },
+  {
+    "name": "@noble/hashes",
+    "version": "1.8.0",
+    "license": "MIT",
+    "files": [
+      "licenses/noble-hashes-1.8.0-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/core",
+    "version": "2.23.7",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-core-2.23.7-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@walletconnect/sign-client",
+    "version": "2.23.7",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-sign-client-2.23.7-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@walletconnect/types",
+    "version": "2.23.7",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-types-2.23.7-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@walletconnect/universal-provider",
+    "version": "2.23.7",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-universal-provider-2.23.7-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@walletconnect/utils",
+    "version": "2.23.7",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-utils-2.23.7-LICENSE.md"
+    ]
+  },
+  {
+    "name": "abitype",
+    "version": "1.3.0",
+    "license": "MIT",
+    "files": [
+      "licenses/abitype-1.3.0-LICENSE"
+    ]
+  },
+  {
+    "name": "ox",
+    "version": "0.9.3",
+    "license": "MIT",
+    "files": [
+      "licenses/ox-0.9.3-LICENSE"
+    ]
+  },
+  {
+    "name": "@noble/curves",
+    "version": "1.9.1",
+    "license": "MIT",
+    "files": [
+      "licenses/noble-curves-1.9.1-LICENSE"
+    ]
+  },
+  {
+    "name": "@scure/base",
+    "version": "1.2.6",
+    "license": "MIT",
+    "files": [
+      "licenses/scure-base-1.2.6-LICENSE"
+    ]
+  },
+  {
+    "name": "@scure/bip32",
+    "version": "1.7.0",
+    "license": "MIT",
+    "files": [
+      "licenses/scure-bip32-1.7.0-LICENSE"
+    ]
+  },
+  {
+    "name": "@noble/curves",
+    "version": "1.9.7",
+    "license": "MIT",
+    "files": [
+      "licenses/noble-curves-1.9.7-LICENSE"
+    ]
+  },
+  {
+    "name": "@noble/hashes",
+    "version": "1.8.0",
+    "license": "MIT",
+    "files": [
+      "licenses/noble-hashes-1.8.0-LICENSE"
+    ]
+  },
+  {
+    "name": "@scure/bip39",
+    "version": "1.6.0",
+    "license": "MIT",
+    "files": [
+      "licenses/scure-bip39-1.6.0-LICENSE"
+    ]
+  },
+  {
+    "name": "@noble/hashes",
+    "version": "1.8.0",
+    "license": "MIT",
+    "files": [
+      "licenses/noble-hashes-1.8.0-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/core",
+    "version": "2.26.0",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-core-2.26.0-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@walletconnect/environment",
+    "version": "1.0.1",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-environment-1.0.1-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/ethereum-provider",
+    "version": "2.26.0",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-ethereum-provider-2.26.0-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@walletconnect/events",
+    "version": "1.0.1",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-events-1.0.1-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/heartbeat",
+    "version": "1.2.2",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-heartbeat-1.2.2-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/jsonrpc-http-connection",
+    "version": "1.0.8",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-jsonrpc-http-connection-1.0.8-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/jsonrpc-provider",
+    "version": "1.0.14",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-jsonrpc-provider-1.0.14-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/jsonrpc-types",
+    "version": "1.0.4",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-jsonrpc-types-1.0.4-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/jsonrpc-utils",
+    "version": "1.0.8",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-jsonrpc-utils-1.0.8-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/jsonrpc-ws-connection",
+    "version": "1.0.16",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-jsonrpc-ws-connection-1.0.16-LICENSE"
+    ]
+  },
+  {
+    "name": "ws",
+    "version": "7.5.13",
+    "license": "MIT",
+    "files": [
+      "licenses/ws-7.5.13-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/keyvaluestorage",
+    "version": "1.1.1",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-keyvaluestorage-1.1.1-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/logger",
+    "version": "3.0.2",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-logger-3.0.2-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/relay-api",
+    "version": "1.0.11",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-relay-api-1.0.11-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/relay-auth",
+    "version": "1.1.0",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-relay-auth-1.1.0-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/safe-json",
+    "version": "1.0.2",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-safe-json-1.0.2-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/sign-client",
+    "version": "2.26.0",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-sign-client-2.26.0-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@walletconnect/time",
+    "version": "1.0.2",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-time-1.0.2-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/types",
+    "version": "2.26.0",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-types-2.26.0-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@walletconnect/universal-provider",
+    "version": "2.26.0",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-universal-provider-2.26.0-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@walletconnect/utils",
+    "version": "2.26.0",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "files": [
+      "licenses/walletconnect-utils-2.26.0-LICENSE.md"
+    ]
+  },
+  {
+    "name": "@noble/curves",
+    "version": "1.9.7",
+    "license": "MIT",
+    "files": [
+      "licenses/noble-curves-1.9.7-LICENSE"
+    ]
+  },
+  {
+    "name": "@noble/hashes",
+    "version": "1.8.0",
+    "license": "MIT",
+    "files": [
+      "licenses/noble-hashes-1.8.0-LICENSE"
+    ]
+  },
+  {
+    "name": "abitype",
+    "version": "1.3.0",
+    "license": "MIT",
+    "files": [
+      "licenses/abitype-1.3.0-LICENSE"
+    ]
+  },
+  {
+    "name": "ox",
+    "version": "0.9.3",
+    "license": "MIT",
+    "files": [
+      "licenses/ox-0.9.3-LICENSE"
+    ]
+  },
+  {
+    "name": "@noble/curves",
+    "version": "1.9.1",
+    "license": "MIT",
+    "files": [
+      "licenses/noble-curves-1.9.1-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/window-getters",
+    "version": "1.0.1",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-window-getters-1.0.1-LICENSE"
+    ]
+  },
+  {
+    "name": "@walletconnect/window-metadata",
+    "version": "1.0.1",
+    "license": "MIT",
+    "files": [
+      "licenses/walletconnect-window-metadata-1.0.1-LICENSE"
+    ]
+  },
+  {
+    "name": "base-x",
+    "version": "5.0.1",
+    "license": "MIT",
+    "files": [
+      "licenses/base-x-5.0.1-LICENSE.md"
+    ]
+  },
+  {
+    "name": "base64-js",
+    "version": "1.5.1",
+    "license": "MIT",
+    "files": [
+      "licenses/base64-js-1.5.1-LICENSE"
+    ]
+  },
+  {
+    "name": "big.js",
+    "version": "6.2.2",
+    "license": "MIT",
+    "files": [
+      "licenses/big.js-6.2.2-LICENCE.md"
+    ]
+  },
+  {
+    "name": "blakejs",
+    "version": "1.2.1",
+    "license": "MIT",
+    "files": [
+      "licenses/blakejs-1.2.1-LICENSE"
+    ]
+  },
+  {
+    "name": "bs58",
+    "version": "6.0.0",
+    "license": "MIT",
+    "files": [
+      "licenses/bs58-6.0.0-LICENSE"
+    ]
+  },
+  {
+    "name": "buffer",
+    "version": "6.0.3",
+    "license": "MIT",
+    "files": [
+      "licenses/buffer-6.0.3-LICENSE"
+    ]
+  },
+  {
+    "name": "cross-fetch",
+    "version": "3.2.0",
+    "license": "MIT",
+    "files": [
+      "licenses/cross-fetch-3.2.0-LICENSE"
+    ]
+  },
+  {
+    "name": "dayjs",
+    "version": "1.11.13",
+    "license": "MIT",
+    "files": [
+      "licenses/dayjs-1.11.13-LICENSE"
+    ]
+  },
+  {
+    "name": "destr",
+    "version": "2.0.5",
+    "license": "MIT",
+    "files": [
+      "licenses/destr-2.0.5-LICENSE"
+    ]
+  },
+  {
+    "name": "detect-browser",
+    "version": "5.3.0",
+    "license": "MIT",
+    "files": [
+      "licenses/detect-browser-5.3.0-LICENSE"
+    ]
+  },
+  {
+    "name": "dijkstrajs",
+    "version": "1.0.3",
+    "license": "MIT",
+    "files": [
+      "licenses/dijkstrajs-1.0.3-LICENSE.md"
+    ]
+  },
+  {
+    "name": "encode-utf8",
+    "version": "1.0.3",
+    "license": "MIT",
+    "files": []
+  },
+  {
+    "name": "es-toolkit",
+    "version": "1.45.1",
+    "license": "MIT",
+    "files": [
+      "licenses/es-toolkit-1.45.1-LICENSE"
+    ]
+  },
+  {
+    "name": "eventemitter3",
+    "version": "5.0.1",
+    "license": "MIT",
+    "files": [
+      "licenses/eventemitter3-5.0.1-LICENSE"
+    ]
+  },
+  {
+    "name": "events",
+    "version": "3.3.0",
+    "license": "MIT",
+    "files": [
+      "licenses/events-3.3.0-LICENSE"
+    ]
+  },
+  {
+    "name": "idb-keyval",
+    "version": "6.2.1",
+    "license": "Apache-2.0",
+    "files": [
+      "licenses/idb-keyval-6.2.1-LICENCE"
+    ]
+  },
+  {
+    "name": "ieee754",
+    "version": "1.2.1",
+    "license": "BSD-3-Clause",
+    "files": [
+      "licenses/ieee754-1.2.1-LICENSE"
+    ]
+  },
+  {
+    "name": "isows",
+    "version": "1.0.7",
+    "license": "MIT",
+    "files": [
+      "licenses/isows-1.0.7-LICENSE"
+    ]
+  },
+  {
+    "name": "lit",
+    "version": "3.3.0",
+    "license": "BSD-3-Clause",
+    "files": [
+      "licenses/lit-3.3.0-LICENSE"
+    ]
+  },
+  {
+    "name": "lit-element",
+    "version": "4.2.2",
+    "license": "BSD-3-Clause",
+    "files": [
+      "licenses/lit-element-4.2.2-LICENSE"
+    ]
+  },
+  {
+    "name": "lit-html",
+    "version": "3.3.3",
+    "license": "BSD-3-Clause",
+    "files": [
+      "licenses/lit-html-3.3.3-LICENSE"
+    ]
+  },
+  {
+    "name": "multiformats",
+    "version": "9.9.0",
+    "license": "(Apache-2.0 AND MIT)",
+    "files": []
+  },
+  {
+    "name": "proxy-compare",
+    "version": "3.0.1",
+    "license": "MIT",
+    "files": [
+      "licenses/proxy-compare-3.0.1-LICENSE"
+    ]
+  },
+  {
+    "name": "qrcode",
+    "version": "1.5.3",
+    "license": "MIT",
+    "files": [
+      "licenses/qrcode-1.5.3-license"
+    ]
+  },
+  {
+    "name": "tslib",
+    "version": "1.14.1",
+    "license": "0BSD",
+    "files": [
+      "licenses/tslib-1.14.1-LICENSE.txt"
+    ]
+  },
+  {
+    "name": "uint8arrays",
+    "version": "3.1.1",
+    "license": "MIT",
+    "files": []
+  },
+  {
+    "name": "unstorage",
+    "version": "1.17.6",
+    "license": "MIT",
+    "files": [
+      "licenses/unstorage-1.17.6-LICENSE"
+    ]
+  },
+  {
+    "name": "valtio",
+    "version": "2.1.7",
+    "license": "MIT",
+    "files": [
+      "licenses/valtio-2.1.7-LICENSE"
+    ]
+  },
+  {
+    "name": "viem",
+    "version": "2.57.12",
+    "license": "MIT",
+    "files": [
+      "licenses/viem-2.57.12-LICENSE"
+    ]
+  },
+  {
+    "name": "@noble/curves",
+    "version": "1.9.1",
+    "license": "MIT",
+    "files": [
+      "licenses/noble-curves-1.9.1-LICENSE"
+    ]
+  },
+  {
+    "name": "@noble/hashes",
+    "version": "1.8.0",
+    "license": "MIT",
+    "files": [
+      "licenses/noble-hashes-1.8.0-LICENSE"
+    ]
+  },
+  {
+    "name": "abitype",
+    "version": "1.2.3",
+    "license": "MIT",
+    "files": [
+      "licenses/abitype-1.2.3-LICENSE"
+    ]
+  },
+  {
+    "name": "ox",
+    "version": "0.14.59",
+    "license": "MIT",
+    "files": [
+      "licenses/ox-0.14.59-LICENSE"
+    ]
+  },
+  {
+    "name": "qrcode",
+    "version": "1.5.4",
+    "license": "MIT",
+    "files": [
+      "licenses/qrcode-1.5.4-license"
+    ]
+  }
+]

@@ -1,0 +1,85 @@
+{
+  "chainId": 56,
+  "executor": "0xE942BcB9629e04B40eAe6253C88A4Ae1EB94fA08",
+  "version": "v9 multi-pool",
+  "deployedAt": "2026-11-09T13:14:39.698Z",
+  "txs": [
+    {
+      "step": "deploy AggregatedRouter",
+      "hash": "0x4a0787764f71fc0cd6dc8c92c6f6095ca338359e98d9920438b7b26460695dad"
+    },
+    {
+      "step": "deploy FstSwapAdapter56",
+      "hash": "0xb89ccee902c3408c7c1a4f788f0f4ee7ba75f5fb7bea0b7c9a7153d2d02b1bda"
+    },
+    {
+      "step": "setAdapter fst",
+      "hash": "0xa41a907982ee2a1c8a366d04f6864d3d4bd30c0b8aa1ee977a4a5cd8e194b39f"
+    },
+    {
+      "step": "deploy PancakeAdapter56",
+      "hash": "0x835a85b5f4b9e09ca47c2d4731c87a1d90e0b22f352fb9e182bdaa217e20c0ba"
+    },
+    {
+      "step": "setAdapter pancake",
+      "hash": "0xdc5e08dd6ee835747ab30cf10d0cf75c9635e00f5ed52072bb5d0d8bb139aad3"
+    },
+    {
+      "step": "deploy PancakeV3Adapter",
+      "hash": "0xf3245f80bd20feca97b01561cc31fc8f2661addb5f33b90c52063b5e6f8c9264"
+    },
+    {
+      "step": "setAdapter v3",
+      "hash": "0x383eeb45fea34808f92602ecdf09c9d5b44e743cdcb9b1495ef7a851be6865cb"
+    },
+    {
+      "step": "deploy BiSwapAdapter56",
+      "hash": "0x32ed9f20d74f78f163c01f67f3239dfbca19e259688fe1ae51467c0b736709b9"
+    },
+    {
+      "step": "setAdapter biswap",
+      "hash": "0xeccffe3ac2b92f36b0802ec62931e6dbec020b0684acaee8babf8baf497f409f"
+    },
+    {
+      "step": "deploy ThenaAdapter56",
+      "hash": "0xb048834ffe3e749544f4484ab8b241405b7ff4da02a891efaa791a9c66f595b2"
+    },
+    {
+      "step": "setAdapter thena",
+      "hash": "0x7fb1f0514e13cb366378f2dd343b83b5df10e905821b54050e1a38a053c1decc"
+    },
+    {
+      "step": "deploy OneInchAdapter56",
+      "hash": "0x47fd4d89cf71c99d05461321bfa6acb9f3b4d7d7f662f3985b6527ed615a10bb"
+    },
+    {
+      "step": "setAdapter oneinch",
+      "hash": "0x2602292220e6a0268bef5608dc8346112831ef83b136b391a9af38c5036c6dc5"
+    },
+    {
+      "step": "deploy OpenOceanAdapter56",
+      "hash": "0x08fbbd0531537661d06df2586f5bf6abbf7a1aad26716668a2fe5fc6c4770587"
+    },
+    {
+      "step": "setAdapter oo",
+      "hash": "0x6258007ed80a46173d40af21b6520019e38315e9cf6d1b28c2bb1fef5412d877"
+    },
+    {
+      "step": "deploy KyberAdapter56",
+      "hash": "0xc7db2ca6f6cfe125c2f1d10ca65b34c675f6c93bad810ca787dc31c39ae8bc0e"
+    },
+    {
+      "step": "setAdapter kyber",
+      "hash": "0x78565a4b1c15116fafc9dfc77080b8dbf974b0e7a36dbcf9dac7c1483c39768e"
+    }
+  ],
+  "router": "0x0b313506e41a21e178e4F1393e1480f55A3d3FD2",
+  "fst": "0x1c99B958ae3b8eCf1E3684344b18B43F9D31E44d",
+  "pancake": "0xeAfB724dBeAB5c358a432e3958Acdd60141b64F7",
+  "v3": "0xe86dE838B0eFd64ADFCD3F1EA0e0BA04A3d58A4B",
+  "biswap": "0x878e412721fC234f721c84Ca936fcAF89b5637c6",
+  "thena": "0x50e3835222a80A3a043bA52C1f06790c329173d8",
+  "oneinch": "0x9CCff9E56bCeC28D4A4B6f3D7d6EC898bD23d3Bf",
+  "oo": "0x0522eA8be0d99E58E1564266D5E69e0E8849FE38",
+  "kyber": "0xd7b6Ea84711F55b444e10b21F0944D529ED7Ec35"
+}

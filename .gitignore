@@ -1,0 +1,17 @@
+node_modules/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.log
+.tools/
+.match/
+backup/
+exports/
+shots/
+contracts/**/out/
+contracts/**/cache/
+contracts/**/broadcast/
+tests/walk-out/*
+tests/v10-local.json
+*.tmp

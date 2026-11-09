@@ -1,0 +1,4 @@
+Portions © 2025 Reown, Inc. All Rights Reserved
+
+Official WalletConnect Ethereum Provider 2.26.0.
+See bundled licenses/ and THIRD-PARTY-LICENSES.json for exact license texts and package versions.
