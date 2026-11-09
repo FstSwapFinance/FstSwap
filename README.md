@@ -1,22 +1,15 @@
 # FstSwap
 
-BSC 主网聚合交易前端，支持兑换、行情、流动池与代币列表管理。
+BSC 主网聚合交易。
 
-主网 v10 路由：`0x6b149377b0d68c7cF09DDa6B6467861D997C9646`。源码及部署记录位于 `contracts/fstsi-v10/`。
+- `src/`：页面、样式和聚合交易逻辑。
+- `assets/`：页面使用的图片、字体和钱包依赖。
+- `admin/`：代币与 Logo 管理后台。
+- `contracts/v10/`：当前主网合约源码及部署记录。
+- `tokens.json`：默认代币列表。
 
-```sh
-npm ci
-npm run serve
-```
+前端：`npm run serve`，访问 http://127.0.0.1:8124 。也可直接部署到静态托管，无需构建。
 
-打开 http://127.0.0.1:8124 。静态前端可以直接放在 GitHub Pages，无需构建。
+后台：先完成 `gh auth login`，再执行 `npm run token-admin`，访问 http://127.0.0.1:8130 。修改保存到本仓库的 `main/tokens.json`。后台需要本地 Node.js，GitHub Pages 不运行后台服务。
 
-```sh
-npm test
-gh auth login
-npm run token-admin
-```
-
-代币和 Logo 后台：http://127.0.0.1:8130 。本机后台使用 GitHub 登录权限，将修改保存至 `FstSwapFinance/FstSwap` 的 `main/tokens.json`；GitHub Pages 本身不运行后台服务。Logo 使用 HTTPS 图片地址。
-
-合约测试：`forge test --root contracts/fstsi-v10 -vv`。依赖源码与许可证包含在 `contracts/fstsi-v10/lib/`。
+主网路由：`0x6b149377b0d68c7cF09DDa6B6467861D997C9646`。

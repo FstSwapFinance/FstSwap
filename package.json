@@ -1,18 +1,10 @@
 {
-  "name": "fstswap-aggregator",
+  "name": "fstswap",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "FstSwap \u805a\u5408 Swap\uff1aBSC \u4e3b\u7f51 AggregatedRouter \u591a DEX \u805a\u5408\u8def\u7531\u524d\u7aef\uff08\u72ec\u7acb\u90e8\u7f72\uff0c\u4e0d\u4f9d\u8d56 FstSi\uff09",
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
     "serve": "python3 -m http.server 8124",
-    "token-admin": "node tools/token-admin-server.mjs"
-  },
-  "dependencies": {
-    "ethers": "6.15.0"
-  },
-  "devDependencies": {
-    "playwright": "1.64.1"
+    "token-admin": "node admin/token-admin-server.mjs"
   }
 }
