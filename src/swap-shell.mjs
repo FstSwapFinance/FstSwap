@@ -3,7 +3,7 @@
 // 钱包连接逻辑沿用（注入式 / WalletConnect / Coinbase→injected→WC / Fortmatic·Portis 已停服回退）。
 import { SWAP_CHAIN, connectInjected, walletConnectAccount,
   walletShort, loadSwapWalletConnect, disconnectWalletConnect } from "./swap-wallet.mjs?v=review-20261110-3";
-import { swapPublicRpc, loadSwapLibrary } from "./swap-aggregator.mjs?v=mainnet-20261110-10";
+import { swapPublicRpc, loadSwapLibrary } from "./swap-aggregator.mjs?v=mainnet-20261110-11";
 import { TPL, EN } from "./swap-official-tpl.mjs?v=official-20261109";
 import { jazziconHtml } from "./swap-jazzicon.mjs?v=official-20261109";
 import "./swap-ui.mjs?v=review-20261110-3";
@@ -213,10 +213,10 @@ export async function refreshNativeBalance() {
   } catch {}
 }
 
-// —— Popups（官方 PopupItem：右上角/移动端顶部，带进度条，25s 自动消失） ——
+// —— Popups（官方 PopupItem：右上角/移动端顶部，带进度条，6s 自动消失） ——
 const CHECK_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#27AE60" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
 const ALERT_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FD4040" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
-export function popup({ summary, hash, success = true, ms = 25000 }) {
+export function popup({ summary, hash, success = true, ms = 6000 }) {
   const make = (key, sel) => {
     const src = part(key, sel); if (!src) return null;
     const item = src.querySelector(".cCnyGV"); if (!item) return null;
