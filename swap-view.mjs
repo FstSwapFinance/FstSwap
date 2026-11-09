@@ -3,19 +3,19 @@
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + USDT⇄FIST / USDT⇄BNB（经 FstSwap 适配器）+ 精确输出；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia / quoteExactOutput。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对与精确输出显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent, releaseUnsentWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-4";
+import { sendWalletOnce, recoverWalletIntent, releaseUnsentWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-5";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, v10AmountsIn, readV10Receipt,
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10QuoteExactOutput, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261110-4";
+} from "./swap-aggregator.mjs?v=mainnet-20261110-5";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-4";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-5";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-4";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-5";
 
 const BPS = 10000n;
 const HISTORY_KEY = "swap_history_v1";
@@ -246,9 +246,13 @@ export async function mountSwapView(root) {
       const label = swapBtn.querySelector(".css-1yxyz72") || swapBtn;
       const err = inputError();
       if (err) { label.textContent = err; swapBtn.disabled = true; swapBtn.className = part("swap_connected", "#swap-button").className; }
+      else if (inT()?.key !== "bnb" && state.allowance == null) { label.textContent = tr("刷新授权状态", "Refresh approval"); swapBtn.disabled = false; }
       else if (needApprove) { swapBtn.disabled = true; }
       else { label.textContent = T("兑换"); swapBtn.disabled = false; }
-      if (!swapBtn.disabled) swapBtn.addEventListener("click", openConfirm);
+      if (!swapBtn.disabled) swapBtn.addEventListener("click", async()=>{
+        if(inT()?.key!=="bnb"&&state.allowance==null){swapBtn.disabled=true;await refreshAllowance();renderBottom();return;}
+        openConfirm();
+      });
       if (needApprove) {
         const approveBtn = next.querySelector("button:not(#swap-button)");
         const span = approveBtn.querySelector(":scope > div > span");
@@ -467,10 +471,12 @@ export async function mountSwapView(root) {
     state.allowance = null;
     if (!wallet.account || !inT() || inT().key === "bnb" || !state.quote) return;
     const sp = spender(); if (!sp) return;
+    const account=wallet.account,token=inT().address,quote=state.quote;
     try {
-      const data = new ethers.Interface(ERC20_ABI).encodeFunctionData("allowance", [wallet.account, sp]);
-      state.allowance = BigInt(await walletCall("eth_call", [{ to: inT().address, data }, "latest"]));
-    } catch { state.allowance = 0n; }
+      const data = new ethers.Interface(ERC20_ABI).encodeFunctionData("allowance", [account, sp]);
+      const allowance=BigInt(await request({method:"eth_call",params:[{ to:token, data }, "latest"]}));
+      if(wallet.account===account&&inT()?.address===token&&state.quote===quote&&spender()===sp)state.allowance=allowance;
+    } catch { /* Unknown allowance is not the same as insufficient allowance. */ }
   }
 
   // —— 报价 ——
@@ -722,6 +728,14 @@ export async function mountSwapView(root) {
     }
     openModal(overlay);
   }
+  async function showApprovalIfNeeded(q) {
+    if(inT()?.key==="bnb")return false;
+    const account=wallet.account;
+    await refreshAllowance();
+    if(wallet.account!==account||state.quote!==q){closeModal();return true;}
+    if(!needsApproval())return false;
+    closeModal();renderBottom();return true;
+  }
   async function executeSwap(q) {
     const [ain, sin, aout, sout] = swapSummary(q);
     pendingModal(tr("将 " + ain + " " + sin + " 兑换为 " + aout + " " + sout, "Swapping " + ain + " " + sin + " for " + aout + " " + sout));
@@ -731,11 +745,13 @@ export async function mountSwapView(root) {
     const submittedTokens = { tokenIn: inT().address, tokenOut: outT().address };
     let expectedRequest;
     try {
+      if(await showApprovalIfNeeded(q))return;
+      if(inT()?.key!=="bnb"&&state.allowance==null)throw new Error(tr("暂时无法读取授权额度，请稍后重试", "Cannot read approval; please try again"));
       let hash, preflight = null;
       if (q.kind === "agg") {
         preflight = await preflightSwap(wallet.provider.request.bind(wallet.provider), { account: wallet.account, route: q.route, amountIn: q.amountIn, minOut: min, deadline, allowance: side() === "sell" ? state.allowance : null });
+        if (preflight.needsApproval) { closeModal(); renderBottom(); return; }
         if (swapV10Ready() && preflight.simulated === null) throw new Error(tr("链上仿真失败，请刷新报价", "Simulation failed; refresh the quote"));
-        if (preflight.needsApproval) throw new Error(tr("请先授权", "Approve first"));
         if (preflight.simulated !== null && preflight.simulated < min) throw new Error(tr("链上仿真低于最少到账，请刷新报价后重试", "Simulation below minimum received; refresh and retry"));
         const sent = await sendTx(preflight.transaction, preflight.gasLimit, preflight.gasPrice);
         hash = sent.hash; expectedRequest = sent.transaction;
@@ -778,6 +794,7 @@ export async function mountSwapView(root) {
         refreshBalances(); refreshNativeBalance();
       }).catch((err) => popup({ summary: summary + " — " + (err?.message || ""), hash, success: false }));
     } catch (err) {
+      if(!err?.pendingIntent&&Number(err?.code)!==4001&&state.quote===q&&await showApprovalIfNeeded(q))return;
       if (err?.pendingIntent) errorModal(err.message, err.pendingIntent);
       else if (Number(err?.code) === 4001) errorModal(T("交易被拒绝。"));
       else errorModal(err?.message || tr("交易失败", "Transaction failed"));
