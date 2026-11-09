@@ -847,7 +847,7 @@ export function swapPublicRpc(fetchImpl = globalThis.fetch, signal, { attempts =
     }
     // 全池冷却/失败兜底：忽略冷却再试一轮，防止冷却死锁
     for (const endpoint of order) {
-      try { return await once(endpoint, { ...payload, id }); } catch (err) { lastError = err; }
+      try { return await once(endpoint, { ...payload, id }); } catch (err) { lastError = err; if (signal?.aborted) throw err; }
     }
     throw lastError ?? rpcError();
   };

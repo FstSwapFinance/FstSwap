@@ -3,20 +3,23 @@
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + USDT⇄FIST / USDT⇄BNB（经 FstSwap 适配器）+ 精确输出；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia / quoteExactOutput。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对与精确输出显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent, releaseUnsentWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-5";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-7";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, v10AmountsIn, readV10Receipt,
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10QuoteExactOutput, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261110-5";
+} from "./swap-aggregator.mjs?v=mainnet-20261110-7";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-5";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-7";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-5";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-7";
 
+import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
+
+const approvals = createApprovalTracker();
 const BPS = 10000n;
 const HISTORY_KEY = "swap_history_v1";
 const SETTINGS_KEY = "swap_settings_v2";
@@ -82,10 +85,12 @@ const page = { inKey: null, outKey: null, connectedDefaults: false };
 export async function mountSwapView(root) {
   const wallet = useWallet();
   const request = swapPublicRpc();
+  // Short, abortable reads for wallet actions; market/chart reads keep their own retry policy.
+  const transactionRead = payload => swapPublicRpc(globalThis.fetch, AbortSignal.timeout(6000), { attempts: 2, timeoutMs: 2000 })(payload);
   const settings = readSettings();
   const state = {
     amount: "", amountOut: "", independent: "in", quote: null, quoteError: "", balances: {}, balanceErrors: {}, balanceEpoch: 0, allowance: null, config: null,
-    approving: false, showInverted: false, settingsOpen: false, seq: 0,
+    showInverted: false, settingsOpen: false, seq: 0,
   };
   try { await loadSwapLibrary(); } catch {}
   const ethers = globalThis.ethers;
@@ -236,6 +241,7 @@ export async function mountSwapView(root) {
   function renderBottom() {
     let next;
     const q = state.quote;
+    const approving = approvals.pending(approvalIdentity());
     if (!wallet.account) {
       next = part("swap_empty", "#swap-page > div > div:nth-child(3)");
       next.querySelector("button").addEventListener("click", () => openWalletModal());
@@ -257,10 +263,10 @@ export async function mountSwapView(root) {
         const approveBtn = next.querySelector("button:not(#swap-button)");
         const span = approveBtn.querySelector(":scope > div > span");
         const icon = span.querySelector("svg");
-        span.replaceChildren(...(icon ? [icon] : []), document.createTextNode(state.approving ? tr("批准中", "Approving") : tr("允许 Fstswap 调用您的 ", "Allow the Fstswap Protocol to use your ") + inT().symbol));
+        span.replaceChildren(...(icon ? [icon] : []), document.createTextNode(approving ? tr("批准中", "Approving") : tr("允许 Fstswap 调用您的 ", "Allow the Fstswap Protocol to use your ") + inT().symbol));
         applyTokenLogo(icon, inT());
-        approveBtn.disabled = state.approving;
-        if (!state.approving) approveBtn.addEventListener("click", approve);
+        approveBtn.disabled = approving;
+        if (!approving) approveBtn.addEventListener("click", approve);
       }
     }
     bottom.replaceWith(next); bottom = next;
@@ -467,6 +473,7 @@ export async function mountSwapView(root) {
     if (swapV10Ready()) return swapActiveRouter();
     return isAggPair() && state.quote?.route ? swapRouteSpenders(state.quote.route)[0] : null;
   }
+  function approvalIdentity() { return { account: wallet.account, token: inT()?.address, spender: spender() }; }
   async function refreshAllowance() {
     state.allowance = null;
     if (!wallet.account || !inT() || inT().key === "bnb" || !state.quote) return;
@@ -474,7 +481,7 @@ export async function mountSwapView(root) {
     const account=wallet.account,token=inT().address,quote=state.quote;
     try {
       const data = new ethers.Interface(ERC20_ABI).encodeFunctionData("allowance", [account, sp]);
-      const allowance=BigInt(await request({method:"eth_call",params:[{ to:token, data }, "latest"]}));
+      const allowance=BigInt(await transactionRead({method:"eth_call",params:[{ to:token, data }, "latest"]}));
       if(wallet.account===account&&inT()?.address===token&&state.quote===quote&&spender()===sp)state.allowance=allowance;
     } catch { /* Unknown allowance is not the same as insufficient allowance. */ }
   }
@@ -619,38 +626,34 @@ export async function mountSwapView(root) {
     }
   }
 
-  async function sendTx(tx, gasLimit, gasPrice) {
-    return sendWalletOnce({provider:wallet.provider,read:request,transaction:tx,gasLimit,gasPrice});
+  async function sendTx(tx, gasLimit, gasPrice, beforeSubmit) {
+    return sendWalletOnce({provider:wallet.provider,read:transactionRead,transaction:tx,gasLimit,gasPrice,beforeSubmit});
   }
   async function waitReceipt(hash, account) {
-    for (let i = 0; i < 60; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      const receipt = await request({ method: "eth_getTransactionReceipt", params: [hash] }).catch(() => null);
-      if (!receipt) continue;
-      await recoverWalletIntent({read:request,account,hash});
-      if (BigInt(receipt.status) === 0n) throw Object.assign(new Error(tr("交易已回滚", "Transaction reverted")), { code: "TX_REVERTED" });
-      return receipt;
-    }
-    throw Object.assign(new Error(tr("确认超时，请到浏览器查看", "Confirmation timeout")), { code: "TX_TIMEOUT" });
+    return waitForApprovalReceipt({read:transactionRead,recover:recoverWalletIntent,hash,account});
   }
   async function approve() {
-    if (!state.quote) return;
+    if (!state.quote || !wallet.account || !inT()?.address) return;
     const sp = spender(); if (!sp) return;
-    state.approving = true; renderBottom();
+    const job = approvals.begin({...approvalIdentity(),symbol:inT().symbol});
+    if (!job) return;
+    let hash;
     try {
-      const req = swapApproveRequest(ethers.Interface, { account: wallet.account, token: inT().address, spender: sp });
-      const light = swapPublicRpc(globalThis.fetch, undefined, { attempts: 2, timeoutMs: 8000 });
-      const [est, price] = await Promise.allSettled([light({ method: "eth_estimateGas", params: [req] }), light({ method: "eth_gasPrice" })]);
+      const req = swapApproveRequest(ethers.Interface, { account: job.account, token: job.token, spender: job.spender });
+      const [est, price] = await Promise.allSettled([transactionRead({ method: "eth_estimateGas", params: [req] }), transactionRead({ method: "eth_gasPrice" })]);
+      // Selection changed before the wallet opened: leave the new token alone.
+      if(wallet.account!==job.account || inT()?.address!==job.token || spender()!==job.spender) return;
       const gasLimit = est.status === "fulfilled" ? BigInt(est.value) * 15n / 10n : 100000n;
-      const gasPrice = price.status === "fulfilled" ? BigInt(price.value) : 3000000000n;
-      const { hash } = await sendTx(req, gasLimit, gasPrice);
-      popup({ summary: "Approve " + inT().symbol, hash });
-      waitReceipt(hash, req.from).then(async () => { state.approving = false; await refreshAllowance(); renderBottom(); })
-        .catch((err) => { state.approving = false; renderBottom(); popup({ summary: "Approve " + inT().symbol + ": " + (err?.message || ""), hash, success: false }); });
+      const gasPrice = price.status === "fulfilled" ? BigInt(price.value) : undefined;
+      ({ hash } = await sendTx(req, gasLimit, gasPrice, () => main.isConnected && wallet.account===job.account && inT()?.address===job.token && spender()===job.spender));
+      popup({ summary: "Approve " + job.symbol, hash });
+      await waitReceipt(hash, job.account);
     } catch (err) {
-      state.approving = false; renderBottom();
-      if (err?.pendingIntent) errorModal(err.message, err.pendingIntent);
-      else if (err?.code !== 4001) popup({ summary: err?.message || tr("授权失败", "Approval failed"), success: false });
+      if (Number(err?.code) !== 4001 && err?.code !== 'REQUEST_CHANGED') popup({ summary: err?.message || tr("授权失败", "Approval failed"), hash:hash||err?.pendingIntent?.hash, success: false });
+    } finally {
+      if(wallet.account===job.account && inT()?.address===job.token) state.allowance=null;
+      approvals.end(job);
+      if(main.isConnected){await refreshAllowance();renderBottom();}
     }
   }
 
@@ -708,23 +711,9 @@ export async function mountSwapView(root) {
     const header = overlay.querySelector(".jmNfaf > div"); if (header) header.textContent = T("错误");
     const close = body.querySelector("button.dwqBbh"); close.querySelector("div").textContent = tr("关闭", "Dismiss");
     overlay.querySelectorAll(".jmNfaf > svg, button.dwqBbh").forEach((el) => el.addEventListener("click", closeModal));
-    if(intent){
-      if(!intent.hash){
-        const release=document.createElement("button");release.textContent=tr("我没有确认交易，解除等待", "I did not confirm this transaction — clear waiting");
-        release.style.cssText="padding:12px;width:100%;cursor:pointer;color:#f0b90b;background:transparent;border:1px solid #f0b90b;border-radius:12px;margin:12px 0";
-        release.onclick=async()=>{release.disabled=true;try{
-          await releaseUnsentWalletIntent({provider:wallet.provider,read:request,account:intent.transaction.from,expectedIntent:intent,confirmedUnsent:true});
-          closeModal();state.quote=null;refreshBalances();refreshAllowance();scheduleQuote(0);popup({summary:tr("已解除等待，请重新查看报价", "Waiting cleared; review the refreshed quote"),success:true});
-        }catch(e){release.textContent=e.message;release.disabled=false;}};
-        body.append(release);
-      }
-      const details=document.createElement("details");details.style.cssText="width:100%;margin-top:8px";
-      const summary=document.createElement("summary");summary.textContent=tr("已在钱包确认过交易？查看结果", "Already confirmed in your wallet? Check the result");summary.style.cursor="pointer";details.append(summary);details.open=Boolean(intent.hash);
-      const input=document.createElement("input");input.placeholder=tr("粘贴原交易哈希 0x…", "Original transaction hash 0x…");input.style.cssText="width:100%;padding:12px;box-sizing:border-box;margin:12px 0";
-      input.value=intent.hash||"";
-      const recover=document.createElement("button");recover.textContent=tr("查看交易结果", "Check transaction result");recover.style.cssText="padding:12px;width:100%;cursor:pointer";
-      recover.onclick=async()=>{recover.disabled=true;try{const result=await recoverWalletIntent({read:request,account:intent.transaction.from,hash:input.value.trim()});closeModal();state.quote=null;refreshBalances();refreshAllowance();scheduleQuote(0);popup({summary:result?.reverted?tr("已确认原交易回滚，可重新报价", "Original transaction reverted; request a new quote"):tr("原交易已核验，请查看最新余额", "Original transaction verified; review updated balance"),success:!result?.reverted});}catch(e){recover.textContent=e.message;recover.disabled=false;}};
-      details.append(input,recover);body.append(details);
+    if(intent?.hash){
+      const link=document.createElement("a");link.href="https://bscscan.com/tx/"+intent.hash;
+      link.target="_blank";link.rel="noopener";link.textContent=tr("查看交易", "View transaction");body.append(link);
     }
     openModal(overlay);
   }
@@ -812,7 +801,7 @@ export async function mountSwapView(root) {
   };
   function restoreSubmittedTransaction() {
     const account=wallet.account;if(!account)return;
-    recoverWalletIntent({read:request,account}).then(result=>{
+    recoverWalletIntent({read:transactionRead,account}).then(result=>{
       if(result&&wallet.account===account&&main.isConnected)refreshBalances();
     }).catch(()=>{});
   }
@@ -824,6 +813,7 @@ export async function mountSwapView(root) {
   });
 
   onTokensChanged(() => { if (main.isConnected) { state.quote=null; ++state.seq; render(); } });
+  approvals.subscribe(()=>{if(!main.isConnected)return false;renderBottom();});
   renderSettings(); render();
   refreshDefaultList();
   if (wallet.account) { refreshBalances(); restoreSubmittedTransaction(); }
