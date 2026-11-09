@@ -1,3 +1,4 @@
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261110-9";
 // 聚合路由 Swap 引擎（BSC 主网 56，FstSi aggregator-live v9「multi-pool」，合约 VERSION 1.01）。
 // 与 market-trade.mjs 相同的约束风格：全部函数只通过注入的 JSON-RPC
 // request 访问链上，返回精确的十进制字符串/大整数，浏览器与 Node 均可运行。
@@ -901,11 +902,7 @@ export async function readV10Receipt(request, hash, { account, expectedRequest, 
   const fail = () => error("INVALID_RECEIPT", "v10 成交回执与请求不符");
   if (!receipt || !tx || !tx.blockHash || lower(receipt.blockHash) !== lower(tx.blockHash)) throw fail();
   if (lower(receipt.transactionHash) !== lower(hash) || lower(tx.hash) !== lower(hash) ||
-      address(tx.from) !== address(account) || address(receipt.from) !== address(account) ||
-      address(tx.to) !== address(expectedRequest.to) || address(receipt.to) !== address(expectedRequest.to) ||
-      lower(tx.input) !== lower(expectedRequest.data) || BigInt(tx.value) !== BigInt(expectedRequest.value || 0)) throw fail();
-  if (expectedRequest.nonce != null && BigInt(tx.nonce) !== BigInt(expectedRequest.nonce)) throw fail();
-  if (tx.chainId && BigInt(tx.chainId) !== 56n) throw fail();
+      !matchesWalletExecution(tx,receipt,{...expectedRequest,from:account})) throw fail();
   if (BigInt(receipt.status) === 0n) throw error("TX_REVERTED", "交易已回滚");
   if (BigInt(receipt.status) !== 1n) throw fail();
   const block = await request({ method: "eth_getBlockByNumber", params: [receipt.blockNumber, false] });

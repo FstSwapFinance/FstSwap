@@ -1,7 +1,7 @@
 // Fstswap 聚合前端入口：官方同款路由（#/swap、#/pool、#/pool/v2/find、#/add/v2/A/B、#/remove/v2/A/B、#/analysis/A/B、#/my）。
-import { currentRoute } from "./swap-shell.mjs?v=mainnet-20261110-8";
+import { currentRoute } from "./swap-shell.mjs?v=mainnet-20261110-9";
 
-import { refreshDefaultList, onTokensChanged, findActiveToken } from "./swap-manage.mjs?v=mainnet-20261110-8";
+import { refreshDefaultList, onTokensChanged, findActiveToken } from "./swap-manage.mjs?v=mainnet-20261110-9";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
 
 const root = document.getElementById("root");
@@ -14,16 +14,16 @@ async function render() {
     document.querySelectorAll("reach-portal").forEach((p) => p.remove());
     document.body.classList.remove("agg-scroll-lock");
     if (route === "swap") {
-      const { mountSwapView } = await import("./swap-view.mjs?v=mainnet-20261110-8");
+      const { mountSwapView } = await import("./swap-view.mjs?v=mainnet-20261110-9");
       if (ticket === rendering) await mountSwapView(root);
     } else if (route === "pool" || route === "add" || route === "remove") {
-      const { mountPoolPage } = await import("./swap-pool.mjs?v=mainnet-20261110-8");
+      const { mountPoolPage } = await import("./swap-pool.mjs?v=mainnet-20261110-9");
       if (ticket === rendering) await mountPoolPage(root, route);
     } else if (route === "analysis") {
-      const { mountAnalysisPage } = await import("./swap-pages.mjs?v=mainnet-20261110-8");
+      const { mountAnalysisPage } = await import("./swap-pages.mjs?v=mainnet-20261110-9");
       if (ticket === rendering) await mountAnalysisPage(root);
     } else if (route === "my") {
-      const { mountMyPage } = await import("./swap-pages.mjs?v=mainnet-20261110-8");
+      const { mountMyPage } = await import("./swap-pages.mjs?v=mainnet-20261110-9");
       if (ticket === rendering) await mountMyPage(root);
     }
   } catch (err) {

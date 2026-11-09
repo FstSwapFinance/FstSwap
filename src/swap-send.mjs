@@ -1,3 +1,4 @@
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261110-9";
 // Track submitted transactions; only a fresh user action may request another wallet transaction.
 const prefix='fstswap-wallet-intent-v1:56:';
 const fail=(code,message,intent)=>Object.assign(new Error(message),{code,pendingIntent:intent});
@@ -26,20 +27,6 @@ function walletDiagnostic(error) {
  const message=String(error?.message||'钱包请求未完成').replace(/(?:https?|wss?):\/\/\S+/gi,'[RPC]').replace(/\b(?:0x)?[a-f0-9]{64,}\b/gi,'[redacted]').slice(0,240);
  return {code:Number.isFinite(code)?code:null,message};
 }
-function matchesCallData(tx,expected,receipt) {
- if(same(tx.input,expected.data))return true;
- // Wallets may reduce ERC20 approval limits in their confirmation screen.
- // Accept only that change, for the same spender, with the emitted amount.
- const actual=String(tx.input||'').toLowerCase(),planned=String(expected.data||'').toLowerCase();
- if(!/^0x095ea7b3[0-9a-f]{128}$/.test(actual)||!/^0x095ea7b3[0-9a-f]{128}$/.test(planned)||actual.slice(0,74)!==planned.slice(0,74))return false;
- if(BigInt('0x'+actual.slice(74))>BigInt('0x'+planned.slice(74)))return false;
- if(BigInt(receipt.status)===0n)return true;
- const owner='0x'+String(expected.from).slice(2).toLowerCase().padStart(64,'0');
- const spender='0x'+actual.slice(10,74),amount='0x'+actual.slice(74);
- return receipt.logs?.some(log=>same(log.address,expected.to)&&log.topics?.length===3&&
-  same(log.topics[0],'0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925')&&
-  same(log.topics[1],owner)&&same(log.topics[2],spender)&&same(log.data,amount))||false;
-}
 async function recoverLocked({read,account,hash,receipt:knownReceipt,storage=globalThis.localStorage,intentKey=key(account)}) {
  const snapshot=storage.getItem(intentKey);
  const intent=JSON.parse(snapshot||'null');
@@ -52,7 +39,9 @@ async function recoverLocked({read,account,hash,receipt:knownReceipt,storage=glo
  const [tx,block]=await Promise.all([read({method:'eth_getTransactionByHash',params:[hash]}),read({method:'eth_getBlockByNumber',params:[receipt.blockNumber,false]})]);
  if(!tx)throw fail('TX_PENDING','交易已提交，正在等待结果',intent);
  const expected=intent.transaction;
- if(!same(tx.hash,hash)||!same(receipt.transactionHash,hash)||!same(tx.from,expected.from)||!same(receipt.from,expected.from)||!same(tx.to,expected.to)||!same(receipt.to,expected.to)||!matchesCallData(tx,expected,receipt)||BigInt(tx.value)!==BigInt(expected.value||0)||BigInt(tx.nonce)!==BigInt(expected.nonce)||!same(tx.blockHash,receipt.blockHash)||!same(block?.hash,receipt.blockHash)||(tx.chainId&&BigInt(tx.chainId)!==56n))throw fail('INVALID_RECEIPT','交易与原始提交意图不符，保持锁定',intent);
+ if(!same(tx.hash,hash)||!same(receipt.transactionHash,hash)||
+  !matchesWalletExecution(tx,receipt,expected,{allowApprovalReduction:true})||
+  !same(tx.blockHash,receipt.blockHash)||!same(block?.hash,receipt.blockHash))throw fail('INVALID_RECEIPT','交易结果暂时无法与本次请求匹配',intent);
  const status=BigInt(receipt.status);
  if(status!==0n&&status!==1n)throw fail('INVALID_RECEIPT','交易状态无效',intent);
  if(storage.getItem(intentKey)!==snapshot)throw fail("INTENT_CHANGED","待处理交易已变化",intent);
