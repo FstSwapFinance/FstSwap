@@ -47,9 +47,10 @@ async function recoverLocked({read,account,hash,receipt:knownReceipt,storage=glo
  hash ||= intent.hash;
  if(!hash){archiveUnresolved(storage,account,intent);return null;}
  if(!/^0x[0-9a-f]{64}$/i.test(hash))throw fail('INVALID_RECEIPT','交易哈希无效',intent);
- const [tx,receipt]=await Promise.all([read({method:'eth_getTransactionByHash',params:[hash]}),knownReceipt||read({method:'eth_getTransactionReceipt',params:[hash]})]);
- if(!tx||!receipt?.blockHash)throw fail('TX_PENDING','原交易尚未确认，请勿重复提交',intent);
- const block=await read({method:'eth_getBlockByNumber',params:[receipt.blockNumber,false]});
+ const receipt=knownReceipt||await read({method:'eth_getTransactionReceipt',params:[hash]});
+ if(!receipt?.blockHash)throw fail('TX_PENDING','交易已提交，正在等待结果',intent);
+ const [tx,block]=await Promise.all([read({method:'eth_getTransactionByHash',params:[hash]}),read({method:'eth_getBlockByNumber',params:[receipt.blockNumber,false]})]);
+ if(!tx)throw fail('TX_PENDING','交易已提交，正在等待结果',intent);
  const expected=intent.transaction;
  if(!same(tx.hash,hash)||!same(receipt.transactionHash,hash)||!same(tx.from,expected.from)||!same(receipt.from,expected.from)||!same(tx.to,expected.to)||!same(receipt.to,expected.to)||!matchesCallData(tx,expected,receipt)||BigInt(tx.value)!==BigInt(expected.value||0)||BigInt(tx.nonce)!==BigInt(expected.nonce)||!same(tx.blockHash,receipt.blockHash)||!same(block?.hash,receipt.blockHash)||(tx.chainId&&BigInt(tx.chainId)!==56n))throw fail('INVALID_RECEIPT','交易与原始提交意图不符，保持锁定',intent);
  const status=BigInt(receipt.status);

@@ -3,19 +3,19 @@
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + USDT⇄FIST / USDT⇄BNB（经 FstSwap 适配器）+ 精确输出；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia / quoteExactOutput。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对与精确输出显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-7";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-8";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, v10AmountsIn, readV10Receipt,
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10QuoteExactOutput, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261110-7";
+} from "./swap-aggregator.mjs?v=mainnet-20261110-8";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-7";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-8";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-7";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-8";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
 
@@ -474,14 +474,14 @@ export async function mountSwapView(root) {
     return isAggPair() && state.quote?.route ? swapRouteSpenders(state.quote.route)[0] : null;
   }
   function approvalIdentity() { return { account: wallet.account, token: inT()?.address, spender: spender() }; }
-  async function refreshAllowance() {
+  async function refreshAllowance(blockTag="latest") {
     state.allowance = null;
     if (!wallet.account || !inT() || inT().key === "bnb" || !state.quote) return;
     const sp = spender(); if (!sp) return;
     const account=wallet.account,token=inT().address,quote=state.quote;
     try {
       const data = new ethers.Interface(ERC20_ABI).encodeFunctionData("allowance", [account, sp]);
-      const allowance=BigInt(await transactionRead({method:"eth_call",params:[{ to:token, data }, "latest"]}));
+      const allowance=BigInt(await transactionRead({method:"eth_call",params:[{ to:token, data }, blockTag]}));
       if(wallet.account===account&&inT()?.address===token&&state.quote===quote&&spender()===sp)state.allowance=allowance;
     } catch { /* Unknown allowance is not the same as insufficient allowance. */ }
   }
@@ -629,15 +629,15 @@ export async function mountSwapView(root) {
   async function sendTx(tx, gasLimit, gasPrice, beforeSubmit) {
     return sendWalletOnce({provider:wallet.provider,read:transactionRead,transaction:tx,gasLimit,gasPrice,beforeSubmit});
   }
-  async function waitReceipt(hash, account) {
-    return waitForApprovalReceipt({read:transactionRead,recover:recoverWalletIntent,hash,account});
+  async function waitReceipt(hash, account, onReceipt) {
+    return waitForApprovalReceipt({read:transactionRead,recover:recoverWalletIntent,hash,account,onReceipt});
   }
   async function approve() {
     if (!state.quote || !wallet.account || !inT()?.address) return;
     const sp = spender(); if (!sp) return;
     const job = approvals.begin({...approvalIdentity(),symbol:inT().symbol});
     if (!job) return;
-    let hash;
+    let hash, refreshed=false;
     try {
       const req = swapApproveRequest(ethers.Interface, { account: job.account, token: job.token, spender: job.spender });
       const [est, price] = await Promise.allSettled([transactionRead({ method: "eth_estimateGas", params: [req] }), transactionRead({ method: "eth_gasPrice" })]);
@@ -647,13 +647,17 @@ export async function mountSwapView(root) {
       const gasPrice = price.status === "fulfilled" ? BigInt(price.value) : undefined;
       ({ hash } = await sendTx(req, gasLimit, gasPrice, () => main.isConnected && wallet.account===job.account && inT()?.address===job.token && spender()===job.spender));
       popup({ summary: "Approve " + job.symbol, hash });
-      await waitReceipt(hash, job.account);
+      await waitReceipt(hash, job.account, async receipt => {
+        if(!main.isConnected || wallet.account!==job.account || inT()?.address!==job.token || spender()!==job.spender)return;
+        // Refresh against the mined block concurrently with background transaction checks.
+        await refreshAllowance(receipt.blockNumber);refreshed=state.allowance!=null;renderBottom();
+      });
     } catch (err) {
       if (Number(err?.code) !== 4001 && err?.code !== 'REQUEST_CHANGED') popup({ summary: err?.message || tr("授权失败", "Approval failed"), hash:hash||err?.pendingIntent?.hash, success: false });
     } finally {
-      if(wallet.account===job.account && inT()?.address===job.token) state.allowance=null;
+      if(!refreshed && wallet.account===job.account && inT()?.address===job.token) state.allowance=null;
       approvals.end(job);
-      if(main.isConnected){await refreshAllowance();renderBottom();}
+      if(main.isConnected && !refreshed){await refreshAllowance();renderBottom();}
     }
   }
 

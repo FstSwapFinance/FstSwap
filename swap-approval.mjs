@@ -18,14 +18,17 @@ function bounded(promise,ms) {
 }
 
 // Bound the whole wait, including slow RPC calls; a timeout never deletes the saved intent.
-export async function waitForApprovalReceipt({read,recover,hash,account,intervalMs=1500,timeoutMs=180000,now=Date.now,sleep=ms=>new Promise(r=>setTimeout(r,ms))}) {
+export async function waitForApprovalReceipt({read,recover,hash,account,onReceipt,intervalMs=1000,timeoutMs=180000,now=Date.now,sleep=ms=>new Promise(r=>setTimeout(r,ms))}) {
  const deadline=now()+timeoutMs;
  const limitedRead=payload=>bounded(Promise.resolve().then(()=>read(payload)),deadline-now());
  while(now()<deadline){
   try {
    const receipt=await limitedRead({method:'eth_getTransactionReceipt',params:[hash]});
    if(receipt){
-    await bounded(recover({read:limitedRead,account,hash,receipt}),deadline-now());
+    await bounded(Promise.all([
+     recover({read:limitedRead,account,hash,receipt}),
+     BigInt(receipt.status)===1n ? onReceipt?.(receipt) : undefined,
+    ]),deadline-now());
     if(BigInt(receipt.status)===0n)throw Object.assign(new Error('交易已回滚'),{code:'TX_REVERTED'});
     return receipt;
    }
