@@ -1,23 +1,25 @@
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
-//  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + USDT⇄FIST / USDT⇄BNB（经 FstSwap 适配器）+ 精确输出；
+//  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价 + 精确输出；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia / quoteExactOutput。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对与精确输出显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-11";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-12";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, v10AmountsIn, readV10Receipt,
+  v10RouteCandidates, v10BestAmountsOut, v10RouteImpact, assertQuoteSafety,
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10QuoteExactOutput, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261110-11";
+} from "./swap-aggregator.mjs?v=mainnet-20261110-12";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-11";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-12";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-11";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-12";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261110-12";
 
 const approvals = createApprovalTracker();
 const BPS = 10000n;
@@ -111,16 +113,14 @@ export async function mountSwapView(root) {
   const inT = () => token(page.inKey), outT = () => token(page.outKey);
   const isAggPair = () => [page.inKey, page.outKey].sort().join("/") === "bnb/fist";
   const side = () => (page.inKey === "bnb" ? "buy" : "sell");
-  const pathFor = (a, b) => {
-    const addr = (t) => t.address || FST_WBNB;
-    if ((a.key === "usdt" && b.key === "bnb") || (a.key === "bnb" && b.key === "usdt")) return settings.singleHop ? null : [addr(a), SWAP_TOKENS.fist.address, addr(b)];
-    return [addr(a), addr(b)];
-  };
   const routeSymbols = () => {
     if (!inT() || !outT()) return [];
-    if (isAggPair()) return [inT().symbol, outT().symbol];
-    const p = pathFor(inT(), outT()); if (!p) return [];
-    return p.map((a) => a.toLowerCase() === SWAP_TOKENS.fist.address.toLowerCase() ? "FIST" : a.toLowerCase() === SWAP_TOKENS.usdt.address.toLowerCase() ? "USDT" : "BNB");
+    const firstPath = state.quote?.first?.path;
+    const p = Array.isArray(firstPath) ? [...firstPath, ...(state.quote?.second?.path?.slice(1) || [])] : null;
+    if (!Array.isArray(p)) return [inT().symbol, outT().symbol];
+    return p.map((a, n) => n === 0 ? inT().symbol : n === p.length - 1 ? outT().symbol
+      : Object.values(TOKENS).find(t => t.address?.toLowerCase() === a.toLowerCase())?.symbol
+        || (Object.values(SWAP_ADAPTERS).some(d => d.weth.toLowerCase() === a.toLowerCase()) ? "WBNB" : a.slice(0, 6) + "…"));
   };
 
   // —— 币种输入面板（官方 CurrencyInputPanel） ——
@@ -285,6 +285,9 @@ export async function mountSwapView(root) {
     if (!typed || !(Number(typed) > 0)) return T("输入数额");
     if (state.quoteError === SWAP_V10_MISSING.code) return tr(SWAP_V10_MISSING.zh, SWAP_V10_MISSING.en);
     if (state.quoteError === "NO_ROUTE") return T("现有流动量不足以支持此交易。");
+    if (state.quoteError === "POOL_LIQUIDITY") return tr("没有符合流动性要求的池子，请稍后重试", "No pool meets the liquidity requirements");
+    if (state.quoteError === "PRICE_IMPACT_TOO_HIGH") return tr("价格影响与滑点超过 15%，请减少金额或滑点", "Price impact and slippage exceed 15%; reduce amount or slippage");
+    if (state.quoteError === "UNSAFE_QUOTE") return tr("兑换价格或流动性异常，已停止兑换", "Unsafe price or liquidity; swap unavailable");
     if (!state.quote) return T("输入数额");
     const bal = state.balances[page.inKey];
     if (bal != null && bal < (state.quote.maxIn ?? state.quote.amountIn)) return tr(inT().symbol + " 余额不足", "Insufficient " + inT().symbol + " balance");
@@ -510,7 +513,7 @@ export async function mountSwapView(root) {
     const bal = state.balances[page.inKey]; if (bal == null || !inT()) return;
     const MIN_BNB = 10n ** 16n; // 官方 maxAmountSpend：原生币预留 0.01
     const max = inT().key === "bnb" ? (bal > MIN_BNB ? bal - MIN_BNB : 0n) : bal;
-    state.amount = formatAmountInput(max, inT().decimals); state.independent = "in"; state.amountOut = ""; state.quote = null; render(); scheduleQuote(0);
+    state.amount = swapFormatUnits(max, inT().decimals); state.independent = "in"; state.amountOut = ""; state.quote = null; render(); scheduleQuote(0);
   }
   const missing = () => Object.assign(new Error(SWAP_V10_MISSING.zh), { code: SWAP_V10_MISSING.code });
   // FstSwap 报价：v10 经聚合路由 getAmountsOutVia(FstSwap 适配器)；不直连 FstSwap 路由器
@@ -534,18 +537,9 @@ export async function mountSwapView(root) {
   }
   const impactOf = (amountIn, out, tiny, ref) => Math.max(0, 1 - (Number(out) / Number(amountIn)) / (Number(ref) / Number(tiny)));
   const feeBpsNow = () => state.config?.platformFeeBps ?? 30;
-  // 精确输出候选（v10）：BNB⇄FIST 比较 FstSwap / Pancake 直连池，其余币对走 FstSwap 适配器
+  // 精确输入与精确输出使用同一份已启用 DEX / 中间币候选。
   function exactOutCandidates(ti, to) {
-    const fist = SWAP_TOKENS.fist.address;
-    const leg = (key, path) => ({ adapter: SWAP_ADAPTERS[key].adapter, path });
-    if (isAggPair()) {
-      return ["fst", "pancake"].filter((k) => SWAP_ADAPTERS[k]).map((k) => {
-        const w = SWAP_ADAPTERS[k].weth;
-        return { first: leg(k, ti.key === "bnb" ? [w, fist] : [fist, w]), key: k };
-      });
-    }
-    const path = pathFor(ti, to); if (!path) return [];
-    return [{ first: leg("fst", path), key: "fst" }];
+    return v10RouteCandidates(ti.address, to.address, { singleHop: settings.singleHop, config: state.config });
   }
   async function refreshQuote() {
     const seq = ++state.seq;
@@ -557,6 +551,7 @@ export async function mountSwapView(root) {
     try {
       let q;
       if (swapV10Ready()) state.config = await readSwapConfig(request);
+      const poolPolicy = await readPoolPolicy(request, { tokenIn: ti.address, tokenOut: to.address, config: state.config });
       const feeBps = feeBpsNow();
       const policy = swapFeePolicy(ti.address, to.address, state.config?.defaultFeeToken);
       const feeAsset = Object.values(TOKENS).find(t => (t.address || ZERO).toLowerCase() === policy.token.toLowerCase()) || TOKENS.usdt;
@@ -564,53 +559,70 @@ export async function mountSwapView(root) {
         // —— 精确输出：quoteExactOutput（与成交同算法），maxIn = amountIn ×（1 + 滑点） ——
         if (!swapV10Ready()) throw missing();
         const mode = ti.key === "bnb" ? 0 : to.key === "bnb" ? 1 : 2;
-        const quotes = await Promise.all(exactOutCandidates(ti, to).map(async (c) => {
+        const quotes = await Promise.all(exactOutCandidates(ti, to).filter(c => poolPolicy.allows(c.first, c.second)).map(async (c) => {
           try {
             let plan = null;
             if (policy.mode === "convert") {
-              const budget = await v10AmountsIn(request, c.first, amount);
+              const budget = await v10AmountsIn(request, c.first, c.second ? await v10AmountsIn(request, c.second, amount) : amount);
               const total = (budget * BPS + BPS - BigInt(feeBps) - 1n) / (BPS - BigInt(feeBps));
-              plan = await v10PlanFeeConversion(request, { input: ti.address, feeBudget: total * BigInt(feeBps) / BPS, config: state.config, slippageBps: settings.slippageBps, mainLegs: [c.first] });
+              plan = await v10PlanFeeConversion(request, { input: ti.address, feeBudget: total * BigInt(feeBps) / BPS, config: state.config, slippageBps: settings.slippageBps, mainLegs: [c.first, c.second].filter(Boolean) });
             }
-            return { ...c, conversion: plan?.conversion, ...(await v10QuoteExactOutput(request, { first: c.first, amountOut: amount, mode, conversion: plan?.conversion })) };
+            return { ...c, conversion: plan?.conversion, ...(await v10QuoteExactOutput(request, { first: c.first, second: c.second, amountOut: amount, mode, conversion: plan?.conversion })) };
           } catch { return null; }
         }));
         const best = quotes.filter(Boolean).sort((a, b) => (a.amountIn < b.amountIn ? -1 : a.amountIn > b.amountIn ? 1 : 0))[0];
         if (!best || best.amountIn <= 0n) throw Object.assign(new Error("no route"), { code: "NO_ROUTE" });
         const maxIn = best.amountIn * (BPS + BigInt(settings.slippageBps)) / BPS;
-        q = { kind: "v10exact", exactOut: true, mode, first: best.first, adapterKey: best.key, amountIn: best.amountIn, maxIn, out: amount,
+        q = { kind: "v10exact", exactOut: true, mode, first: best.first, second: best.second, adapterKey: best.key, amountIn: best.amountIn, maxIn, out: amount,
           lpFee: best.fee, feeAsset, conversion: best.conversion, impact: null };
-        try { const tiny = 10n ** BigInt(Math.max(0, ti.decimals - 4)); q.impact = impactOf(best.amountIn, amount, tiny, (await fstAmounts(tiny, best.first.path)).at(-1)); } catch {}
+        q.impact = await v10RouteImpact(request, [best.first, best.second].filter(Boolean), best.amountIn, amount);
       } else if (isAggPair()) {
         const amountIn = amount;
-        const route = await quoteSwap(request, { side: side(), amountIn, feeBps });
+        const route = await quoteSwap(request, { side: side(), amountIn, feeBps, poolPolicy });
         q = { kind: "agg", route, amountIn, out: route.estimateOut, lpFee: route.platformFee, feeAsset: swapV10Ready() ? feeAsset : TOKENS.bnb };
-        try {
+        if (swapV10Ready()) {
+          q.impact = await v10RouteImpact(request, [route.first, route.second].filter(Boolean), route.swapBudget, q.out);
+        } else try {
           const path = side() === "buy" ? [FST_WBNB, SWAP_TOKENS.fist.address] : [SWAP_TOKENS.fist.address, FST_WBNB];
           const tiny = 10n ** BigInt(Math.max(0, ti.decimals - 4));
           q.impact = impactOf(amountIn, q.out, tiny, await midOut(tiny, path));
         } catch { q.impact = null; }
       } else {
-        // —— USDT⇄FIST、USDT⇄BNB：v10 经 FstSwap 适配器（含平台费）；未部署 → 不回退 ——
+        // —— 通用币对：一次批量比较所有已启用的 V2 DEX（含平台费） ——
         if (!swapV10Ready()) throw missing();
         const amountIn = amount;
-        const path = pathFor(ti, to); if (!path) throw Object.assign(new Error("no route"), { code: "NO_ROUTE" });
         let swapIn, method;
         if (ti.key === "bnb") { swapIn = swapBuyBudget(amountIn, feeBps).budget; method = "swapBnbToToken"; }
         else if (to.key === "bnb") { swapIn = policy.mode === "input" ? amountIn - amountIn * BigInt(feeBps) / BPS : amountIn; method = "swapTokenToBnb"; }
         else { swapIn = policy.mode === "output" ? amountIn : amountIn - amountIn * BigInt(feeBps) / BPS; method = "swapTokenToToken"; }
-        const gross = (await fstAmounts(swapIn, path)).at(-1);
-        const out = policy.mode === "output" ? swapSellNet(gross, feeBps).net : gross;
-        const tiny = 10n ** BigInt(Math.max(0, ti.decimals - 4));
-        let impact = null; try { impact = impactOf(swapIn, gross, tiny, (await fstAmounts(tiny, path)).at(-1)); } catch {}
-        q = { kind: "v10", method, path, amountIn, out, impact, feeAsset,
-          lpFee: (policy.mode === "output" ? gross : amountIn) * BigInt(feeBps) / BPS,
-          first: { adapter: SWAP_ADAPTERS.fst.adapter, path } };
+        let best = await v10BestAmountsOut(request, { tokenIn: ti.address, tokenOut: to.address, amountIn: swapIn,
+          singleHop: settings.singleHop, config: state.config, poolPolicy });
+        let feePlan;
         if (policy.mode === "convert") {
-          const plan = await v10PlanFeeConversion(request, { input: ti.address, feeBudget: q.lpFee, config: state.config, slippageBps: settings.slippageBps, mainLegs: [q.first] });
-          q.method = "swapTokenToTokenWithFee"; q.conversion = plan.conversion; q.lpFee = plan.fee;
+          let lastError;
+          for (const candidate of best.candidates) {
+            try {
+              feePlan = await v10PlanFeeConversion(request, { input: ti.address, feeBudget: amountIn * BigInt(feeBps) / BPS,
+                config: state.config, slippageBps: settings.slippageBps, mainLegs: [candidate.first, candidate.second].filter(Boolean) });
+              best = candidate; break;
+            } catch (err) { if (err?.code !== "NO_FEE_ROUTE") throw err; lastError = err; }
+          }
+          if (!feePlan) throw lastError;
+        }
+        const gross = best.out, path = best.first.path;
+        const out = policy.mode === "output" ? swapSellNet(gross, feeBps).net : gross;
+        const impact = await v10RouteImpact(request, [best.first, best.second].filter(Boolean), swapIn, gross);
+        q = { kind: "v10", method, path, amountIn, out, impact, feeAsset, adapterKey: best.key,
+          lpFee: (policy.mode === "output" ? gross : amountIn) * BigInt(feeBps) / BPS,
+          first: best.first, second: best.second };
+        if (policy.mode === "convert") {
+          q.method = "swapTokenToTokenWithFee"; q.conversion = feePlan.conversion; q.lpFee = feePlan.fee;
         }
       }
+      assertQuoteSafety({ tokenIn: ti.address, tokenOut: to.address, amountIn: q.maxIn || q.amountIn,
+        amountOut: q.exactOut ? q.out : minOut(q), impact: q.impact, quotedAmountIn: q.amountIn, quotedAmountOut: q.out });
+      q.poolCheckedAt = poolPolicy.checkedAt;
+      poolPolicy.assertValue(q.maxIn || q.amountIn, q.exactOut ? q.out : minOut(q));
       if (seq !== state.seq) return;
       state.quote = q; state.quoteError = "";
       await refreshAllowance();
@@ -622,7 +634,7 @@ export async function mountSwapView(root) {
       state.quoteError = err?.code === SWAP_V10_MISSING.code ? SWAP_V10_MISSING.code
         : err?.code === "NO_ROUTE" || /revert|INSUFFICIENT/i.test(err?.message || "") ? "NO_ROUTE" : (err?.code || "SWAP_RPC");
       render();
-      if (state.quoteError !== "NO_ROUTE" && state.quoteError !== SWAP_V10_MISSING.code) scheduleQuote(8000);
+      if (!["NO_ROUTE", "POOL_LIQUIDITY", "UNSAFE_QUOTE", "PRICE_IMPACT_TOO_HIGH", SWAP_V10_MISSING.code].includes(state.quoteError)) scheduleQuote(8000);
     }
   }
 
@@ -739,26 +751,32 @@ export async function mountSwapView(root) {
     const submittedTokens = { tokenIn: inT().address, tokenOut: outT().address };
     let expectedRequest;
     try {
+      assertQuoteSafety({ ...submittedTokens, amountIn: q.maxIn || q.amountIn, amountOut: q.exactOut ? q.out : min, impact: q.impact, quotedAmountIn: q.amountIn, quotedAmountOut: q.out });
       if(await showApprovalIfNeeded(q))return;
       if(inT()?.key!=="bnb"&&state.allowance==null)throw new Error(tr("暂时无法读取授权额度，请稍后重试", "Cannot read approval; please try again"));
+      const freshPolicy = await readPoolPolicy(request, { ...submittedTokens, config: await readSwapConfig(request) });
+      const quotedRoute = q.route || q;
+      freshPolicy.assert(quotedRoute.first, quotedRoute.second);
+      freshPolicy.assertValue(q.maxIn || q.amountIn, q.exactOut ? q.out : min);
+      if (state.quote !== q || wallet.account !== submittedAccount) { closeModal(); return; }
       let hash, preflight = null;
       if (q.kind === "agg") {
         preflight = await preflightSwap(wallet.provider.request.bind(wallet.provider), { account: wallet.account, route: q.route, amountIn: q.amountIn, minOut: min, deadline, allowance: side() === "sell" ? state.allowance : null });
         if (preflight.needsApproval) { closeModal(); renderBottom(); return; }
         if (swapV10Ready() && preflight.simulated === null) throw new Error(tr("链上仿真失败，请刷新报价", "Simulation failed; refresh the quote"));
         if (preflight.simulated !== null && preflight.simulated < min) throw new Error(tr("链上仿真低于最少到账，请刷新报价后重试", "Simulation below minimum received; refresh and retry"));
-        const sent = await sendTx(preflight.transaction, preflight.gasLimit, preflight.gasPrice);
+        const sent = await sendTx(preflight.transaction, preflight.gasLimit, preflight.gasPrice, () => freshPolicy.assertFresh());
         hash = sent.hash; expectedRequest = sent.transaction;
       } else {
         // v10 聚合路由（不直连 FstSwap 路由器）；未部署时 v10Request 抛「聚合合约未部署」
         let tx;
         if (q.kind === "v10exact") {
           const method = q.conversion ? "swapTokenForExactTokenWithFee" : ["swapBnbForExactToken", "swapTokenForExactBnb", "swapTokenForExactToken"][q.mode];
-          const args = q.mode === 0 ? [q.first, NO_LEG, q.out, deadline, wallet.account] : [q.first, NO_LEG, q.out, q.maxIn, deadline, wallet.account];
+          const args = q.mode === 0 ? [q.first, q.second || NO_LEG, q.out, deadline, wallet.account] : [q.first, q.second || NO_LEG, q.out, q.maxIn, deadline, wallet.account];
           if (q.conversion) args.push(q.conversion);
           tx = v10Request(ethers.Interface, { account: wallet.account, method, args, value: q.mode === 0 ? q.maxIn : 0n });
         } else if (q.kind === "v10") {
-          const args = q.method === "swapBnbToToken" ? [q.first, NO_LEG, min, deadline, wallet.account] : [q.first, NO_LEG, q.amountIn, min, deadline, wallet.account];
+          const args = q.method === "swapBnbToToken" ? [q.first, q.second || NO_LEG, min, deadline, wallet.account] : [q.first, q.second || NO_LEG, q.amountIn, min, deadline, wallet.account];
           if (q.conversion) args.push(q.conversion);
           tx = v10Request(ethers.Interface, { account: wallet.account, method: q.method, args, value: q.method === "swapBnbToToken" ? q.amountIn : 0n });
         } else throw missing();
@@ -770,7 +788,7 @@ export async function mountSwapView(root) {
         expectedRequest = tx;
         const light = swapPublicRpc(globalThis.fetch, undefined, { attempts: 2, timeoutMs: 8000 });
         const [est, price] = await Promise.allSettled([light({ method: "eth_estimateGas", params: [tx] }), light({ method: "eth_gasPrice" })]);
-        const sent = await sendTx(tx, est.status === "fulfilled" ? BigInt(est.value) * 13n / 10n : 900000n, price.status === "fulfilled" ? BigInt(price.value) : 3000000000n);
+        const sent = await sendTx(tx, est.status === "fulfilled" ? BigInt(est.value) * 13n / 10n : 900000n, price.status === "fulfilled" ? BigInt(price.value) : 3000000000n, () => freshPolicy.assertFresh());
         hash = sent.hash; expectedRequest = sent.transaction;
       }
       const [a3, , b3] = swapSummary(q, 3);
@@ -788,7 +806,7 @@ export async function mountSwapView(root) {
         refreshBalances(); refreshNativeBalance();
       }).catch((err) => popup({ summary: summary + " — " + (err?.message || ""), hash, success: false }));
     } catch (err) {
-      if(!err?.pendingIntent&&Number(err?.code)!==4001&&state.quote===q&&await showApprovalIfNeeded(q))return;
+      if(!["UNSAFE_QUOTE","PRICE_IMPACT_TOO_HIGH","POOL_LIQUIDITY"].includes(err?.code)&&!err?.pendingIntent&&Number(err?.code)!==4001&&state.quote===q&&await showApprovalIfNeeded(q))return;
       if (err?.pendingIntent) errorModal(err.message, err.pendingIntent);
       else if (Number(err?.code) === 4001) errorModal(T("交易被拒绝。"));
       else errorModal(err?.message || tr("交易失败", "Transaction failed"));

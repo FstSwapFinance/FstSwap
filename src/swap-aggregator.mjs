@@ -1,4 +1,4 @@
-import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261110-11";
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261110-12";
 // 聚合路由 Swap 引擎（BSC 主网 56，FstSi aggregator-live v9「multi-pool」，合约 VERSION 1.01）。
 // 与 market-trade.mjs 相同的约束风格：全部函数只通过注入的 JSON-RPC
 // request 访问链上，返回精确的十进制字符串/大整数，浏览器与 Node 均可运行。
@@ -415,6 +415,153 @@ export async function v10AmountsOut(request, adapterKey, amountIn, path) {
   return iface.decodeFunctionResult("getAmountsOutVia", raw)[0].map((x) => BigInt(x));
 }
 
+/// 通用币对比较所有已启用的 V2 DEX，以及各 DEX 自己的包装币路径。
+export function v10V2Candidates(tokenIn, tokenOut, { singleHop = false, config } = {}) {
+  const native = token => !token || lower(token) === ZERO_ADDRESS;
+  const candidates = [], seen = new Set();
+  for (const [key, item] of Object.entries(SWAP_ADAPTERS)) {
+    if (item.v3 || config?.adaptersOff?.includes(key)) continue;
+    const input = native(tokenIn) ? item.weth : tokenIn;
+    const output = native(tokenOut) ? item.weth : tokenOut;
+    const paths = [[input, output]];
+    if (!singleHop) for (const mid of [item.weth, SWAP_TOKENS.usdt.address, '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', '0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c', '0x2170ed0880ac9a755fd29b2688956bd959f933f8', SWAP_TOKENS.fist.address]) paths.push([input, mid, output]);
+    for (const path of paths) {
+      if (!path.every(isAddr) || new Set(path.map(lower)).size !== path.length) continue;
+      const id = lower(item.adapter) + ':' + path.map(lower).join(':');
+      if (seen.has(id)) continue;
+      seen.add(id); candidates.push({ key, first: { adapter: item.adapter, path } });
+    }
+  }
+  return candidates;
+}
+
+export function v10RouteCandidates(tokenIn, tokenOut, options = {}) {
+  const candidates = v10V2Candidates(tokenIn, tokenOut, options);
+  if (options.singleHop) return candidates;
+  const adapters = Object.values(SWAP_ADAPTERS).filter(a => !a.v3 && !options.config?.adaptersOff?.includes(a.key));
+  const mids = [SWAP_TOKENS.usdt.address, '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', '0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c', '0x2170ed0880ac9a755fd29b2688956bd959f933f8', ...new Set(adapters.map(a => a.weth))];
+  for (const a of adapters) for (const b of adapters) {
+    if (a.key === b.key) continue;
+    const input = !tokenIn || lower(tokenIn) === ZERO_ADDRESS ? a.weth : tokenIn;
+    const output = !tokenOut || lower(tokenOut) === ZERO_ADDRESS ? b.weth : tokenOut;
+    for (const mid of mids) {
+      if (new Set([input, mid, output].map(lower)).size !== 3) continue;
+      candidates.push({ key: a.key, first: { adapter: a.adapter, path: [input, mid] }, second: { adapter: b.adapter, path: [mid, output] } });
+    }
+  }
+  return candidates;
+}
+
+/// 所有候选一次批量报价，失败的池不影响其他 DEX 的可用报价。
+export async function v10BestAmountsOut(request, { tokenIn, tokenOut, amountIn, singleHop, config, poolPolicy }) {
+  if (!swapV10Ready()) throw error(SWAP_V10_MISSING.code, SWAP_V10_MISSING.zh);
+  if (typeof amountIn !== 'bigint' || amountIn <= 0n) throw invalid();
+  const iface = swapInterface(globalThis.ethers?.Interface);
+  const candidates = (poolPolicy ? v10RouteCandidates : v10V2Candidates)(tokenIn, tokenOut, { singleHop, config }).filter(c => !poolPolicy || poolPolicy.allows(c.first, c.second));
+  const entries = await multicallTryAggregate(request, candidates.map(({ first }) => ({ target: swapActiveRouter(),
+    data: iface.encodeFunctionData('getAmountsOutVia', [first.adapter, amountIn, first.path]) })));
+  const quotes = [], partials = [];
+  candidates.forEach((candidate, index) => {
+    if (!entries[index]?.success) return;
+    try {
+      const amounts = Array.from(iface.decodeFunctionResult('getAmountsOutVia', entries[index].returnData)[0]);
+      const out = amounts.at(-1);
+      if (amounts.length !== candidate.first.path.length || amounts[0] !== amountIn || out <= 0n) return;
+      (candidate.second ? partials : quotes).push({ ...candidate, out, amounts });
+    } catch { /* 不完整的报价不可用于成交。 */ }
+  });
+  if (partials.length) {
+    const secondResults = await multicallTryAggregate(request, partials.map(c => ({ target: swapActiveRouter(),
+      data: iface.encodeFunctionData('getAmountsOutVia', [c.second.adapter, c.out, c.second.path]) })));
+    secondResults.forEach((entry, n) => {
+      if (!entry.success) return;
+      try {
+        const amounts = Array.from(iface.decodeFunctionResult('getAmountsOutVia', entry.returnData)[0]);
+        if (amounts.length !== partials[n].second.path.length || amounts[0] !== partials[n].out || amounts.at(-1) <= 0n) return;
+        quotes.push({ ...partials[n], out: amounts.at(-1), amounts: [...partials[n].amounts, ...amounts.slice(1)] });
+      } catch {}
+    });
+  }
+  quotes.sort((a, b) => a.out > b.out ? -1 : a.out < b.out ? 1 : 0);
+  if (!quotes.length) throw error('NO_ROUTE', '当前没有可用的聚合交易路径');
+  return { ...quotes[0], candidates: quotes };
+}
+
+// Pancake V3 的参考价来自所选池的 slot0，而不是另一家 DEX 的试报价。
+async function v10V3Impact(request, leg, amountIn, amountOut) {
+  if (!sameToken(leg.adapter, SWAP_ADAPTERS.v3?.adapter) || !/^0x[0-9a-f]{86}$/i.test(leg.path || ''))
+    throw error('UNSAFE_QUOTE', '无法读取 V3 兑换路线');
+  const iface = new globalThis.ethers.Interface([
+    'function factory() view returns(address)', 'function getPool(address,address,uint24) view returns(address)',
+    'function token0() view returns(address)', 'function token1() view returns(address)',
+    'function slot0() view returns(uint160,int24,uint16,uint16,uint16,uint32,bool)',
+  ]);
+  const call = async (target, method, args = []) => iface.decodeFunctionResult(method,
+    await request({ method: 'eth_call', params: [{ to: target, data: iface.encodeFunctionData(method, args) }, 'latest'] }));
+  const a = leg.path.slice(0, 42), b = '0x' + leg.path.slice(48), fee = parseInt(leg.path.slice(42, 48), 16);
+  const [factory] = await call(PCS_V3_QUOTER, 'factory');
+  if (!isAddr(factory)) throw error('UNSAFE_QUOTE', 'V3 工厂不可用');
+  const [pool] = await call(factory, 'getPool', [a, b, fee]);
+  if (!isAddr(pool)) throw error('UNSAFE_QUOTE', 'V3 池不存在');
+  const entries = await multicallTryAggregate(request, ['slot0', 'token0', 'token1'].map(method => ({ target: pool, data: iface.encodeFunctionData(method) })));
+  if (entries.some(e => !e.success) || entries.length !== 3) throw error('UNSAFE_QUOTE', '无法读取 V3 池价格');
+  const [sqrt] = iface.decodeFunctionResult('slot0', entries[0].returnData);
+  const [token0] = iface.decodeFunctionResult('token0', entries[1].returnData), [token1] = iface.decodeFunctionResult('token1', entries[2].returnData);
+  const forward = sameToken(a, token0) && sameToken(b, token1), reverse = sameToken(a, token1) && sameToken(b, token0);
+  if ((!forward && !reverse) || sqrt <= 0n || amountIn <= 0n || amountOut <= 0n) throw error('UNSAFE_QUOTE', 'V3 池价格无效');
+  const numerator = amountIn * (forward ? sqrt * sqrt : 2n ** 192n);
+  const received = amountOut * (forward ? 2n ** 192n : sqrt * sqrt);
+  return received >= numerator ? 0 : Number((numerator - received) * 100000000n / numerator) / 100000000;
+}
+
+/// 用储备计算交易前的边际价格，避免“小额试报价”本身耗尽微小池子。
+export async function v10RouteImpact(request, first, amountIn, amountOut) {
+  const legs = Array.isArray(first) ? first : [first];
+  if (legs.length === 1 && legs[0]?.kind === 'v3') return v10V3Impact(request, legs[0], amountIn, amountOut);
+  const iface = swapInterface(globalThis.ethers?.Interface), edges = [];
+  for (const leg of legs) {
+    if (!Array.isArray(leg?.path) || leg.path.length < 2) throw error('UNSAFE_QUOTE', '无法读取兑换路线的流动性');
+    for (let n = 1; n < leg.path.length; n++) edges.push({ adapter: leg.adapter, a: leg.path[n - 1], b: leg.path[n] });
+  }
+  if (!edges.length || amountIn <= 0n || amountOut <= 0n) throw error('UNSAFE_QUOTE', '兑换报价无效');
+  const entries = await multicallTryAggregate(request, edges.map(({ adapter, a, b }) => ({ target: swapActiveRouter(),
+    data: iface.encodeFunctionData('getPairInfo', [adapter, a, b, ZERO_ADDRESS]) })));
+  let numerator = amountIn, denominator = 1n;
+  for (let n = 0; n < edges.length; n++) {
+    let pool;
+    try { if (entries[n]?.success) pool = iface.decodeFunctionResult('getPairInfo', entries[n].returnData); } catch {}
+    const { a, b } = edges[n];
+    if (!pool || !isAddr(pool[0]) || pool[3] <= 0n || pool[4] <= 0n) throw error('UNSAFE_QUOTE', '流动性不足，无法安全报价');
+    const forward = sameToken(pool[1], a) && sameToken(pool[2], b);
+    const reverse = sameToken(pool[1], b) && sameToken(pool[2], a);
+    if (!forward && !reverse) throw error('UNSAFE_QUOTE', '兑换池与报价路线不符');
+    numerator *= forward ? pool[4] : pool[3];
+    denominator *= forward ? pool[3] : pool[4];
+  }
+  const received = amountOut * denominator;
+  return received >= numerator ? 0 : Number((numerator - received) * 100000000n / numerator) / 100000000;
+}
+
+export function assertQuoteSafety({ tokenIn, tokenOut, amountIn, amountOut, impact, quotedAmountIn = amountIn, quotedAmountOut = amountOut }) {
+  if (typeof amountIn !== 'bigint' || typeof amountOut !== 'bigint' || amountIn <= 0n || amountOut <= 0n)
+    throw error('UNSAFE_QUOTE', '兑换报价无效');
+  if (impact != null) {
+    if (!Number.isFinite(impact) || impact > 0.15)
+      throw error('PRICE_IMPACT_TOO_HIGH', '价格影响超过 15%，请减少金额或选择其他币对');
+    if (typeof quotedAmountIn !== 'bigint' || typeof quotedAmountOut !== 'bigint' || quotedAmountIn <= 0n || quotedAmountOut <= 0n)
+      throw error('UNSAFE_QUOTE', '兑换报价无效');
+    // 对链上最低到账 / 最高支付生效，不能通过放大滑点绕过价格影响上限。
+    const rate = BigInt(Math.floor(Math.min(1, 1 - impact) * 100000000));
+    const worstRate = amountOut * quotedAmountIn * rate / (quotedAmountOut * amountIn);
+    if (worstRate < 85000000n) throw error('PRICE_IMPACT_TOO_HIGH', '价格影响与滑点合计超过 15%，请减少金额或滑点');
+  }
+  // 仅这两个已知 BSC 18 位稳定币采用额外的 90% 最低比率保护；不按代币名称猜测精度。
+  const stable = [lower(SWAP_TOKENS.usdt.address), '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d'];
+  if (!sameToken(tokenIn, tokenOut) && stable.includes(lower(tokenIn)) && stable.includes(lower(tokenOut)) && amountOut * 100n < amountIn * 90n)
+    throw error('UNSAFE_QUOTE', '稳定币兑换价格异常，已停止兑换');
+  if (impact == null) throw error('UNSAFE_QUOTE', '无法读取价格影响，请刷新报价');
+}
+
 /// v10：精确输出报价（与成交同算法）。mode 0 = BNB→代币，1 = 代币→BNB（净额），2 = 代币→代币。
 export async function v10QuoteExactOutput(request, { first, second = null, amountOut, mode, conversion }) {
   if (!swapV10Ready()) throw error(SWAP_V10_MISSING.code, SWAP_V10_MISSING.zh);
@@ -439,7 +586,7 @@ export function v10Request(Interface, { account, method, args, value = 0n }) {
 /// 两轮 Multicall3：第一轮覆盖直接候选 + 两段第一腿 + v3 尝试；
 /// 第二轮用第一腿输出对两段第二腿报价。返回最优路线。
 export async function quoteSwap(request, options) {
-  const { side, amountIn, feeBps = 30, tokens = SWAP_TOKENS, adapters = SWAP_ADAPTERS, includeV3 = true } = options ?? {};
+  const { side, amountIn, feeBps = 30, tokens = SWAP_TOKENS, adapters = SWAP_ADAPTERS, includeV3 = true, poolPolicy } = options ?? {};
   if (!["buy", "sell"].includes(side) || typeof amountIn !== "bigint" || amountIn <= 0n) throw invalid();
   const usdt = tokens.usdt.address, fist = tokens.fist.address;
   // 候选种子清单：2026-11-09 主网已核验的池。BUSD 无 FIST 池不列入；
@@ -603,7 +750,7 @@ export async function quoteSwap(request, options) {
   }
 
   const usable = candidates
-    .filter((c) => c && c.estimateOut > 0n)
+    .filter((c) => c && c.estimateOut > 0n && (!poolPolicy || poolPolicy.allows(c.first, c.second)))
     .sort((a, b) => (a.estimateOut > b.estimateOut ? -1 : a.estimateOut < b.estimateOut ? 1 : a.hops - b.hops));
   if (!usable.length) throw error("NO_ROUTE", "当前没有可用的聚合交易路径");
   return usable[0];

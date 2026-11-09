@@ -3,7 +3,7 @@
 // 钱包连接逻辑沿用（注入式 / WalletConnect / Coinbase→injected→WC / Fortmatic·Portis 已停服回退）。
 import { SWAP_CHAIN, connectInjected, walletConnectAccount,
   walletShort, loadSwapWalletConnect, disconnectWalletConnect } from "./swap-wallet.mjs?v=review-20261110-3";
-import { swapPublicRpc, loadSwapLibrary } from "./swap-aggregator.mjs?v=mainnet-20261110-11";
+import { swapPublicRpc, loadSwapLibrary } from "./swap-aggregator.mjs?v=mainnet-20261110-12";
 import { TPL, EN } from "./swap-official-tpl.mjs?v=official-20261109";
 import { jazziconHtml } from "./swap-jazzicon.mjs?v=official-20261109";
 import "./swap-ui.mjs?v=review-20261110-3";

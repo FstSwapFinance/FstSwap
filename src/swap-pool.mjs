@@ -2,9 +2,9 @@ import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 // 流动池（#/pool、#/pool/v2/find）、注入流动资金（#/add/v2/A/B）、去除流动资金（#/remove/v2/A/B）——
 // 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css）；
 // 链上逻辑：直接调用 FstSwap 路由器（Pancake V2 fork，同官方授权对象 0x1B6C…ABC2d），FIST-USDT / FIST-WBNB 官方池。
-import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261110-11";
-import { tr, T, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal, popup, refreshNativeBalance, hashParts } from "./swap-shell.mjs?v=mainnet-20261110-11";
-import { TOKENS, sigDown } from "./swap-view.mjs?v=mainnet-20261110-11";
+import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261110-12";
+import { tr, T, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal, popup, refreshNativeBalance, hashParts } from "./swap-shell.mjs?v=mainnet-20261110-12";
+import { TOKENS, sigDown } from "./swap-view.mjs?v=mainnet-20261110-12";
 
 import { tokenLogo, applyTokenLogo } from "./swap-token-logo.mjs";
 
@@ -404,7 +404,7 @@ async function mountAdd(root, request, parts) {
       const text = left.querySelector(".css-djrxae");
       text.textContent = bal == null ? "" : tr("余额：", "Balance: ") + formatBalance(bal, TOKENS[k]) + " " + TOKENS[k].symbol;
       const max = left.querySelector("button.cfnxzr");
-      const setMax = () => { if (!bal) return; const m = k === "bnb" ? (bal > 10n ** 16n ? bal - 10n ** 16n : 0n) : bal; st.field = field; st.typed = formatAmountInput(m, TOKENS[k].decimals); render(); };
+      const setMax = () => { if (!bal) return; const m = k === "bnb" ? (bal > 10n ** 16n ? bal - 10n ** 16n : 0n) : bal; st.field = field; st.typed = swapFormatUnits(m, TOKENS[k].decimals); render(); };
       if (!bal || bal === 0n || (st.field === field && parseAmount(st.typed, TOKENS[k].decimals) === bal)) max.remove(); else max.addEventListener("click", setMax);
       text.addEventListener("click", setMax);
     }
