@@ -138,7 +138,7 @@ export async function quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,sli
  const whole=wrap?null:await readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens:[config.defaultFeeToken]});
  const findRoute=async(from,to,amount,used)=>{
   if(isWrap(from,to))return{from,to,amountIn:amount,minimum:amount,out:amount,impact:0,legs:[{kind:'wrap',out:amount,amountIn:amount}],assertFresh(){}};
-  const policy={...whole,...createPoolPolicy(whole.pools,whole.prices,from,to)};
+  const policy={...whole,...createPoolPolicy(whole.pools,whole.prices,from,to,{tradeTokenIn:tokenIn})};
   const routes=await quoteFstRoutes(request,{from,to,amount,used,policy,singleHop});
   const valid=routes.candidates.filter(c=>{c.minimum=minimum(c.out,slippageBps);try{policy.assertValue(c.amountIn,c.minimum);return true;}catch{return false;}});
   if(!valid.length)throw noRoute();return{...valid[0],candidates:valid};
@@ -152,7 +152,7 @@ export function validateFstQuote(quote,config,policy){
  if(fee.token!==quote.feeToken||fee.mode!==quote.feeMode)throw Error('收费资产已变化，请刷新报价');
  if(isWrap(quote.tokenIn,quote.tokenOut)&&quote.stages.length===1&&quote.stages[0].branches[0].kind===2)return{assert(){},assertValue(){},assertFresh(){}};
  for(const s of quote.segments){
-  const part=createPoolPolicy(policy.pools,policy.prices,s.from,s.to);part.assertRoute(s.legs);part.assertValue(s.amountIn,s.minimum);
+  const part=createPoolPolicy(policy.pools,policy.prices,s.from,s.to,{tradeTokenIn:quote.tokenIn});part.assertRoute(s.legs);part.assertValue(s.amountIn,s.minimum);
  }
  policy.assertValue(quote.amountIn,quote.minimum);policy.assertFresh();
  return{assert(){},assertValue:(a,b)=>policy.assertValue(a,b),assertFresh:()=>policy.assertFresh()};

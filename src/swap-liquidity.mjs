@@ -35,7 +35,7 @@ function fistReferencePrice(pools,prices,tokenIn,tokenOut){
  const price=reference.reserves[usdIndex]*p/reference.reserves[fistIndex];
  return price>0n?price:null;
 }
-export function createPoolPolicy(pools,prices,tokenIn,tokenOut){
+export function createPoolPolicy(pools,prices,tokenIn,tokenOut,{tradeTokenIn=tokenIn}={}){
  const endpoints=[lower(tokenIn),lower(tokenOut)];
  const references=new Set(MAINSTREAM_TOKENS);
  // Only a separate canonical FstSwap FIST/USDT pool above $100k may value
@@ -58,6 +58,11 @@ export function createPoolPolicy(pools,prices,tokenIn,tokenOut){
    if(references.has(other)&&(!main.has(alt)||pool.usd>main.get(alt).usd))main.set(alt,pool);
   }
  }
+ // FIST buys of an FstSwap main-pool token stay on FstSwap for the entire
+ // route, including bridges. Use this same admission rule for quote selection
+ // and the fresh preflight so a competing quote cannot switch the execution DEX.
+ const targetMain=main.get(endpoints[1]);
+ const fstOnly=lower(tradeTokenIn)===FIST&&lower(targetMain?.adapter||targetMain?.id?.split(':')[0])===lower(SWAP_ADAPTERS.fst.adapter);
  const edges=leg=>{
   if(!leg)return[];
   if(leg.kind==='v3'){
@@ -68,6 +73,7 @@ export function createPoolPolicy(pools,prices,tokenIn,tokenOut){
   return leg.path.slice(1).map((b,n)=>pools.get(key(leg.adapter,leg.path[n],b)));
  };
  const allowsRoute=legs=>{
+  if(fstOnly&&legs.some(leg=>lower(leg?.adapter)!==lower(SWAP_ADAPTERS.fst.adapter)))return false;
   const route=legs.flatMap(edges);if(!route.length||route.some(p=>!p||p.usd<=0n||!p.priceAligned||p.depthVerified===false))return false;
   for(const pool of route){
    const a=[pool.token0,pool.token1].filter(t=>!references.has(t));
