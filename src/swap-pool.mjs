@@ -1,11 +1,13 @@
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 // 流动池（#/pool、#/pool/v2/find）、注入流动资金（#/add/v2/A/B）、去除流动资金（#/remove/v2/A/B）——
 // 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css）；
-// 链上逻辑：直接调用 FstSwap 路由器（Pancake V2 fork，同官方授权对象 0x1B6C…ABC2d），FIST-USDT / FIST-WBNB 官方池。
-import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261110-13";
-import { tr, T, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal, popup, refreshNativeBalance, hashParts } from "./swap-shell.mjs?v=mainnet-20261110-13";
-import { TOKENS, sigDown } from "./swap-view.mjs?v=mainnet-20261110-13";
+// 链上逻辑：直接调用 FstSwap 路由器（Pancake V2 fork，同官方授权对象 0x1B6C…ABC2d），所有启用列表中的代币，按 FstSwap factory 查询所选币对。
+import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261110-14";
+import { tr, T, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal, popup, refreshNativeBalance, hashParts } from "./swap-shell.mjs?v=mainnet-20261110-14";
+import { TOKENS, sigDown, tokenKeys, openTokenPicker } from "./swap-view.mjs?v=mainnet-20261110-14";
 
+import { discoverPool, reservesByToken } from "./swap-pool-data.mjs";
+import { refreshDefaultList } from "./swap-manage.mjs?v=mainnet-20261110-14";
 import { tokenLogo, applyTokenLogo } from "./swap-token-logo.mjs";
 
 const FST_ROUTER = "0x1B6C9c20693afDE803B27F8782156c0f892ABC2d";
@@ -33,19 +35,44 @@ const ROUTER_ABI = [
   "function removeLiquidityETH(address token,uint256 liquidity,uint256 amountTokenMin,uint256 amountETHMin,address to,uint256 deadline) returns (uint256 amountToken,uint256 amountETH)",
   "function removeLiquidity(address tokenA,address tokenB,uint256 liquidity,uint256 amountAMin,uint256 amountBMin,address to,uint256 deadline) returns (uint256 amountA,uint256 amountB)",
 ];
-const ORDER = ["bnb", "usdt", "fist"];
 
 const iface = (abi) => new globalThis.ethers.Interface(abi);
 const readSettings = () => { try { const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"); return { slippageBps: 50, slippageAuto: !("slippageBps" in saved), deadlineMinutes: 30, ...saved }; } catch { return { slippageBps: 50, slippageAuto: true, deadlineMinutes: 30 }; } };
 const saveSettings = (s) => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {} };
 const keyFromId = (id) => {
   const v = String(id || "").toLowerCase();
-  if (v === "bnb" || v === "eth" || v === WBNB_FST.toLowerCase()) return "bnb";
-  if (v === USDT.toLowerCase()) return "usdt";
-  if (v === FIST.toLowerCase()) return "fist";
-  return null;
+  if (v === "bnb" || v === "eth") return "bnb";
+  return tokenKeys().find(k => TOKENS[k].address?.toLowerCase() === v) || null;
 };
-const poolFor = (a, b) => POOLS.find((p) => a && b && p.keys.includes(a) && p.keys.includes(b) && a !== b) || null;
+const discoveredPools = new Map();
+const poolKey = (a, b) => [a, b].sort().join(":");
+const poolFor = (a, b) => discoveredPools.get(poolKey(a, b)) || POOLS.find(p => a && b && a !== b && p.keys.includes(a) && p.keys.includes(b)) || null;
+const tokenId = k => k === "bnb" ? "BNB" : TOKENS[k].address;
+const pairRoute = (action, pool) => "#/" + action + "/v2/" + pool.keys.map(tokenId).join("/");
+async function resolvePool(request, a, b) {
+  if (!a || !b || a === b) return null;
+  const cached = poolFor(a, b);
+  if (cached) return cached;
+  const pool = await discoverPool(request, TOKENS[a], TOKENS[b]);
+  if (pool) discoveredPools.set(poolKey(a, b), pool);
+  return pool;
+}
+function rememberPool(pool) {
+  try {
+    const pairs = JSON.parse(localStorage.getItem("fstswap_imported_pairs_v1") || "[]");
+    const ids = pool.keys.map(tokenId);
+    const key = ids.map(x => x.toLowerCase()).sort().join(":");
+    const next = pairs.filter(p => p.map(x => x.toLowerCase()).sort().join(":") !== key);
+    localStorage.setItem("fstswap_imported_pairs_v1", JSON.stringify([ids, ...next].slice(0, 50)));
+  } catch {}
+}
+async function importedPools(request) {
+  try {
+    const pairs = JSON.parse(localStorage.getItem("fstswap_imported_pairs_v1") || "[]");
+    const loaded = await Promise.all(pairs.slice(0, 50).map(p => resolvePool(request, keyFromId(p[0]), keyFromId(p[1])).catch(() => null)));
+    return [...new Map([...POOLS, ...loaded.filter(Boolean)].map(p => [p.pair.toLowerCase(), p])).values()];
+  } catch { return POOLS; }
+}
 const addrOf = (k) => (k === "bnb" ? WBNB_FST : TOKENS[k].address);
 /// 官方 Price.toSignificant(6)（ROUND_HALF_UP）。
 const price6 = (num) => (!Number.isFinite(num) || num <= 0 ? "-" : String(Number(num.toPrecision(6))));
@@ -76,8 +103,7 @@ function chainReads(request) {
     call,
     async pool(pool) {
       const [[r0, r1], [ts]] = await Promise.all([call(pool.pair, PAIR_ABI, "getReserves"), call(pool.pair, PAIR_ABI, "totalSupply")]);
-      const fistIs0 = pool.token0.toLowerCase() === FIST.toLowerCase();
-      return { fist: fistIs0 ? r0 : r1, other: fistIs0 ? r1 : r0, totalSupply: ts };
+      return reservesByToken(pool, r0, r1, ts);
     },
     async balance(k, account, provider) {
       if (k === "bnb") return BigInt(await (provider ? provider.request({ method: "eth_getBalance", params: [account, "latest"] }) : request({ method: "eth_getBalance", params: [account, "latest"] })));
@@ -191,42 +217,6 @@ function bindSettings(main) {
 }
 
 // —— 代币选择弹窗（官方 CurrencySearchModal，用于注入页 / 导入流动池） ——
-function openTokenPicker({ selected, other, balances = {}, onPick }) {
-  const wallet = useWallet();
-  const overlay = tpl("token_modal");
-  const listHost = overlay.querySelector('div[style*="flex: 1 1 0%"]');
-  const scroller = listHost.querySelector('div[style*="overflow: auto"]');
-  const inner = scroller.firstElementChild;
-  const rowTpl = {}; inner.querySelectorAll(":scope > div").forEach((r) => { const k = ORDER.find((key) => r.className.includes(TOKENS[key].item)); if (k) rowTpl[k] = r.cloneNode(true); });
-  const emptyView = part("token_search_empty", 'div[style*="padding: 20px"]');
-  const search = overlay.querySelector("#token-search-input");
-  const draw = () => {
-    const q = search.value.trim().toLowerCase();
-    const keys = ORDER.filter((k) => !q || TOKENS[k].symbol.toLowerCase().includes(q) || TOKENS[k].name.toLowerCase().includes(q) || (TOKENS[k].address || "").toLowerCase() === q);
-    const container = overlay.querySelector('div[style*="flex: 1 1 0%"]') || overlay.querySelector('div[style*="padding: 20px"]');
-    if (!keys.length) { container.replaceWith(emptyView.cloneNode(true)); return; }
-    if (container !== listHost) container.replaceWith(listHost);
-    inner.replaceChildren(); inner.style.height = keys.length * 56 + "px";
-    keys.forEach((k, i) => {
-      const r = rowTpl[k].cloneNode(true); const base = r.className.replace(/\b(hkWdsr|hhKaCX|LPcFh)\b/, "").trim();
-      r.className = base + " " + (k === selected ? "hhKaCX" : k === other ? "LPcFh" : "hkWdsr");
-      if (k === selected) r.setAttribute("disabled", ""); else r.removeAttribute("disabled");
-      r.style.top = i * 56 + "px";
-      applyTokenLogo(r.querySelector(":scope > svg, :scope > img"), TOKENS[k]);
-      const balBox = r.querySelector(".hpHOqm"); const bal = balances[k];
-      if (balBox) { if (wallet.account && bal != null) { balBox.textContent = sigDown(bal, TOKENS[k].decimals, 4); balBox.title = swapFormatUnits(bal, TOKENS[k].decimals); } else balBox.parentElement.replaceChildren(); }
-      if (k !== selected) r.addEventListener("click", () => { closeModal(); onPick(k); });
-      inner.append(r);
-    });
-  };
-  search.addEventListener("input", draw);
-  overlay.querySelector(".jmNfaf > svg")?.addEventListener("click", closeModal);
-  openModal(overlay);
-  const h = listHost.getBoundingClientRect().height; if (h > 0) scroller.style.height = Math.floor(h) + "px";
-  const trig = listHost.querySelector(".expand-trigger > div"); if (trig) { trig.style.width = Math.floor(listHost.getBoundingClientRect().width + 1) + "px"; trig.style.height = Math.floor(h + 1) + "px"; }
-  draw(); search.focus();
-}
-
 function connectButton() {
   const btns = tpl("swap_empty").querySelectorAll("#swap-page button");
   const b = btns[btns.length - 1].cloneNode(true);
@@ -237,7 +227,9 @@ function connectButton() {
 export async function mountPoolPage(root, route) {
   try { await loadSwapLibrary(); } catch {}
   const request = swapPublicRpc();
-  const parts = hashParts();
+  const mountedHash = location.hash, parts = hashParts();
+  if ([parts[2], parts[3]].some(id => /^0x/i.test(id || "") && !keyFromId(id))) await refreshDefaultList().catch(() => {});
+  if (location.hash !== mountedHash) return;
   if (route === "add") return mountAdd(root, request, parts);
   if (route === "remove") return mountRemove(root, request, parts);
   if (parts[1] === "v2" && parts[2] === "find") return mountFind(root, request);
@@ -253,43 +245,45 @@ async function mountPoolList(root, request) {
   const holder = main.querySelector(".bWHOHv");
   const msg = holder.querySelector(".css-1mkknq7");
   const proto = holder.cloneNode(true);
+  let visible = holder, drawSeq = 0;
   async function draw() {
+    const seq = ++drawSeq, account = wallet.account;
     if (!main.isConnected) return;
-    if (!wallet.account) { msg.textContent = tr("连接钱包以查看您的流动资金。", "Connect to a wallet to view your liquidity."); return; }
+    if (visible !== holder) { visible.replaceWith(holder); visible = holder; }
+    if (!account) { msg.textContent = tr("连接钱包以查看您的流动资金。", "Connect to a wallet to view your liquidity."); return; }
     msg.textContent = T("未找到流动资金。");
-    const rows = await Promise.all(POOLS.map(async (pool) => {
+    const rows = await Promise.all((await importedPools(request)).map(async (pool) => {
       try {
-        const [pr, [lp]] = await Promise.all([reads.pool(pool), reads.call(pool.pair, PAIR_ABI, "balanceOf", [wallet.account])]);
-        return lp > 0n ? { pool, pr, lp } : null;
+        const [pr, [lp]] = await Promise.all([reads.pool(pool), reads.call(pool.pair, PAIR_ABI, "balanceOf", [account])]);
+        return lp > 0n && pr.totalSupply > 0n ? { pool, pr, lp } : null;
       } catch { return null; }
     }));
     const held = rows.filter(Boolean);
-    if (!held.length || !main.isConnected) return;
+    if (!held.length || !main.isConnected || seq !== drawSeq || account !== wallet.account) return;
     // 有持仓：沿用官方卡片容器，按 FullPositionCard 内容列出（币对 / 份额 / 去除入口）
     const list = html('<div class="sc-16waliw-2 dcfnNF" style="width: 100%;"></div>');
     held.forEach(({ pool, pr, lp }) => {
       const card = proto.cloneNode(true);
-      const other = pool.keys[1];
-      const fistAmt = lp * pr.fist / pr.totalSupply, otherAmt = lp * pr.other / pr.totalSupply;
+      const [first, other] = pool.keys;
+      const firstAmt = lp * pr.reserves[addrOf(first).toLowerCase()] / pr.totalSupply, otherAmt = lp * pr.reserves[addrOf(other).toLowerCase()] / pr.totalSupply;
       const share = Number(lp) / Number(pr.totalSupply) * 100;
       const body = card.querySelector(".css-1mkknq7");
       body.style.textAlign = "left";
       body.innerHTML = "";
       const line = (k, v) => { const d = document.createElement("div"); d.style.cssText = "display:flex;justify-content:space-between;margin:4px 0"; d.append(k, Object.assign(document.createElement("span"), { textContent: v })); return d; };
-      const title = document.createElement("div"); title.style.cssText = "font-weight:500;font-size:20px;color:#fff;margin-bottom:8px"; title.textContent = TOKENS[other].symbol + "/FIST";
+      const title = document.createElement("div"); title.style.cssText = "font-weight:500;font-size:20px;color:#fff;margin-bottom:8px"; title.textContent = TOKENS[other].symbol + "/" + TOKENS[first].symbol;
       body.append(title,
         line(tr("您的总流动池代币：", "Your total pool tokens:"), sigDown(lp, 18, 4)),
         line(tr("已入金 ", "Pooled ") + TOKENS[other].symbol + "：", sigDown(otherAmt, TOKENS[other].decimals, 6)),
-        line(tr("已入金 FIST：", "Pooled FIST:"), sigDown(fistAmt, 6, 6)),
+        line(tr("已入金 ", "Pooled ") + TOKENS[first].symbol + "：", sigDown(firstAmt, TOKENS[first].decimals, 6)),
         line(tr("您的资金池份额：", "Your pool share:"), (share < 0.01 ? "<0.01" : share.toFixed(2)) + "%"));
       const actions = document.createElement("div"); actions.style.cssText = "display:flex;gap:8px;margin-top:12px";
-      const addId = other === "bnb" ? "BNB" : TOKENS[other].address;
       const mk = (text, href) => { const a = main.querySelector("a.egNOzd").cloneNode(true); a.textContent = text; a.href = href; a.style.flex = "1"; return a; };
-      actions.append(mk(tr("增加", "Add"), "#/add/v2/" + addId + "/" + FIST), mk(tr("去除", "Remove"), "#/remove/v2/" + addId + "/" + FIST));
+      actions.append(mk(tr("增加", "Add"), pairRoute("add", pool)), mk(tr("去除", "Remove"), pairRoute("remove", pool)));
       body.append(actions);
       list.append(card);
     });
-    holder.replaceWith(list);
+    holder.replaceWith(list); visible = list;
   }
   wallet.subscribe(() => { draw(); });
   draw();
@@ -305,16 +299,23 @@ async function mountFind(root, request) {
   const [btnA, btnB] = main.querySelectorAll("button.gOauOq");
   const protoSelected = btnA.cloneNode(true), protoEmpty = btnB.cloneNode(true);
   const status = main.querySelector(".exvWjX:last-child .css-1lx7oj");
+  let checkSeq = 0;
   async function check() {
-    const pool = poolFor(sel.a, sel.b);
+    const seq = ++checkSeq, account = wallet.account;
+    const current = () => seq === checkSeq && main.isConnected && account === wallet.account;
     if (!sel.a || !sel.b) { status.textContent = T("选择代币以查找您的 v2 流动资金。"); return; }
-    if (!pool) { status.textContent = tr("未找到流动池。", "No pool found."); return; }
-    if (!wallet.account) { status.textContent = tr("连接钱包以查找流动池。", "Connect to a wallet to find pools"); return; }
     status.textContent = tr("正在加载…", "Loading…");
     try {
-      const [lp] = await reads.call(pool.pair, PAIR_ABI, "balanceOf", [wallet.account]);
+      const pool = await resolvePool(request, sel.a, sel.b);
+      if (!current()) return;
+      if (!pool) { status.textContent = tr("未找到流动池。", "No pool found."); return; }
+      if (!account) { status.textContent = tr("连接钱包以查找流动池。", "Connect to a wallet to find pools"); return; }
+      const [lp] = await reads.call(pool.pair, PAIR_ABI, "balanceOf", [account]);
+      if (!current()) return;
+      if (lp > 0n) rememberPool(pool);
       status.textContent = lp > 0n ? tr("已找到流动池！已导入。", "Pool Found! Imported.") : tr("您在此流动池中还没有流动资金。", "You don’t have liquidity in this pool yet.");
-    } catch { status.textContent = tr("读取失败", "Read failed"); }
+      const link = document.createElement("a"); link.href = pairRoute("add", pool); link.textContent = tr(" 增加流动资金", " Add liquidity"); status.append(link);
+    } catch { if (current()) status.textContent = tr("读取失败", "Read failed"); }
   }
   function draw() {
     const live = main.querySelectorAll("button.gOauOq");
@@ -344,7 +345,7 @@ async function mountAdd(root, request, parts) {
   const tx = txHelpers(wallet, request);
   const st = {
     a: keyFromId(parts[2]) || (parts[2] ? null : null), b: keyFromId(parts[3]),
-    field: "a", typed: "", pr: null, balances: {}, allowance: {}, approving: {},
+    field: "a", typed: "", pr: null, pool: null, poolLoading: true, poolError: false, balances: {}, allowance: {}, approving: {},
   };
   const main = tpl("add");
   mountFrame(root, "pool", main);
@@ -355,8 +356,8 @@ async function mountAdd(root, request, parts) {
   const protoPrices = $(".gplWWU").cloneNode(true);
   const protoBottomEmpty = col.lastElementChild.cloneNode(true);
   const protoBottomApprove = part("add_amount", ".dbEdQm > .dcfoEc > .dcfnNF:last-child");
-  const pool = () => poolFor(st.a, st.b);
-  const reserve = (k) => (st.pr ? (k === "fist" ? st.pr.fist : st.pr.other) : 0n);
+  const pool = () => st.pool;
+  const reserve = (k) => st.pr?.reserves[addrOf(k).toLowerCase()] ?? 0n;
 
   const parsed = () => {
     const ka = st.a, kb = st.b; const out = { a: 0n, b: 0n };
@@ -435,6 +436,8 @@ async function mountAdd(root, request, parts) {
     if (!wallet.account) { const wrap = protoBottomEmpty.cloneNode(true); wrap.replaceChildren(connectButton()); return wrap; }
     const wrap = protoBottomEmpty.cloneNode(true); const btn = wrap.querySelector("button"); const label = btn.querySelector("div");
     if (!st.a || !st.b) { label.textContent = T("无效币对"); return wrap; }
+    if (st.poolLoading) { label.textContent = tr("正在加载流动池…", "Loading pool…"); return wrap; }
+    if (!st.pr) { label.textContent = st.poolError ? tr("流动池读取失败，请刷新重试", "Could not load pool. Refresh to retry.") : tr("未找到流动池", "No pool found"); return wrap; }
     if (!(p.a > 0n) || !(p.b > 0n)) { label.textContent = T("输入数额"); return wrap; }
     for (const f of ["a", "b"]) {
       const k = st[f]; const bal = st.balances[k];
@@ -472,24 +475,39 @@ async function mountAdd(root, request, parts) {
     if (focusField) { const inp = (focusField === "a" ? na : nb).querySelector("input"); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
   }
 
-  async function loadPool() { const pl = pool(); st.pr = pl ? await reads.pool(pl).catch(() => null) : null; }
+  async function loadPool() {
+    st.poolLoading = true; st.poolError = false;
+    try { st.pool = await resolvePool(request, st.a, st.b); st.pr = st.pool ? await reads.pool(st.pool) : null; }
+    catch { st.pr = null; st.poolError = true; }
+    finally { st.poolLoading = false; }
+  }
+  let accountSeq = 0, loadedAccount;
   async function loadAccount() {
-    if (!wallet.account) return;
-    await Promise.all(ORDER.map(async (k) => { st.balances[k] = await reads.balance(k, wallet.account, wallet.provider).catch(() => st.balances[k] ?? null); }));
-    await Promise.all(["usdt", "fist"].map(async (k) => { st.allowance[k] = await reads.allowance(TOKENS[k].address, wallet.account, FST_ROUTER).catch(() => null); }));
+    const account = wallet.account, seq = ++accountSeq;
+    if (account !== loadedAccount) { st.balances = {}; st.allowance = {}; st.approving = {}; loadedAccount = account; }
+    if (!account) return;
+    const keys = [...new Set([st.a, st.b].filter(Boolean))];
+    await Promise.all(keys.map(async k => {
+      const [bal, allowance] = await Promise.all([reads.balance(k, account, wallet.provider).catch(() => null), k === "bnb" ? null : reads.allowance(TOKENS[k].address, account, FST_ROUTER).catch(() => null)]);
+      if (seq !== accountSeq || account !== wallet.account) return;
+      st.balances[k] = bal; st.allowance[k] = allowance;
+    }));
   }
   async function approveToken(k) {
     const account = wallet.account;
-    st.approving[k] = true; render();
+    const job = { account }; st.approving[k] = job; render();
     try {
       await tx.approve(TOKENS[k].address, TOKENS[k].symbol, async (ok) => {
+        if (st.approving[k] !== job || wallet.account !== account) return;
         const actual = ok ? await reads.allowance(TOKENS[k].address, account, FST_ROUTER).catch(() => null) : null;
+        if (st.approving[k] !== job || wallet.account !== account) return;
         st.approving[k] = false;
-        if (wallet.account === account) st.allowance[k] = actual;
+        st.allowance[k] = actual;
         if (main.isConnected) render();
       });
     } catch (err) {
-      st.approving[k] = false; render();
+      if (st.approving[k] !== job || wallet.account !== account) return;
+      st.approving[k] = false; if (main.isConnected) render();
       if (!isReject(err)) popup({ summary: err?.message || tr("授权失败", "Approval failed"), success: false });
     }
   }
@@ -513,7 +531,7 @@ async function mountAdd(root, request, parts) {
       const summary = "Add " + sigDown(p.a, TOKENS[st.a].decimals, 3) + " " + sa + " and " + sigDown(p.b, TOKENS[st.b].decimals, 3) + " " + sb;
       submittedModal(hash); popup({ summary, hash });
       st.typed = ""; render();
-      tx.waitReceipt(hash).then(async () => { await Promise.all([loadPool(), loadAccount()]); refreshNativeBalance(); if (main.isConnected) render(); })
+      tx.waitReceipt(hash).then(async () => { rememberPool(pl); await Promise.all([loadPool(), loadAccount()]); refreshNativeBalance(); if (main.isConnected) render(); })
         .catch((err) => popup({ summary: summary + " — " + (err?.message || ""), hash, success: false }));
     } catch (err) {
       errorModal(isReject(err) ? T("交易被拒绝。") : (err?.message || tr("交易失败", "Transaction failed")));
@@ -531,12 +549,17 @@ async function mountRemove(root, request, parts) {
   const wallet = useWallet();
   const reads = chainReads(request);
   const tx = txHelpers(wallet, request);
-  const st = { a: keyFromId(parts[2]) || "usdt", b: keyFromId(parts[3]) || "fist", pct: 0, pr: null, lp: 0n, allowance: null, approving: false };
+  const st = { a: parts[2] ? keyFromId(parts[2]) : "usdt", b: parts[3] ? keyFromId(parts[3]) : "fist", pct: 0, pr: null, lp: 0n, allowance: null, approving: false };
   const main = tpl("remove");
   mountFrame(root, "pool", main);
   bindSettings(main);
   const $ = (s) => main.querySelector(s);
-  const pool = poolFor(st.a, st.b);
+  if (!st.a || !st.b || st.a === st.b) { errorModal(T("无效币对")); return; }
+  let pool;
+  try { pool = await resolvePool(request, st.a, st.b); }
+  catch { if (main.isConnected) errorModal(tr("流动池读取失败，请刷新重试", "Could not load pool. Refresh to retry.")); return; }
+  if (!main.isConnected) return;
+  if (!pool) { errorModal(tr("未找到流动池", "No pool found")); return; }
   const btnRow = main.querySelector('div[style="position: relative;"] > .jmNfaf');
   const proto = { approveIdle: btnRow.children[0].cloneNode(true), main: btnRow.children[1].cloneNode(true) };
   const r50 = tpl("remove_50").querySelector('div[style="position: relative;"] > .jmNfaf');
@@ -551,7 +574,7 @@ async function mountRemove(root, request, parts) {
     const symEl = $(sel); symEl.textContent = TOKENS[k].symbol;
     const logo = symEl.previousElementSibling; const img = logoFor(k, logo); if (img && logo) logo.replaceWith(img);
   });
-  const reserve = (k) => (st.pr ? (k === "fist" ? st.pr.fist : st.pr.other) : 0n);
+  const reserve = (k) => st.pr?.reserves[addrOf(k).toLowerCase()] ?? 0n;
   const amounts = () => {
     if (!st.pr || st.pr.totalSupply === 0n) return null;
     const liq = st.lp * BigInt(st.pct) / 100n;
@@ -578,11 +601,11 @@ async function mountRemove(root, request, parts) {
     const row = html('<div class="sc-bdnxRM sc-1ep0hjq-0 sc-1ep0hjq-1 fzUdiI hlBXoz jmNfaf"></div>');
     let approveBtn, mainBtn;
     const liq = am?.liq ?? 0n;
-    const approved = st.pct > 0 && st.allowance != null && st.allowance >= liq;
+    const approved = liq > 0n && st.allowance != null && st.allowance >= liq;
     if (st.pct === 0) approveBtn = proto.approveIdle.cloneNode(true);
     else if (approved) approveBtn = proto.approved.cloneNode(true);
     else {
-      approveBtn = proto.approveIdle.cloneNode(true); approveBtn.disabled = Boolean(st.approving);
+      approveBtn = proto.approveIdle.cloneNode(true); approveBtn.disabled = Boolean(st.approving) || liq === 0n;
       approveBtn.textContent = st.approving ? tr("批准中", "Approving") : T("批准");
       approveBtn.addEventListener("click", approveLp);
     }
@@ -594,28 +617,35 @@ async function mountRemove(root, request, parts) {
   slider.addEventListener("input", () => setPct(Number(slider.value)));
   main.querySelectorAll("button.GhknT").forEach((b, i) => b.addEventListener("click", () => setPct([25, 50, 75, 100][i])));
 
+  let loadSeq = 0, loadedAccount;
   async function load() {
-    if (!pool) return;
-    st.pr = await reads.pool(pool).catch(() => st.pr);
-    if (wallet.account) {
+    const account = wallet.account, seq = ++loadSeq;
+    if (account !== loadedAccount) { st.lp = 0n; st.allowance = null; st.approving = false; loadedAccount = account; }
+    const pr = await reads.pool(pool).catch(() => null);
+    if (seq !== loadSeq || account !== wallet.account) return;
+    st.pr = pr;
+    if (account) {
       const [[lp], [al]] = await Promise.all([
-        reads.call(pool.pair, PAIR_ABI, "balanceOf", [wallet.account]).catch(() => [st.lp]),
-        reads.call(pool.pair, PAIR_ABI, "allowance", [wallet.account, FST_ROUTER]).catch(() => [st.allowance]),
+        reads.call(pool.pair, PAIR_ABI, "balanceOf", [account]).catch(() => [0n]),
+        reads.call(pool.pair, PAIR_ABI, "allowance", [account, FST_ROUTER]).catch(() => [null]),
       ]);
+      if (seq !== loadSeq || account !== wallet.account) return;
       st.lp = lp ?? 0n; st.allowance = al;
     }
   }
   async function approveLp() {
     const account = wallet.account;
-    st.approving = true; render();
+    const job = { account }; st.approving = job; render();
     try {
       await tx.approve(pool.pair, "FST-LP", async (ok) => {
+        if (st.approving !== job || wallet.account !== account) return;
         const actual = ok ? await reads.allowance(pool.pair, account, FST_ROUTER).catch(() => null) : null;
+        if (st.approving !== job || wallet.account !== account) return;
         st.approving = false;
-        if (wallet.account === account) st.allowance = actual;
+        st.allowance = actual;
         if (main.isConnected) render();
       });
-    } catch (err) { st.approving = false; render(); if (!isReject(err)) popup({ summary: err?.message || tr("授权失败", "Approval failed"), success: false }); }
+    } catch (err) { if (st.approving !== job || wallet.account !== account) return; st.approving = false; if (main.isConnected) render(); if (!isReject(err)) popup({ summary: err?.message || tr("授权失败", "Approval failed"), success: false }); }
   }
   async function removeLp() {
     const am = amounts(); if (!am || am.liq === 0n) { errorModal(tr("您在此流动池中没有可去除的流动资金。", "You have no liquidity to remove in this pool.")); return; }
@@ -628,7 +658,7 @@ async function mountRemove(root, request, parts) {
       let data;
       if (pool.native) {
         const tokAmt = st.a === "bnb" ? am.b : am.a, ethAmt = st.a === "bnb" ? am.a : am.b;
-        data = iface(ROUTER_ABI).encodeFunctionData("removeLiquidityETH", [FIST, am.liq, min(tokAmt), min(ethAmt), wallet.account, deadline]);
+        data = iface(ROUTER_ABI).encodeFunctionData("removeLiquidityETH", [TOKENS[st.a === "bnb" ? st.b : st.a].address, am.liq, min(tokAmt), min(ethAmt), wallet.account, deadline]);
       } else {
         data = iface(ROUTER_ABI).encodeFunctionData("removeLiquidity", [TOKENS[st.a].address, TOKENS[st.b].address, am.liq, min(am.a), min(am.b), wallet.account, deadline]);
       }

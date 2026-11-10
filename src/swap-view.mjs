@@ -3,7 +3,7 @@
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价 + 精确输出；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia / quoteExactOutput。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对与精确输出显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-13";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-14";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, v10AmountsIn, readV10Receipt,
@@ -11,15 +11,15 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10QuoteExactOutput, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261110-13";
+} from "./swap-aggregator.mjs?v=mainnet-20261110-14";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-13";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-14";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-13";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-14";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261110-13";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261110-14";
 
 const approvals = createApprovalTracker();
 const BPS = 10000n;
@@ -32,6 +32,7 @@ export const TOKENS = {
   fist: { key: "fist", symbol: "FIST", name: "FstSwap", decimals: 6, address: SWAP_TOKENS.fist.address, id: SWAP_TOKENS.fist.address, item: "token-item-" + SWAP_TOKENS.fist.address },
 };
 let ORDER = ["bnb", "usdt", "fist"];
+export const tokenKeys = () => [...ORDER];
 // 代币注册表跟随「管理代币列表」（官方 useAllTokens = 激活列表 + 用户添加）；USDT / FIST 来自默认 FSTSWAP 列表。
 export function syncTokenRegistry() {
   const keys = ["bnb"];
@@ -83,6 +84,111 @@ function saveHistory(entry) {
 
 // 页面级状态（跨路由保留选择，和官方 redux 一致）
 const page = { inKey: null, outKey: null, connectedDefaults: false };
+
+export function openTokenPicker({ selected, other, balances = {}, onPick, loadBalances }) {
+  syncTokenRegistry();
+  const wallet = useWallet();
+  const overlay = tpl("token_modal");
+  const listHost = overlay.querySelector('div[style*="flex: 1 1 0%"]');
+  const scroller = listHost.querySelector('div[style*="overflow: auto"]');
+  const inner = scroller.firstElementChild;
+  const rowTpl = {}; inner.querySelectorAll(":scope > div").forEach((r) => { const k = ["bnb", "usdt", "fist"].find((key) => r.className.toLowerCase().includes(TOKENS[key].item.toLowerCase())); if (k) rowTpl[k] = r.cloneNode(true); });
+  const emptyView = part("token_search_empty", 'div[style*="padding: 20px"]');
+  const search = overlay.querySelector("#token-search-input");
+  const genericTpl = rowTpl.usdt || rowTpl.fist;
+  // 列表 / 用户添加代币的行：官方 CurrencyRow（图标加载失败 → 斜杠圆圈；用户添加的名称后缀「• 由用户添加」）
+  const rowFor = (k) => {
+    const t = TOKENS[k]; const r = (rowTpl[k] || genericTpl).cloneNode(true);
+    if (!rowTpl[k]) { r.className = r.className.replace(/token-item-\S+/, t.item); const sym = r.querySelector(".css-8mokm4"); sym.textContent = t.symbol; sym.title = t.name; }
+    const nm = r.querySelector(".css-165qfk5"); if (nm && t.address) nm.textContent = t.name + (t.userAdded ? tr(" • 由用户添加", " • Added by user") : "");
+    applyTokenLogo(r.querySelector(":scope > svg, :scope > img"), t);
+    return r;
+  };
+  // 官方 useTokenComparator：BNB 置顶，其余按余额（原始数量）降序，再按符号字母序；未连接钱包保持列表顺序
+  const sortKeys = (keys) => {
+    if (!wallet.account) return keys;
+    const rest = keys.filter((k) => k !== "bnb").sort((a, b) => {
+      const A = balances[a], B = balances[b]; let c = 0;
+      if (A != null && B != null) c = A > B ? -1 : A === B ? 0 : 1; else if (A != null && A > 0n) c = -1; else if (B != null && B > 0n) c = 1;
+      if (c) return c; return TOKENS[a].symbol.toLowerCase() < TOKENS[b].symbol.toLowerCase() ? -1 : 1;
+    });
+    return keys.includes("bnb") ? ["bnb", ...rest] : rest;
+  };
+  // Token metadata always comes from BSC, even when the wallet is on another chain.
+  const readRpc = swapPublicRpc();
+  const dialog = overlay.querySelector("[data-reach-dialog-content]");
+  const searchCls = dialog.className, searchNodes = [...dialog.childNodes];
+  let manager = null, searchSeq = 0;
+  let unsubscribe = () => {}, stopWallet = () => {};
+  const cleanup = () => { unsubscribe(); stopWallet(); manager?.dispose(); };
+  const closePicker = () => { cleanup(); closeModal(); };
+  const backToSearch = () => { manager?.dispose(); searchSeq++; dialog.className = searchCls; dialog.replaceChildren(...searchNodes); search.value = ""; draw(); search.focus(); }; // 官方：CurrencySearch 重新挂载，搜索词清空
+  const pickImported = (t) => { syncTokenRegistry(); const k = ORDER.find((x) => TOKENS[x].address && TOKENS[x].address.toLowerCase() === t.address.toLowerCase()); closePicker(); if (k) onPick(k); };
+  const manage = (opts = {}) => { searchSeq++; manager?.dispose(); manager = openManageView({ content: dialog, onBack: backToSearch, onClose: closePicker, onSelectToken: pickImported, request: readRpc, ...opts }); };
+  // 「管理代币列表」：原先未绑定任何事件（按钮点不开的原因），现在切到官方 Manage 视图
+  overlay.querySelector(".list-token-manage-button")?.addEventListener("click", () => manage());
+  const draw = () => {
+    if (!dialog.contains(search)) return;
+    const q = search.value.trim().toLowerCase(); const seq = ++searchSeq;
+    const keys = sortKeys(ORDER.filter((k) => !q || TOKENS[k].symbol.toLowerCase().includes(q) || TOKENS[k].name.toLowerCase().includes(q) || (TOKENS[k].address || "").toLowerCase() === q));
+    const container = overlay.querySelector('div[style*="flex: 1 1 0%"]') || overlay.querySelector('div[style*="padding: 20px"]');
+    if (!keys.length) {
+      container.replaceWith(emptyView.cloneNode(true));
+      // 官方 CurrencySearch：粘贴未在激活列表中的合约地址 → 显示导入行，点「导入」进入导入代币页
+      if (isAddress(q)) readToken(readRpc, q).then((t) => {
+        if (!t || seq !== searchSeq || !overlay.isConnected || !dialog.contains(search) || findActiveToken(t.address)) return;
+        const box = overlay.querySelector('div[style*="padding: 20px"]'); if (!box) return;
+        const col = document.createElement("div"); col.className = box.className; col.setAttribute("style", "padding: 20px 0px; height: 100%;");
+        col.append(searchImportRow(t, () => manage({ initial: "importToken", importToken: t }))); box.replaceWith(col);
+      }).catch(() => {});
+      return;
+    }
+    const list = listHost; if (container !== list) container.replaceWith(list);
+    inner.replaceChildren(); inner.style.height = keys.length * 56 + "px";
+    keys.forEach((k, i) => {
+      const r = rowFor(k); const base = r.className.replace(/\b(hkWdsr|hhKaCX|LPcFh)\b/, "").trim();
+      r.className = base + " " + (k === selected ? "hhKaCX" : k === other ? "LPcFh" : "hkWdsr");
+      if (k === selected) r.setAttribute("disabled", ""); else r.removeAttribute("disabled");
+      r.style.top = i * 56 + "px";
+      const balBox = r.querySelector(".hpHOqm");
+      const bal = balances[k];
+      if (balBox) { if (wallet.account && bal != null) { balBox.textContent = sigDown(bal, TOKENS[k].decimals, 4); balBox.title = swapFormatUnits(bal, TOKENS[k].decimals); } else balBox.parentElement.replaceChildren(); }
+      if (k !== selected) r.addEventListener("click", () => { closePicker(); onPick(k); });
+      inner.append(r);
+    });
+  };
+  search.addEventListener("input", draw);
+  overlay.querySelector(".jmNfaf > svg")?.addEventListener("click", closePicker);
+  openModal(overlay, { onClose: cleanup });
+  const h = listHost.getBoundingClientRect().height; if (h > 0) scroller.style.height = Math.floor(h) + "px";
+  const trig = listHost.querySelector(".expand-trigger > div"); if (trig) { trig.style.width = Math.floor(listHost.getBoundingClientRect().width + 1) + "px"; trig.style.height = Math.floor(h + 1) + "px"; }
+  draw(); search.focus();
+  const refreshBalances = async () => {
+    if (loadBalances) return loadBalances();
+    const account = wallet.account;
+    if (!account) return;
+    const codec = new globalThis.ethers.Interface(ERC20_ABI);
+    await Promise.all(ORDER.map(async k => {
+      try {
+        const value = k === "bnb"
+          ? BigInt(await readRpc({ method: "eth_getBalance", params: [account, "latest"] }))
+          : codec.decodeFunctionResult("balanceOf", await readRpc({ method: "eth_call", params: [{to: TOKENS[k].address, data: codec.encodeFunctionData("balanceOf", [account])}, "latest"] }))[0];
+        if (wallet.account === account && overlay.isConnected) balances[k] = value;
+      } catch {}
+    }));
+  };
+  refreshBalances().then(() => { if (overlay.isConnected) draw(); }).catch(() => {});
+  unsubscribe = onTokensChanged(() => {
+    if (!overlay.isConnected) { cleanup(); return; }
+    syncTokenRegistry(); draw();
+  });
+  const openedAccount = wallet.account;
+  stopWallet = wallet.subscribe(() => {
+    if (!overlay.isConnected) { cleanup(); return; }
+    if (wallet.account !== openedAccount) closePicker();
+  });
+  refreshDefaultList();
+}
 
 export async function mountSwapView(root) {
   const wallet = useWallet();
@@ -361,80 +467,9 @@ export async function mountSwapView(root) {
 
   // —— 代币选择弹窗（官方 CurrencySearchModal） ——
   function openTokenModal(field) {
-    const overlay = tpl("token_modal");
-    const listHost = overlay.querySelector('div[style*="flex: 1 1 0%"]');
-    const scroller = listHost.querySelector('div[style*="overflow: auto"]');
-    const inner = scroller.firstElementChild;
-    const rowTpl = {}; inner.querySelectorAll(":scope > div").forEach((r) => { const k = ["bnb", "usdt", "fist"].find((key) => r.className.toLowerCase().includes(TOKENS[key].item.toLowerCase())); if (k) rowTpl[k] = r.cloneNode(true); });
-    const emptyView = part("token_search_empty", 'div[style*="padding: 20px"]');
-    const search = overlay.querySelector("#token-search-input");
-    const selected = field === "in" ? page.inKey : page.outKey, other = field === "in" ? page.outKey : page.inKey;
-    const genericTpl = rowTpl.usdt || rowTpl.fist;
-    // 列表 / 用户添加代币的行：官方 CurrencyRow（图标加载失败 → 斜杠圆圈；用户添加的名称后缀「• 由用户添加」）
-    const rowFor = (k) => {
-      const t = TOKENS[k]; const r = (rowTpl[k] || genericTpl).cloneNode(true);
-      if (!rowTpl[k]) { r.className = r.className.replace(/token-item-\S+/, t.item); const sym = r.querySelector(".css-8mokm4"); sym.textContent = t.symbol; sym.title = t.name; }
-      const nm = r.querySelector(".css-165qfk5"); if (nm && t.address) nm.textContent = t.name + (t.userAdded ? tr(" • 由用户添加", " • Added by user") : "");
-      applyTokenLogo(r.querySelector(":scope > svg, :scope > img"), t);
-      return r;
-    };
-    // 官方 useTokenComparator：BNB 置顶，其余按余额（原始数量）降序，再按符号字母序；未连接钱包保持列表顺序
-    const sortKeys = (keys) => {
-      if (!wallet.account) return keys;
-      const rest = keys.filter((k) => k !== "bnb").sort((a, b) => {
-        const A = state.balances[a], B = state.balances[b]; let c = 0;
-        if (A != null && B != null) c = A > B ? -1 : A === B ? 0 : 1; else if (A != null && A > 0n) c = -1; else if (B != null && B > 0n) c = 1;
-        if (c) return c; return TOKENS[a].symbol.toLowerCase() < TOKENS[b].symbol.toLowerCase() ? -1 : 1;
-      });
-      return keys.includes("bnb") ? ["bnb", ...rest] : rest;
-    };
-    // Token metadata always comes from BSC, even when the wallet is on another chain.
-    const readRpc = swapPublicRpc();
-    const dialog = overlay.querySelector("[data-reach-dialog-content]");
-    const searchCls = dialog.className, searchNodes = [...dialog.childNodes];
-    let manager = null, searchSeq = 0;
-    const backToSearch = () => { manager?.dispose(); searchSeq++; dialog.className = searchCls; dialog.replaceChildren(...searchNodes); search.value = ""; draw(); search.focus(); }; // 官方：CurrencySearch 重新挂载，搜索词清空
-    const pickImported = (t) => { syncTokenRegistry(); const k = ORDER.find((x) => TOKENS[x].address && TOKENS[x].address.toLowerCase() === t.address.toLowerCase()); closeModal(); if (k) selectToken(field, k); };
-    const manage = (opts = {}) => { searchSeq++; manager?.dispose(); manager = openManageView({ content: dialog, onBack: backToSearch, onClose: closeModal, onSelectToken: pickImported, request: readRpc, ...opts }); };
-    // 「管理代币列表」：原先未绑定任何事件（按钮点不开的原因），现在切到官方 Manage 视图
-    overlay.querySelector(".list-token-manage-button")?.addEventListener("click", () => manage());
-    const draw = () => {
-      if (!dialog.contains(search)) return;
-      const q = search.value.trim().toLowerCase(); const seq = ++searchSeq;
-      const keys = sortKeys(ORDER.filter((k) => !q || TOKENS[k].symbol.toLowerCase().includes(q) || TOKENS[k].name.toLowerCase().includes(q) || (TOKENS[k].address || "").toLowerCase() === q));
-      const container = overlay.querySelector('div[style*="flex: 1 1 0%"]') || overlay.querySelector('div[style*="padding: 20px"]');
-      if (!keys.length) {
-        container.replaceWith(emptyView.cloneNode(true));
-        // 官方 CurrencySearch：粘贴未在激活列表中的合约地址 → 显示导入行，点「导入」进入导入代币页
-        if (isAddress(q)) readToken(readRpc, q).then((t) => {
-          if (!t || seq !== searchSeq || !overlay.isConnected || !dialog.contains(search) || findActiveToken(t.address)) return;
-          const box = overlay.querySelector('div[style*="padding: 20px"]'); if (!box) return;
-          const col = document.createElement("div"); col.className = box.className; col.setAttribute("style", "padding: 20px 0px; height: 100%;");
-          col.append(searchImportRow(t, () => manage({ initial: "importToken", importToken: t }))); box.replaceWith(col);
-        }).catch(() => {});
-        return;
-      }
-      const list = listHost; if (container !== list) container.replaceWith(list);
-      inner.replaceChildren(); inner.style.height = keys.length * 56 + "px";
-      keys.forEach((k, i) => {
-        const r = rowFor(k); const base = r.className.replace(/\b(hkWdsr|hhKaCX|LPcFh)\b/, "").trim();
-        r.className = base + " " + (k === selected ? "hhKaCX" : k === other ? "LPcFh" : "hkWdsr");
-        if (k === selected) r.setAttribute("disabled", ""); else r.removeAttribute("disabled");
-        r.style.top = i * 56 + "px";
-        const balBox = r.querySelector(".hpHOqm");
-        const bal = state.balances[k];
-        if (balBox) { if (wallet.account && bal != null) { balBox.textContent = sigDown(bal, TOKENS[k].decimals, 4); balBox.title = swapFormatUnits(bal, TOKENS[k].decimals); } else balBox.parentElement.replaceChildren(); }
-        if (k !== selected) r.addEventListener("click", () => { closeModal(); selectToken(field, k); });
-        inner.append(r);
-      });
-    };
-    search.addEventListener("input", draw);
-    overlay.querySelector(".jmNfaf > svg")?.addEventListener("click", closeModal);
-    openModal(overlay);
-    const h = listHost.getBoundingClientRect().height; if (h > 0) scroller.style.height = Math.floor(h) + "px";
-    const trig = listHost.querySelector(".expand-trigger > div"); if (trig) { trig.style.width = Math.floor(listHost.getBoundingClientRect().width + 1) + "px"; trig.style.height = Math.floor(h + 1) + "px"; }
-    draw(); search.focus();
-    loadAllBalances().then(() => { if (overlay.isConnected) draw(); });
+    return openTokenPicker({ selected: field === "in" ? page.inKey : page.outKey,
+      other: field === "in" ? page.outKey : page.inKey, balances: state.balances,
+      onPick: key => selectToken(field, key), loadBalances: loadAllBalances });
   }
   function selectToken(field, key) {
     if (field === "in") { if (page.outKey === key) page.outKey = page.inKey; page.inKey = key; }
