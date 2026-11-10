@@ -57,27 +57,22 @@
 .fst-token-results .css-8mokm4, .fst-token-results .css-165qfk5 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fst-token-results [role="button"] > .dkvoaW { min-width: 0; }
 .fst-common-tokens { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-.fst-common-token, .fst-analysis-token {
+.fst-common-token {
   display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 0;
   padding: 8px 5px; border: 1px solid var(--ui-border); border-radius: 12px;
   color: var(--ui-text); background: var(--ui-panel); cursor: pointer; font: inherit; font-size: 13px;
 }
 .fst-common-token > img, .fst-common-token > svg { width: 18px; height: 18px; flex-shrink: 0; }
 .fst-common-token:disabled { opacity: .45; cursor: default; }
-.fst-common-token:not(:disabled):hover, .fst-analysis-token:hover { background: var(--ui-raised); }
-.fst-common-token:focus-visible, .fst-analysis-token:focus-visible, .fst-token-results [role="button"]:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
+.fst-common-token:not(:disabled):hover { background: var(--ui-raised); }
+.fst-common-token:focus-visible, .fst-token-results [role="button"]:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
 @media (max-width: 480px) {
   .fst-token-dialog .kcbEdf { padding: 16px; gap: 12px; }
   .fst-token-dialog .eDdLkf { padding: 16px; }
   .fst-common-token { font-size: 12px; gap: 4px; }
 }
-.fst-analysis-heading { flex-wrap: wrap; gap: 8px; }
-.fst-analysis-token { font-size: 16px; padding: 8px 10px; max-width: calc(50% - 12px); }
-.fst-analysis-token span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fst-analysis-token img, .fst-analysis-token svg { width: 24px; height: 24px; flex-shrink: 0; }
-.fst-pool-choice { padding: 12px 16px; border-bottom: 1px solid var(--ui-raised); }
-.fst-pool-choice select { width: 100%; padding: 10px; color: var(--ui-text); background: var(--ui-panel); border: 1px solid var(--ui-border); border-radius: 10px; font: inherit; font-size: 13px; }
-.fst-pool-choice p { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--ui-subtle); overflow-wrap: anywhere; }
+.fst-pool-status { padding: 8px 16px; }
+.fst-pool-status p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ui-subtle); }
 
 /* Keep the existing panel design; give the desktop swap card 5% more width. */
 @media (min-width: 961px) { .fst-swap-card { max-width: 504px; } }

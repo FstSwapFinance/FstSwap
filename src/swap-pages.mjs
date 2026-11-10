@@ -1,14 +1,14 @@
 // 首页 / 币对分析（#/analysis/A/B，官方 pages/PoolAnalysis）与 我的（#/my，官方 pages/My）——
 // 界面逐节点复刻官方 DOM 模板；K 线使用官方同版本 TradingView Lightweight Charts v3.8.0（取自官方构建），
 // 数据：链上储备/余额/LP（RPC 池）+ GeckoTerminal OHLCV / 成交（官方 /api/Fst/* 接口在静态站点不可用）。
-import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261110-16";
-import { tr, T, tpl, part, html, mountFrame, useWallet, popup, getLanguage, hashParts, DEFAULT_ANALYSIS } from "./swap-shell.mjs?v=mainnet-20261110-16";
-import { TOKENS, tokenKeys, openTokenPicker, syncTokenRegistry } from "./swap-view.mjs?v=mainnet-20261110-16";
-import { discoverAnalysisPools, readAnalysisPool, analysisStats, analysisTrade, analysisKlinePath, analysisPrice, matchesAnalysisToken, isPoolAddress } from "./swap-analysis-data.mjs?v=mainnet-20261110-16";
+import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261110-17";
+import { tr, T, tpl, part, html, mountFrame, useWallet, popup, getLanguage, hashParts, DEFAULT_ANALYSIS } from "./swap-shell.mjs?v=mainnet-20261110-17";
+import { TOKENS } from "./swap-view.mjs?v=mainnet-20261110-17";
+import { discoverAnalysisPools, readAnalysisPool, analysisStats, analysisTrade, analysisKlinePath, analysisPrice, matchesAnalysisToken, isPoolAddress } from "./swap-analysis-data.mjs?v=mainnet-20261110-17";
 import { marketData } from "./swap-market-data.mjs?v=review-20261110-3";
 import { getTheme, setTheme, SOCIAL_LINKS } from "./swap-ui.mjs?v=review-20261110-3";
 
-import { findActiveToken, refreshDefaultList, readToken } from "./swap-manage.mjs?v=mainnet-20261110-16";
+import { findActiveToken, refreshDefaultList, readToken } from "./swap-manage.mjs?v=mainnet-20261110-17";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
 
 const WBNB_FST = "0x0efb5FD2402A0967B92551d6AF54De148504A115";
@@ -72,7 +72,8 @@ export async function mountAnalysisPage(root) {
   mountFrame(root, "analysis", main);
   const card = main.querySelector(".eyuYtB");
   const title = card.querySelector("header.jCPZFR");
-  const iconSample = title.querySelector("svg").cloneNode(true);
+  const pairIcons = [...title.querySelectorAll(".kVwuYv > svg")];
+  title.querySelector("span").textContent = "—";
   const tabs = [...card.children].find(el => el.querySelector?.(":scope > span.active, :scope > span.normal"));
   const dataNodes = [];
   for (let n = title.nextElementSibling; n && n !== tabs; n = n.nextElementSibling) dataNodes.push(n);
@@ -91,42 +92,21 @@ export async function mountAnalysisPage(root) {
   capturedChart?.parentElement?.nextElementSibling?.querySelector(':scope > div')?.remove();
   if (capturedChart) capturedChart.parentElement.style.display = "none";
   if (tabs) tabs.style.display = "none";
-  title.replaceChildren(); title.classList.add("fst-analysis-heading");
-  const choice = html('<div class="fst-pool-choice"><select hidden></select><p role="status" aria-live="polite"></p></div>');
+  const choice = html('<div class="fst-pool-status" hidden><p role="status" aria-live="polite"></p></div>');
   title.after(choice);
-  const poolSelect = choice.querySelector('select'), poolStatus = choice.querySelector('p');
-  poolSelect.setAttribute('aria-label', tr('选择交易池', 'Select a pool'));
-  poolStatus.textContent = tr('正在查找交易池…', 'Finding pools…');
-  const route = (ids, pair = '') => '#/analysis/' + ids.join('/') + (pair ? '/' + pair : '');
-  const tokenId = token => token.native || token.key === 'bnb' ? 'BNB' : token.address;
+  const poolStatus = choice.querySelector('p');
   let ma = null, mb = null;
   const drawPair = () => {
-    title.replaceChildren();
+    title.querySelector('span').textContent = ma.symbol + '-' + mb.symbol;
     [ma, mb].forEach((token, index) => {
-      const button = html('<button type="button" class="fst-analysis-token"><span></span><small aria-hidden="true">⌄</small></button>');
-      button.querySelector('span').textContent = token?.symbol || tr('选择代币', 'Select token');
-      button.setAttribute('aria-label', tr('更换第', 'Change token ') + (index + 1) + tr('个代币', ''));
-      if (token) {
-        const icon = iconSample.cloneNode(true); icon.removeAttribute('class'); icon.removeAttribute('style');
-        button.prepend(icon);
-        if (token.native) { const img = document.createElement('img'); img.src = 'assets/official/media/bnb.c51cffcc.svg'; img.alt = 'BNB'; icon.replaceWith(img); }
-        else applyTokenLogo(icon, token);
-      }
-      button.addEventListener('click', () => {
-        syncTokenRegistry();
-        const keyOf = t => t?.native ? 'bnb' : tokenKeys().find(k => TOKENS[k].address?.toLowerCase() === t?.address?.toLowerCase());
-        openTokenPicker({ selected: keyOf(token), other: keyOf(index ? ma : mb), onPick: key => {
-          const ids = [ma ? tokenId(ma) : ida, mb ? tokenId(mb) : idb];
-          const next = tokenId(TOKENS[key]);
-          if (next.toLowerCase() === ids[1 - index].toLowerCase()) ids[1 - index] = ids[index];
-          ids[index] = next; location.hash = route(ids);
-        }});
-      });
-      title.append(button);
-      if (!index) title.append(document.createTextNode(' / '));
+      const icon = pairIcons[index];
+      if (token.native) {
+        const img = document.createElement('img');
+        for (const attr of ['class', 'style', 'width', 'height']) if (icon.hasAttribute(attr)) img.setAttribute(attr, icon.getAttribute(attr));
+        img.src = 'assets/official/media/bnb.c51cffcc.svg'; img.alt = 'BNB'; icon.replaceWith(img);
+      } else applyTokenLogo(icon, token);
     });
   };
-  drawPair();
   const resolveToken = async id => {
     if (id === 'bnb' || id === WBNB_FST.toLowerCase()) return { ...TOKENS.bnb, native: true };
     if (!isPoolAddress(id)) throw Error('Invalid token address');
@@ -142,29 +122,23 @@ export async function mountAnalysisPage(root) {
     drawPair();
     const found = await discoverAnalysisPools(request, ma, mb, marketData);
     if (!alive()) return;
-    const requestedPool = (parts[3] || '').toLowerCase();
-    const selected = requestedPool ? found.pools.find(p => p.pair.toLowerCase() === requestedPool) : found.pools[0];
+    const selected = found.pools[0];
     if (!selected) {
-      poolStatus.textContent = found.incomplete ? tr('部分池数据暂不可用，请重试或更换币对。', 'Some pool data is unavailable. Retry or select another pair.')
-        : tr('未找到已收录的直接交易池，请更换币对。', 'No indexed direct pool found. Select another pair.');
+      choice.hidden = false;
+      poolStatus.textContent = found.incomplete ? tr('部分池数据暂不可用，请重试，或在兑换页选择其他币对。', 'Some pool data is unavailable. Retry or choose another pair on Swap.')
+        : tr('未找到已收录的直接交易池，请在兑换页选择其他币对。', 'No indexed direct pool found. Choose another pair on Swap.');
       const retry = html('<button type="button" class="fst-common-token"></button>'); retry.textContent = tr('重试', 'Retry');
       retry.onclick = () => { dispose(); mountAnalysisPage(root); }; choice.append(retry);
       return;
     }
-    for (const p of found.pools) {
-      const option = document.createElement('option'); option.value = p.pair;
-      option.textContent = p.dex + ' · ' + p.pair.slice(0, 6) + '…' + p.pair.slice(-4)
-        + (p.reserveUsd ? ' · $' + Math.round(p.reserveUsd).toLocaleString() : '');
-      poolSelect.append(option);
-    }
-    poolSelect.value = selected.pair; poolSelect.hidden = false;
-    poolSelect.addEventListener('change', () => { location.hash = route([tokenId(ma), tokenId(mb)], poolSelect.value); });
     pool = await readAnalysisPool(request, selected, ma, mb);
     if (!alive()) return;
-    poolStatus.textContent = tr('池地址：', 'Pool: ') + pool.pair + (pool.kind === 'v3' ? tr(' · V3 的个人 NFT 持仓不在此展示', ' · Individual V3 NFT positions are not shown here') : '');
+    if (pool.kind === 'v3') { choice.hidden = false; poolStatus.textContent = tr('V3 的个人 NFT 持仓不在此展示', 'Individual V3 NFT positions are not shown here'); }
+    else choice.remove();
   } catch {
     if (alive()) {
-      poolStatus.textContent = tr('池数据读取失败，请重试或更换币对。', 'Pool data unavailable. Retry or select another pair.');
+      choice.hidden = false;
+      poolStatus.textContent = tr('池数据读取失败，请重试，或在兑换页选择其他币对。', 'Pool data unavailable. Retry or choose another pair on Swap.');
       const retry = html('<button type="button" class="fst-common-token"></button>'); retry.textContent = tr('重试', 'Retry');
       retry.onclick = () => { dispose(); mountAnalysisPage(root); }; choice.append(retry);
     }
