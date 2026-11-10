@@ -1,5 +1,5 @@
-import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261111-23";
-import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261111-23";
+import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261111-24";
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261111-24";
 // 聚合路由 Swap 引擎（BSC 主网 56，FstSi aggregator-live v9「multi-pool」，合约 VERSION 1.01）。
 // 与 market-trade.mjs 相同的约束风格：全部函数只通过注入的 JSON-RPC
 // request 访问链上，返回精确的十进制字符串/大整数，浏览器与 Node 均可运行。
@@ -107,64 +107,17 @@ export async function buildSignableTransaction(request, transaction, gasPrice, g
   };
 }
 
-/// BSC 主网 RPC 端点池（全部公共节点，无 key）：
-/// 前三位为 fstswap.pro / lvswap.app 都在使用的公共端点；
-/// 实测通过（bsc-rpc-list.md）次之，官方 dataseed 系列与其余公共节点后备；
-/// 明确不可用的剔除。swapPublicRpc 按亲和 + 轮换 + 冷却自动故障转移。
+/// 浏览器直读备用池（无私有 key，2026-11-11 本机只读复测）。
+/// 日常报价/余额优先走独立只读服务；此池用于浏览器回退及链上预检。
+/// 共 4 个公开备用节点：trade 2 个供询价/授权读取/预检/回执，balance 2 个供钱包余额。
+/// 两个 lane 各自维护轮转、成功节点亲和与冷却，余额读取不占用交易备用池。
 export const SWAP_RPC_ENDPOINTS = Object.freeze([
-  // 用户提供（2026-11-09 实测可用）：
-  // BlockRazor 全功能；DRPC key 当前限制合约调用白名单（eth_call 会被拒，
-  // 区块/余额/回执可用；到 DRPC 后台给 key 添加聚合合约地址后可放开）
-  "https://swap.bsc.blockrazor.xyz",
-  // 头部公共端点（fstswap.pro 主用 / lvswap.app 公共备用）
-  "https://fast.bsc-rpc.com",
-  "https://bsc-rpc.publicnode.com",
   "https://bsc-dataseed.bnbchain.org",
-  // 实测通过（读取 + 近期日志）
-  "https://public-bsc-mainnet.fastnode.io",
-  "https://bsc.api.pocket.network",
-  "https://bsc.drpc.org",
-  // 官方 dataseed（eth_getLogs 有 limit 限制，eth_call / 回执可用）
-  "https://bsc-dataseed1.binance.org",
-  "https://bsc-dataseed2.binance.org",
-  "https://bsc-dataseed1.bnbchain.org",
-  "https://bsc-dataseed2.bnbchain.org",
-  "https://bsc-dataseed3.bnbchain.org",
-  "https://bsc-dataseed4.bnbchain.org",
-  "https://bsc-dataseed1.defibit.io",
-  "https://bsc-dataseed2.defibit.io",
-  "https://bsc-dataseed3.defibit.io",
-  "https://bsc-dataseed4.defibit.io",
-  "https://bsc-dataseed1.ninicoin.io",
-  "https://bsc-dataseed2.ninicoin.io",
-  "https://bsc-dataseed3.ninicoin.io",
-  "https://bsc-dataseed4.ninicoin.io",
-  "https://bsc-dataseed-public.bnbchain.org",
-  // 其余公共节点（清单未复验，作为后备）
-  "https://bsc.nodereal.io",
-  "https://binance.nodereal.io",
-  "https://bsc-dataseed.nariox.org",
-  "https://bsc-dataseed.defibit.io",
-  "https://bsc-dataseed.ninicoin.io",
-  "https://binance-smart-chain-public.nodies.app",
-  "https://bscrpc.com",
-  "https://public.1rpc.io/bnb",
-  "https://bsc.rpc.blxrbdn.com",
-  "https://bnb.api.onfinality.io/public",
-  "https://bsc-mainnet.public.blastapi.io",
-  "https://bsc.meowrpc.com",
-  "https://api.zan.top/bsc-mainnet",
-  "https://bsc-mainnet.gateway.tatum.io",
-  "https://public-bsc.nownodes.io",
-  "https://bsc.rpc.sentio.xyz",
-  "https://rpc.swiftnodes.io/rpc/bsc",
-  "https://rpc-bsc.blockmachine.io",
-  "https://rpc-bsc.48.club",
-  "https://0.48.club",
-  "https://xrpc.cl/bsc",
-  "https://rpc.hostdefi.com/api/rpc/bsc",
-  "https://lb.routeme.sh/rpc/evm/56",
-  "https://rpc.nodeflare.app/bnb/public",
+  "https://fast.bsc-rpc.com",
+]);
+export const SWAP_BALANCE_RPC_ENDPOINTS = Object.freeze([
+  "https://swap.bsc.blockrazor.xyz",
+  "https://bsc-rpc.publicnode.com",
 ]);
 
 export const SWAP_TOKENS = Object.freeze({
@@ -318,10 +271,21 @@ function legV2(key, path) {
   return { kind: "v2", ...item, path: path.map((token) => token.toLowerCase()) };
 }
 
+// Factory reuse is an in-process proof, never a field trusted from a JSON API.
+const configFactoryProofs = new WeakMap();
+const configSnapshot = block => block && /^0x(?:0|[1-9a-f][0-9a-f]*)$/i.test(block.number || '') && /^0x[0-9a-f]{64}$/i.test(block.hash || '')
+  ? {number:block.number.toLowerCase(),hash:block.hash.toLowerCase()} : null;
+export function readSwapConfigFactory(config, request, block) {
+  const proof = configFactoryProofs.get(config), snapshot = configSnapshot(block);
+  return proof && snapshot && proof.request === request && proof.number === snapshot.number && proof.hash === snapshot.hash ? proof.factory : null;
+}
+
 /// 读取路由器配置并核对部署一致性（一次 Multicall3 批量读取）。
-export async function readSwapConfig(request, { tokens = SWAP_TOKENS, adapters = SWAP_ADAPTERS } = {}) {
+export async function readSwapConfig(request, { tokens = SWAP_TOKENS, adapters = SWAP_ADAPTERS, block } = {}) {
   const iface = swapInterface(globalThis.ethers?.Interface);
   const adapterList = Object.values(adapters);
+  const snapshot = configSnapshot(block);
+  const factoryIface = snapshot && adapterList.some(item => item.key === 'v3') ? new globalThis.ethers.Interface(['function factory() view returns(address)']) : null;
   const calls = [
     { target: swapActiveRouter(), data: iface.encodeFunctionData("platformFeeBps", []) },
     { target: swapActiveRouter(), data: iface.encodeFunctionData("feeReceiver", []) },
@@ -331,10 +295,11 @@ export async function readSwapConfig(request, { tokens = SWAP_TOKENS, adapters =
     ...adapterList.map((item) => ({ target: item.adapter, data: iface.encodeFunctionData("aggregator", []) })),
     { target: swapActiveRouter(), data: iface.encodeFunctionData("VERSION", []) },
     ...(swapV10Ready() ? ["defaultFeeToken", "feeConfigVersion"].map(method => ({ target: swapActiveRouter(), data: iface.encodeFunctionData(method, []) })) : []),
+    ...(factoryIface ? [{target:PCS_V3_QUOTER,data:factoryIface.encodeFunctionData('factory',[])}] : []),
   ];
   const [chain, entries] = await Promise.all([
     request({ method: "eth_chainId" }),
-    multicallTryAggregate(request, calls),
+    multicallTryAggregate(request, calls, snapshot?.number),
   ]);
   if (chain !== CHAIN_HEX) throw error("WRONG_CHAIN", "请连接 BSC 主网（chainId 56）");
   const readEntry = (index, method) => {
@@ -364,7 +329,18 @@ export async function readSwapConfig(request, { tokens = SWAP_TOKENS, adapters =
     feeConfigVersion: readEntry(5 + adapterList.length * 2, "feeConfigVersion")[0],
   } : {};
   if (swapV10Ready() && contractVersion !== (V10_CONFIG.version === "2.0.0" ? "2.0.0" : "1.11")) throw error("SWAP_CONFIG", "聚合路由收费版本不匹配");
-  return { platformFeeBps: Number(fee), feeReceiver: receiver, wbnb, adaptersOff: off, version: contractVersion, ...feeConfig };
+  const config = { platformFeeBps: Number(fee), feeReceiver: receiver, wbnb, adaptersOff: off, version: contractVersion, ...feeConfig };
+  if (factoryIface) {
+    const entry = entries[calls.length - 1];
+    try {
+      const factory = entry?.success ? factoryIface.decodeFunctionResult('factory', entry.returnData)[0] : null;
+      if (isAddr(factory)) {
+        config.v3Factory = factory.toLowerCase();
+        configFactoryProofs.set(config, {...snapshot,request,factory:config.v3Factory});
+      }
+    } catch { /* Optional discovery failures use the normal policy factory read. */ }
+  }
+  return config;
 }
 
 /// v2 报价已并入 quoteSwap 的 Multicall3 批量路径（getAmountsOut）。
@@ -388,14 +364,14 @@ const MULTICALL_ABI = [
   "function tryAggregate(bool requireSuccess, tuple(address target, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])",
 ];
 
-async function multicallTryAggregate(request, calls) {
+async function multicallTryAggregate(request, calls, blockTag = 'latest') {
   if (!calls.length) return [];
   const Interface = globalThis.ethers?.Interface;
   if (typeof Interface !== "function") throw error("SWAP_DEPENDENCY", "交易依赖未加载");
   const iface = new Interface(MULTICALL_ABI);
   // ethers 对无名 tuple 组件要求数组形式（[target, data]）
   const data = iface.encodeFunctionData("tryAggregate", [false, calls.map((call) => [call.target, call.data])]);
-  const result = await request({ method: "eth_call", params: [{ to: MULTICALL3, data }, "latest"] });
+  const result = await request({ method: "eth_call", params: [{ to: MULTICALL3, data }, blockTag] });
   const decoded = iface.decodeFunctionResult("tryAggregate", result);
   return decoded[0].map((item) => ({ success: item.success, returnData: item.returnData }));
 }
@@ -990,16 +966,19 @@ export function loadSwapLibrary() {
 }
 
 /// 公共 RPC 封装：端点亲和（复用成功端点热连接）+ 跨端点故障转移 + 失败冷却。
-let rpcCursor = 0;
-let rpcLastGood = null;
-const rpcCooldown = new Map();
+const rpcLanes = {
+  trade: { cursor: 0, lastGood: null, cooldown: new Map() },
+  balance: { cursor: 0, lastGood: null, cooldown: new Map() },
+};
 const RPC_ATTEMPTS = 3; // 单请求最多尝试的端点数
 const RPC_COOLDOWN_MS = 60_000;
 
 /// 仅本地 fork 验证：globalThis.FST_RPC_OVERRIDE = ["http://127.0.0.1:8545"]（生产不注入，SWAP_RPC_ENDPOINTS 不变）。
-const rpcList = () => (Array.isArray(globalThis.FST_RPC_OVERRIDE) && globalThis.FST_RPC_OVERRIDE.length ? globalThis.FST_RPC_OVERRIDE : SWAP_RPC_ENDPOINTS);
+const rpcList = lane => (Array.isArray(globalThis.FST_RPC_OVERRIDE) && globalThis.FST_RPC_OVERRIDE.length ? globalThis.FST_RPC_OVERRIDE : lane === "balance" ? SWAP_BALANCE_RPC_ENDPOINTS : SWAP_RPC_ENDPOINTS);
 
-export function swapPublicRpc(fetchImpl = globalThis.fetch, signal, { attempts = RPC_ATTEMPTS, timeoutMs = 15000 } = {}) {
+export function swapPublicRpc(fetchImpl = globalThis.fetch, signal, { lane = "trade", attempts = RPC_ATTEMPTS, timeoutMs = 15000 } = {}) {
+  lane = lane === "balance" ? "balance" : "trade";
+  const state = rpcLanes[lane];
   let nextId = 0;
   const once = async (endpoint, { method, params = [], id }) => {
     const timeout = AbortSignal.timeout(timeoutMs);
@@ -1014,38 +993,48 @@ export function swapPublicRpc(fetchImpl = globalThis.fetch, signal, { attempts =
   return async (payload) => {
     const id = ++nextId;
     // 候选顺序：上一个成功端点优先（复用热连接），随后按轮换取号分散并发
-    const list = rpcList();
-    const start = rpcCursor % list.length;
-    rpcCursor = (rpcCursor + 1) % list.length;
+    const list = rpcList(lane);
+    const start = state.cursor % list.length;
+    state.cursor = (state.cursor + 1) % list.length;
     const order = [];
-    if (rpcLastGood && list.includes(rpcLastGood) && rpcLastGood !== list[start]) order.push(rpcLastGood);
+    if (state.lastGood && list.includes(state.lastGood) && state.lastGood !== list[start]) order.push(state.lastGood);
     for (let attempt = 0; attempt < attempts; attempt++) {
       const endpoint = list[(start + attempt) % list.length];
       if (!order.includes(endpoint)) order.push(endpoint);
     }
-    let lastError = null;
+    let lastError = null, sawMissingTransaction = false;
+    const nullableTransaction = ["eth_getTransactionReceipt", "eth_getTransactionByHash"].includes(payload.method);
     for (const endpoint of order) {
-      if ((rpcCooldown.get(endpoint) ?? 0) > Date.now()) continue;
+      if ((state.cooldown.get(endpoint) ?? 0) > Date.now()) continue;
       try {
         const result = await once(endpoint, { ...payload, id });
-        rpcLastGood = endpoint;
+        // Some public providers return null for an existing historical hash.
+        // Check only the bounded alternate read set; never resend a transaction.
+        if (result === null && nullableTransaction) { sawMissingTransaction = true; continue; }
+        state.lastGood = endpoint;
         return result;
       } catch (err) {
         lastError = err;
         if (signal?.aborted) throw err; // 外部取消：不冷却、快速失败
-        rpcCooldown.set(endpoint, Date.now() + RPC_COOLDOWN_MS);
+        state.cooldown.set(endpoint, Date.now() + RPC_COOLDOWN_MS);
       }
     }
+    if (sawMissingTransaction) return null;
     // Authenticated backup is available only through the local credential-hiding proxy.
     // It is a fallback, never promoted ahead of healthy public endpoints or local fork overrides.
-    if (!globalThis.FST_RPC_OVERRIDE?.length && ["127.0.0.1", "localhost"].includes(globalThis.location?.hostname)) {
+    if (lane === "trade" && !globalThis.FST_RPC_OVERRIDE?.length && ["127.0.0.1", "localhost"].includes(globalThis.location?.hostname)) {
       try { return await once("http://127.0.0.1:8126/rpc", { ...payload, id }); }
       catch (err) { lastError = err; if (signal?.aborted) throw err; }
     }
     // 全池冷却/失败兜底：忽略冷却再试一轮，防止冷却死锁
     for (const endpoint of order) {
-      try { return await once(endpoint, { ...payload, id }); } catch (err) { lastError = err; if (signal?.aborted) throw err; }
+      try {
+        const result = await once(endpoint, { ...payload, id });
+        if (result === null && nullableTransaction) { sawMissingTransaction = true; continue; }
+        return result;
+      } catch (err) { lastError = err; if (signal?.aborted) throw err; }
     }
+    if (sawMissingTransaction) return null;
     throw lastError ?? rpcError();
   };
 }

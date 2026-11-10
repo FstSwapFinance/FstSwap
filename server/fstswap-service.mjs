@@ -3,8 +3,8 @@ import {pathToFileURL} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {isIP} from 'node:net';
 import {ethers} from 'ethers';
-import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261111-23';
-import {readPoolPolicy} from '../src/swap-liquidity.mjs?v=mainnet-20261111-23';
+import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261111-24';
+import {readPoolPolicy} from '../src/swap-liquidity.mjs?v=mainnet-20261111-24';
 import {readTokenBalances} from '../src/swap-balances.mjs';
 import {createReadPool} from './swap-read-pool.mjs';
 export {createReadPool};
@@ -97,7 +97,7 @@ function sharedRead(start,{timeoutMs,onSettled,onAbandoned}={}){
  };
  return entry;
 }
-export function createEngine(pool,{clock=Date.now,readConfig=readSwapConfig,readPolicy=readPoolPolicy,calculate=computeQuote,readBalances=readTokenBalances,warmup={}}={}){
+export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=readSwapConfig,readPolicy=readPoolPolicy,calculate=computeQuote,readBalances=readTokenBalances,warmup={}}={}){
  const contexts=new Map(),inflight=new Map(),recentPairs=new Map();
  const warmOptions={enabled:true,intervalMs:6000,activeTtlMs:60000,maxPairs:4,...warmup};
  warmOptions.intervalMs=Math.max(1000,Number(warmOptions.intervalMs)||6000);
@@ -133,8 +133,8 @@ export function createEngine(pool,{clock=Date.now,readConfig=readSwapConfig,read
   let entry;
   entry=sharedRead(signal=>pool.run(async request=>{
    const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertRunning(signal);assertBlock(block,clock);
-   const read=pinned(request,block),config=await readConfig(read);assertRunning(signal);
-   const policy=await readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:'legacy',clock});assertRunning(signal);policy.assertFresh();
+   const read=pinned(request,block),config=await readConfig(read,{block});assertRunning(signal);
+   const policy=await readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:'legacy',clock,deferCanonical:true});assertRunning(signal);policy.assertFresh();
    if(warm){const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(signal);if(canonical?.hash!==block.hash)throw fail('STALE_BLOCK');policy.assertFresh();if(clock()>=policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');}
    entry.completedAt=clock();entry.warmed=warm;return{block,config,policy};
   },signal,{operation:warm?'warm':'config',nodeId}),{timeoutMs:18000,
@@ -168,7 +168,7 @@ export function createEngine(pool,{clock=Date.now,readConfig=readSwapConfig,read
   balances(raw,{signal}={}){
    const input=balanceInput(raw);if(signal?.aborted)return Promise.reject(abortError(signal));
    const combined=signal?AbortSignal.any([signal,AbortSignal.timeout(12000)]):AbortSignal.timeout(12000);
-   return untilAborted(pool.run(async request=>{
+   return untilAborted(balancePool.run(async request=>{
     const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertRunning(combined);assertBlock(block,clock);
     const tokens=input.tokens.map(a=>({key:a===ZERO?'bnb':a,address:a===ZERO?null:a}));
     const result=await readBalances(pinned(request,block),input.account,tokens);assertRunning(combined);
@@ -190,18 +190,19 @@ export function createEngine(pool,{clock=Date.now,readConfig=readSwapConfig,read
    if(!warmOptions.enabled||warmTimer)return;
    void engine.warmupOnce();warmTimer=setInterval(()=>{void engine.warmupOnce();},warmOptions.intervalMs);warmTimer.unref();
   },
-  stopWarmup(){if(warmTimer)clearInterval(warmTimer);warmTimer=null;warming?.controller.abort();}
+  stopWarmup(){if(warmTimer)clearInterval(warmTimer);warmTimer=null;warming?.controller.abort();},
+  isBusy(){return foreground>0||warming!==null;}
  };
  return engine;
 }
 const publicErrors=new Set(['INVALID_INPUT','NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY','UNSUPPORTED_VERSION','QUOTE_EXPIRED','STALE_BLOCK','BALANCE_UNAVAILABLE','SERVICE_BUSY','RATE_LIMIT','BODY_LIMIT','BODY_TIMEOUT']);
-export function createApi({engine,pool,clock=Date.now,maxActive=12,rateLimit=240,allowedOrigins=['http://127.0.0.1:8124','http://localhost:8124','https://fstswap-live.vercel.app','https://fstswap-live-haocutbabas.vercel.app','https://fstswap.pro','https://www.fstswap.pro']}={}){
- const rates=new Map();let active=0;
+export function createApi({engine,pool,balancePool=pool,clock=Date.now,maxActive=12,rateLimit=240,allowedOrigins=['http://127.0.0.1:8124','http://localhost:8124','https://fstswap-live.vercel.app','https://fstswap-live-haocutbabas.vercel.app','https://fstswap.pro','https://www.fstswap.pro']}={}){
+ const rates=new Map(),activeByRole={quote:0,balances:0},roleLimits={quote:Math.min(8,maxActive),balances:Math.min(4,maxActive)};let active=0;
  const server=createServer({headersTimeout:5000,requestTimeout:22000,maxHeaderSize:8192},async(req,res)=>{
   const origin=req.headers.origin;if(allowedOrigins.includes(origin)){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Methods','POST, GET, OPTIONS');res.setHeader('Access-Control-Allow-Headers','Content-Type');res.setHeader('Access-Control-Max-Age','600');}
   const reply=(status,body)=>{if(res.destroyed)return;res.writeHead(status,{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(encode(body));};
   const routes={'/api/swap/quote':'quote','/api/swap/balances':'balances'};
-  if(req.url==='/api/swap/health'&&req.method==='GET'){const health=pool.health();return reply(200,{service:'fstswap-api',version:'1',chainId:56,readOnly:true,router:swapActiveRouter(),ready:health.providers.some(p=>p.ready),active,pool:health});}
+  if(req.url==='/api/swap/health'&&req.method==='GET'){const health=pool.health();return reply(200,{service:'fstswap-api',version:'1',chainId:56,readOnly:true,router:swapActiveRouter(),ready:health.providers.some(p=>p.ready),active,activeByRole:{...activeByRole},pool:health,balancePool:balancePool===pool?health:balancePool.health(),roles:{quote:'pool',balances:'balancePool',shared:balancePool===pool}});}
   const action=routes[req.url];if(action&&req.method==='OPTIONS'){res.writeHead(204);return res.end();}if(!action)return reply(404,{error:'NOT_FOUND'});
   if(req.method!=='POST')return reply(405,{error:'METHOD_NOT_ALLOWED'});
   if(!/^application\/json(?:;.*)?$/i.test(req.headers['content-type']||''))return reply(415,{error:'CONTENT_TYPE'});
@@ -209,10 +210,10 @@ export function createApi({engine,pool,clock=Date.now,maxActive=12,rateLimit=240
   const ip=['127.0.0.1','::1','::ffff:127.0.0.1'].includes(remote)&&typeof header==='string'&&isIP(header)?header:remote;
   let rate=rates.get(ip);if(!rate||clock()-rate.at>60000){rate={at:clock(),count:0};if(rates.size>4096)rates.delete(rates.keys().next().value);rates.set(ip,rate);}
   if(++rate.count>rateLimit)return reply(429,{error:'RATE_LIMIT'});
-  if(active>=maxActive)return reply(503,{error:'SERVICE_BUSY'});
+  if(active>=maxActive||activeByRole[action]>=roleLimits[action])return reply(503,{error:'SERVICE_BUSY'});
   const controller=new AbortController(),disconnected=()=>{if(!res.writableEnded)controller.abort();};
   req.once('aborted',disconnected);res.once('close',disconnected);
-  active++;let timer;
+  active++;activeByRole[action]++;let timer;
   try{
    if(Number(req.headers['content-length'])>16384)throw fail('BODY_LIMIT');
    const chunks=[];let length=0;
@@ -221,20 +222,37 @@ export function createApi({engine,pool,clock=Date.now,maxActive=12,rateLimit=240
    clearTimeout(timer);let body;try{body=JSON.parse(Buffer.concat(chunks).toString())}catch{throw fail('INVALID_INPUT');}
    reply(200,await engine[action](body,{signal:controller.signal}));
   }catch(e){const code=publicErrors.has(e.code)?e.code:'SERVICE_UNAVAILABLE';reply(code==='INVALID_INPUT'?400:code==='BODY_LIMIT'?413:422,{error:code,...(e.code==='POOL_LIQUIDITY'&&['data','stale','oracle','price'].includes(e.reason)?{reason:e.reason}:{})});}
-  finally{clearTimeout(timer);req.removeListener('aborted',disconnected);res.removeListener('close',disconnected);active--;}
+  finally{clearTimeout(timer);req.removeListener('aborted',disconnected);res.removeListener('close',disconnected);active--;activeByRole[action]--;}
  });
  server.keepAliveTimeout=5000;server.once('close',()=>engine.stopWarmup?.());return server;
 }
-export function endpointsFromEnv(env){
- const configured=env.FSTSWAP_RPC_URLS?env.FSTSWAP_RPC_URLS.split(','):[env.FSTSI_ROUTE_RPC_DRPC,env.FSTSI_ROUTE_RPC_BLOCKRAZOR,env.FSTSI_ROUTE_RPC_BINANCE,env.FSTSI_ROUTE_RPC_PUBLICNODE].filter(Boolean);
+export function endpointsFromEnv(env,{role='quote'}={}){
+ const configured=role==='balances'&&env.FSTSWAP_BALANCE_RPC_URLS?env.FSTSWAP_BALANCE_RPC_URLS.split(','):env.FSTSWAP_RPC_URLS?env.FSTSWAP_RPC_URLS.split(','):[env.FSTSI_ROUTE_RPC_DRPC,env.FSTSI_ROUTE_RPC_BLOCKRAZOR,env.FSTSI_ROUTE_RPC_BINANCE,env.FSTSI_ROUTE_RPC_PUBLICNODE].filter(Boolean);
  const endpoints=configured.length?configured:SWAP_RPC_ENDPOINTS.slice(0,4);
  return endpoints.map(value=>{let u;try{u=new URL(value);}catch{throw fail('RPC_CONFIG');}if(u.protocol!=='https:'||u.username||u.password||u.hash)throw fail('RPC_CONFIG');return u.href;});
 }
+// Background measurements use separate role pools and one timer, so they never
+// compete with each other. Each pool also checks its own in-flight foreground work.
+export function createProbeScheduler({pool,balancePool=pool,engine,signal,timers=globalThis}={}){
+ const roles=balancePool===pool?[pool]:[pool,balancePool],controller=new AbortController();
+ const activeSignal=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
+ let next=0,running=false,timer=null;
+ async function probe(target){
+  if(activeSignal.aborted)return;
+  try{await target.probe({signal:activeSignal,busy:target===pool&&!!engine?.isBusy?.()});}catch{/* Probe failures never block foreground reads or startup. */}
+ }
+ async function initial(){if(running||activeSignal.aborted)return false;running=true;try{for(const target of roles){if(activeSignal.aborted)break;await probe(target);}return !activeSignal.aborted;}finally{running=false;}}
+ async function tick(){if(running||activeSignal.aborted)return false;running=true;const target=roles[next];next=(next+1)%roles.length;try{await probe(target);return !activeSignal.aborted;}finally{running=false;}}
+ return{initial,tick,start(){if(timer!==null||activeSignal.aborted)return;timer=timers.setInterval(()=>{void tick();},31000);timer?.unref?.();},stop(){if(timer!==null)timers.clearInterval(timer);timer=null;controller.abort();}};
+}
 if(process.argv[1]&&pathToFileURL(realpathSync(process.argv[1])).href===import.meta.url){
- const pool=createReadPool(endpointsFromEnv(process.env)),engine=createEngine(pool,{warmup:{enabled:process.env.FSTSWAP_CONTEXT_WARMUP!=='0'}}),server=createApi({engine,pool});
+ const pool=createReadPool(endpointsFromEnv(process.env)),balancePool=process.env.FSTSWAP_BALANCE_RPC_URLS?createReadPool(endpointsFromEnv(process.env,{role:'balances'})):pool;
+ const engine=createEngine(pool,{balancePool,warmup:{enabled:process.env.FSTSWAP_CONTEXT_WARMUP!=='0'}}),server=createApi({engine,pool,balancePool});
  const shutdown=new AbortController();
  const warm=()=>pool.run(async r=>{const b=await r({method:'eth_getBlockByNumber',params:['latest',false]});assertBlock(b,Date.now);},AbortSignal.any([shutdown.signal,AbortSignal.timeout(12000)]),{operation:'warm',rpcClass:'header'}).catch(()=>{});
- await warm();const timer=setInterval(warm,20000);timer.unref();engine.startWarmup();
- const port=Number(process.env.FSTSWAP_API_PORT||4375);server.listen(port,'127.0.0.1',()=>console.log('FstSwap read API ready on loopback port '+port));
- for(const name of ['SIGTERM','SIGINT'])process.once(name,()=>{shutdown.abort();clearInterval(timer);engine.stopWarmup();server.close();});
+ await warm();
+ const probes=createProbeScheduler({pool,balancePool,engine,signal:shutdown.signal});
+ const timer=setInterval(warm,20000);timer.unref();engine.startWarmup();
+ const port=Number(process.env.FSTSWAP_API_PORT||4375);server.listen(port,'127.0.0.1',()=>{console.log('FstSwap read API ready on loopback port '+port);void probes.initial();probes.start();});
+ for(const name of ['SIGTERM','SIGINT'])process.once(name,()=>{shutdown.abort();clearInterval(timer);probes.stop();engine.stopWarmup();server.close();});
 }

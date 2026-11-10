@@ -2,12 +2,12 @@ import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 // 流动池（#/pool、#/pool/v2/find）、注入流动资金（#/add/v2/A/B）、去除流动资金（#/remove/v2/A/B）——
 // 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css）；
 // 链上逻辑：直接调用 FstSwap 路由器（Pancake V2 fork，同官方授权对象 0x1B6C…ABC2d），所有启用列表中的代币，按 FstSwap factory 查询所选币对。
-import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261111-23";
-import { tr, T, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal, popup, refreshNativeBalance, hashParts } from "./swap-shell.mjs?v=mainnet-20261111-23";
-import { TOKENS, sigDown, tokenKeys, openTokenPicker } from "./swap-view.mjs?v=mainnet-20261111-23";
+import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261111-24";
+import { tr, T, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal, popup, refreshNativeBalance, hashParts } from "./swap-shell.mjs?v=mainnet-20261111-24";
+import { TOKENS, sigDown, tokenKeys, openTokenPicker } from "./swap-view.mjs?v=mainnet-20261111-24";
 
 import { discoverPool, reservesByToken } from "./swap-pool-data.mjs";
-import { refreshDefaultList } from "./swap-manage.mjs?v=mainnet-20261111-23";
+import { refreshDefaultList } from "./swap-manage.mjs?v=mainnet-20261111-24";
 import { tokenLogo, applyTokenLogo } from "./swap-token-logo.mjs";
 
 const FST_ROUTER = "0x1B6C9c20693afDE803B27F8782156c0f892ABC2d";
@@ -93,10 +93,11 @@ function logoFor(k, sample) {
   return img;
 }
 
-function chainReads(request) {
+function chainReads(request, balanceRequest = swapPublicRpc(globalThis.fetch, undefined, { lane: "balance" })) {
   const call = async (to, abi, method, args = []) => {
     const i = iface(abi);
-    const raw = await request({ method: "eth_call", params: [{ to, data: i.encodeFunctionData(method, args) }, "latest"] });
+    const read = method === "balanceOf" ? balanceRequest : request;
+    const raw = await read({ method: "eth_call", params: [{ to, data: i.encodeFunctionData(method, args) }, "latest"] });
     return i.decodeFunctionResult(method, raw);
   };
   return {
@@ -105,8 +106,8 @@ function chainReads(request) {
       const [[r0, r1], [ts]] = await Promise.all([call(pool.pair, PAIR_ABI, "getReserves"), call(pool.pair, PAIR_ABI, "totalSupply")]);
       return reservesByToken(pool, r0, r1, ts);
     },
-    async balance(k, account, provider) {
-      if (k === "bnb") return BigInt(await (provider ? provider.request({ method: "eth_getBalance", params: [account, "latest"] }) : request({ method: "eth_getBalance", params: [account, "latest"] })));
+    async balance(k, account) {
+      if (k === "bnb") return BigInt(await balanceRequest({ method: "eth_getBalance", params: [account, "latest"] }));
       return (await call(TOKENS[k].address, ERC20_ABI, "balanceOf", [account]))[0];
     },
     async allowance(token, owner, spender) { return (await call(token, ERC20_ABI, "allowance", [owner, spender]))[0]; },
@@ -488,7 +489,7 @@ async function mountAdd(root, request, parts) {
     if (!account) return;
     const keys = [...new Set([st.a, st.b].filter(Boolean))];
     await Promise.all(keys.map(async k => {
-      const [bal, allowance] = await Promise.all([reads.balance(k, account, wallet.provider).catch(() => null), k === "bnb" ? null : reads.allowance(TOKENS[k].address, account, FST_ROUTER).catch(() => null)]);
+      const [bal, allowance] = await Promise.all([reads.balance(k, account).catch(() => null), k === "bnb" ? null : reads.allowance(TOKENS[k].address, account, FST_ROUTER).catch(() => null)]);
       if (seq !== accountSeq || account !== wallet.account) return;
       st.balances[k] = bal; st.allowance[k] = allowance;
     }));

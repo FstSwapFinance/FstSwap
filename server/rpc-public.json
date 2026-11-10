@@ -1,50 +1,89 @@
 {
   "checkedAt": "2026-11-11",
   "chainId": 56,
-  "measurement": "one VPS USDT/FIST quote; sample only",
+  "measurement": "VPS; 3 USDT decimals eth_call samples per node; not full quote timing",
+  "ordering": "Separate quote/approval-preflight and balance pools; each selects a healthy primary with bounded fallback and independent scoring.",
   "nodes": [
-    {
-      "id": "h56-fast",
-      "url": "https://fast.bsc-rpc.com",
-      "enabled": true,
-      "quoteMs": 5200
-    },
-    {
-      "id": "h56-bsc",
-      "url": "https://bsc.publicnode.com",
-      "enabled": true,
-      "quoteMs": 3569
-    },
     {
       "id": "h56-bsc-dataseed",
       "url": "https://bsc-dataseed.bnbchain.org",
       "enabled": true,
-      "quoteMs": 2780
+      "callMedianMs": 115,
+      "role": "quote"
+    },
+    {
+      "id": "private-drpc",
+      "credentialLocation": "server environment only",
+      "enabled": true,
+      "callMedianMs": 142,
+      "role": "quote"
+    },
+    {
+      "id": "h56-blockrazor",
+      "url": "https://swap.bsc.blockrazor.xyz",
+      "enabled": true,
+      "callMedianMs": 160,
+      "role": "balances"
+    },
+    {
+      "id": "h56-fast",
+      "url": "https://fast.bsc-rpc.com",
+      "enabled": true,
+      "callMedianMs": 164,
+      "role": "quote"
+    },
+    {
+      "id": "h56-publicnode",
+      "url": "https://bsc-rpc.publicnode.com",
+      "enabled": true,
+      "callMedianMs": 201,
+      "role": "balances"
     },
     {
       "id": "h56-rpc-1",
       "url": "https://rpc1.muskswap.club",
       "enabled": true,
-      "quoteMs": 5336
+      "callMedianMs": 240,
+      "role": "balances"
     },
     {
       "id": "h56-rpc-2",
       "url": "https://rpc2.muskswap.club",
       "enabled": true,
-      "quoteMs": 5501
+      "callMedianMs": 243,
+      "role": "balances"
     },
     {
       "id": "h56-rpc-3",
       "url": "https://rpc3.muskswap.club",
       "enabled": true,
-      "quoteMs": 5625
+      "callMedianMs": 237,
+      "role": "balances"
+    }
+  ],
+  "excluded": [
+    {
+      "url": "https://bsc.publicnode.com",
+      "reason": "Duplicate PublicNode provider; retain bsc-rpc.publicnode.com"
     },
     {
-      "id": "h56-rpc-4",
       "url": "https://rpc4.muskswap.club",
-      "enabled": false,
-      "quoteMs": null,
-      "reason": "HTTP 502 during chain probe; quote also unavailable"
+      "reason": "Previously unavailable; no new successful validation in this run"
+    },
+    {
+      "url": "https://api.bscscan.com/api",
+      "reason": "REST explorer API, not a standard JSON-RPC endpoint"
     }
-  ]
+  ],
+  "browserFallback": {
+    "quoteAndPreflight": [
+      "https://bsc-dataseed.bnbchain.org",
+      "https://fast.bsc-rpc.com"
+    ],
+    "balances": [
+      "https://swap.bsc.blockrazor.xyz",
+      "https://bsc-rpc.publicnode.com"
+    ],
+    "walletBroadcast": "Controlled by the connected wallet; no private keys or signing on this service."
+  }
 }

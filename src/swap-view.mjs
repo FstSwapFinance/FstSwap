@@ -1,14 +1,14 @@
-import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261111-23';
-import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261111-23';
-import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261111-23';
-import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261111-23';
-import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261111-23";
+import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261111-24';
+import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261111-24';
+import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261111-24';
+import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261111-24';
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261111-24";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261111-23";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261111-24";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
@@ -16,25 +16,26 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261111-23";
+} from "./swap-aggregator.mjs?v=mainnet-20261111-24";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261111-23";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261111-24";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261111-23";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261111-24";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261111-23";
-import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261111-23";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261111-24";
+import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261111-24";
 
 const approvals = createApprovalTracker();
 const warmRequest = swapPublicRpc();
+const warmBalanceRequest = swapPublicRpc(globalThis.fetch, undefined, { lane: "balance" });
 const sharedQuoteContext = createQuoteContext(warmRequest);
 export async function warmSwapData(account) {
   await loadSwapLibrary();
   const jobs = [];
   if (!swapService.available?.()) jobs.push(sharedQuoteContext.get(TOKENS.usdt.address, TOKENS.fist.address));
-  if (account) jobs.push(readWalletBalances(warmRequest, account, ORDER.map(k => TOKENS[k])));
+  if (account) jobs.push(readWalletBalances(warmBalanceRequest, account, ORDER.map(k => TOKENS[k])));
   await Promise.allSettled(jobs);
 }
 const BPS = 10000n;
@@ -140,6 +141,7 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
   };
   // Token metadata always comes from BSC, even when the wallet is on another chain.
   const readRpc = swapPublicRpc();
+  const balanceRequest = swapPublicRpc(globalThis.fetch, undefined, { lane: "balance" });
   const dialog = overlay.querySelector("[data-reach-dialog-content]");
   dialog.classList.add("fst-token-dialog");
   const searchCls = dialog.className;
@@ -229,7 +231,7 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
     if (loadBalances) return loadBalances();
     const account = wallet.account;
     if (!account) return;
-    const result = await readWalletBalances(readRpc, account, ORDER.map(k => TOKENS[k]));
+    const result = await readWalletBalances(balanceRequest, account, ORDER.map(k => TOKENS[k]));
     if (wallet.account !== account || !overlay.isConnected) return;
     Object.assign(balances, result.balances);
     for (const k of result.failed) delete balances[k];
@@ -250,6 +252,7 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
 export async function mountSwapView(root) {
   const wallet = useWallet();
   const request = swapPublicRpc();
+  const balanceRequest = swapPublicRpc(globalThis.fetch, undefined, { lane: "balance" });
   const quoteContext = sharedQuoteContext;
   // Short, abortable reads for wallet actions; market/chart reads keep their own retry policy.
   const transactionRead = payload => swapPublicRpc(globalThis.fetch, AbortSignal.timeout(6000), { attempts: 2, timeoutMs: 2000 })(payload);
@@ -556,7 +559,7 @@ export async function mountSwapView(root) {
     const id = ++balanceRequestId;
     wanted.forEach(k => balanceRequests.set(k, id));
     let result;
-    try { result = await readWalletBalances(request, account, wanted.map(k => TOKENS[k]), {fresh}); }
+    try { result = await readWalletBalances(balanceRequest, account, wanted.map(k => TOKENS[k]), {fresh}); }
     catch { result = {balances:{}, failed:wanted}; }
     if (wallet.account !== account || state.balanceEpoch !== epoch) return;
     for (const k of wanted) {

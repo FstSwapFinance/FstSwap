@@ -4,7 +4,8 @@ const TERMINAL=new Set(['INVALID_INPUT','RPC_FORBIDDEN','NO_ROUTE','NO_FEE_ROUTE
 const KNOWN=new Set([...TERMINAL,'STALE_BLOCK','BALANCE_UNAVAILABLE','WRONG_CHAIN','UPSTREAM_UNAVAILABLE','UPSTREAM_TIMEOUT','UPSTREAM_LIMIT','UPSTREAM_RATE_LIMIT','REQUEST_ABORTED','REQUEST_TIMEOUT']);
 const LIMIT=2*1024*1024,MAX_ACTIVE=48,MAX_ATTEMPTS=3;
 let globalHedges=0;
-const INTERNAL_ERROR=Symbol('read-pool-error');
+const INTERNAL_ERROR=Symbol('read-pool-error'),PROBE_READ=Symbol('fixed-background-probe');
+const PROBE_TOKEN='0x55d398326f99059ff775485246999027b3197955',PROBE_DATA='0x313ce567',MEASUREMENT_TTL=300000;
 const fail=(code,extra)=>Object.assign(new Error(code),{code,[INTERNAL_ERROR]:true},extra);
 const terminal=e=>TERMINAL.has(e?.code)||(typeof e?.code==='string'&&e.code.startsWith('POOL')&&e.retryable!==true);
 const cancelled=signal=>fail(signal?.reason?.name==='TimeoutError'||signal?.reason?.code==='REQUEST_TIMEOUT'?'REQUEST_TIMEOUT':'REQUEST_ABORTED');
@@ -18,14 +19,15 @@ function abortable(promise,signal){
   Promise.resolve(promise).then(value=>{cleanup();resolve(value);},error=>{cleanup();reject(error);});
  });
 }
-function metric(){return {samples:0,ewmaMs:0,p90Ms:0,successes:0,failures:0,values:[]};}
-function observe(stats,elapsed){
+function metric(){return {samples:0,ewmaMs:0,p90Ms:0,successes:0,failures:0,observedAt:null,values:[]};}
+function observe(stats,elapsed,observedAt){
+ if(observedAt!==undefined)stats.observedAt=observedAt;
  const value=Math.max(0,elapsed);stats.successes++;stats.samples++;stats.values.push(value);
  if(stats.values.length>20)stats.values.shift();
  stats.ewmaMs=stats.samples===1?value:stats.ewmaMs*0.75+value*0.25;
  const ordered=[...stats.values].sort((a,b)=>a-b);stats.p90Ms=ordered[Math.ceil(ordered.length*0.9)-1];
 }
-function snapshot(stats){return Object.fromEntries(Object.entries(stats).map(([key,value])=>[key,{samples:value.samples,successes:value.successes,failures:value.failures,ewmaMs:Math.round(value.ewmaMs),p90Ms:Math.round(value.p90Ms)}]));}
+function snapshot(stats){return Object.fromEntries(Object.entries(stats).map(([key,value])=>[key,{samples:value.samples,successes:value.successes,failures:value.failures,ewmaMs:Math.round(value.ewmaMs),p90Ms:Math.round(value.p90Ms),observedAt:value.observedAt}]));}
 function retryAfter(response,now){
  const value=response.headers?.get('retry-after');
  if(!value)return 10000;
@@ -34,10 +36,11 @@ function retryAfter(response,now){
  return Math.max(1000,Math.min(120000,delay));
 }
 
-export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=Date.now}={}){
- let nextId=0,active=0,eligibleOperations=0;
+export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=Date.now,probeIntervalMs=30000}={}){
+ let nextId=0,active=0,eligibleOperations=0,ownHedges=0,probing=false,lastProbeStartedAt=null,activeProbeController=null;
+ const probeInterval=Math.max(30000,Number(probeIntervalMs)||30000);
  const operationStats=Object.create(null);
- const states=endpoints.map((url,index)=>({url,id:'upstream-'+(index+1),chainAt:null,lastOk:null,failures:0,totalFailures:0,successes:0,cooldown:0,inFlight:0,head:null,headAt:null,requests:Object.create(null),operations:Object.create(null),public:{id:'upstream-'+(index+1),chainAt:0,lastOk:0,failures:0,cooldown:0}}));
+ const states=endpoints.map((url,index)=>({url,id:'upstream-'+(index+1),chainAt:null,lastOk:null,failures:0,totalFailures:0,successes:0,cooldown:0,inFlight:0,probeInFlight:0,head:null,headAt:null,lastProbeAt:null,lastProbeOk:null,requests:Object.create(null),probeRequests:Object.create(null),operations:Object.create(null),public:{id:'upstream-'+(index+1),chainAt:0,lastOk:0,failures:0,cooldown:0}}));
  const nodes=states.map(n=>n.public);
  function sync(n){Object.assign(n.public,{id:n.id,chainAt:n.chainAt??0,lastOk:n.lastOk??0,failures:n.failures,cooldown:n.cooldown});}
  function headLag(n){
@@ -49,17 +52,23 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
   const highest=peers.reduce((head,peer)=>peer.head>head?peer.head:head,n.head),lag=highest-n.head;
   return Number(lag>1000000n?1000000n:lag);
  }
- function score(n,kind='read',rpcClass='call'){
-  // Operation duration includes cache hits, route discovery and CPU work. Only
-  // comparable real RPC measurements describe the speed of a provider.
+ function recent(stats){return !!stats?.samples&&stats.observedAt!==null&&clock()>=stats.observedAt&&clock()-stats.observedAt<=MEASUREMENT_TTL;}
+ function latency(n,kind='read',rpcClass='call'){
   const method=rpcClass==='header'?'eth_getBlockByNumber':'eth_call';
-  const stats=n.requests[method]?.samples?n.requests[method]:kind==='balances'&&n.requests.eth_getBalance?.samples?n.requests.eth_getBalance:null;
-  const latency=stats?stats.ewmaMs*0.75+stats.p90Ms*0.25:1000;
+  const real=recent(n.requests[method])?n.requests[method]:kind==='balances'&&recent(n.requests.eth_getBalance)?n.requests.eth_getBalance:null;
+  // A cheap fixed-call probe is an approximation. It never dilutes a recent
+  // production measurement, and gets a conservative margin when used alone.
+  if(real)return {ms:real.ewmaMs*0.75+real.p90Ms*0.25,source:'real'};
+  const probe=n.probeRequests[method];
+  if(recent(probe))return {ms:(probe.ewmaMs*0.75+probe.p90Ms*0.25)*1.25,source:'probe'};
+  return {ms:1000,source:'unknown'};
+ }
+ function score(n,kind='read',rpcClass='call'){
   const failureRate=n.totalFailures/Math.max(1,n.totalFailures+n.successes);
-  return (n.cooldown>clock()?1e9:0)+latency+n.failures*2500+failureRate*1000+n.inFlight*100+(headLag(n)??0)*250;
+  return (n.cooldown>clock()?1e9:0)+latency(n,kind,rpcClass).ms+n.failures*2500+failureRate*1000+Math.max(0,n.inFlight-n.probeInFlight)*100+(headLag(n)??0)*250;
  }
  function ordered(kind,attempted,nodeId,rpcClass){return states.filter(n=>!attempted.has(n)&&n.cooldown<=clock()&&(nodeId===undefined||n.id===nodeId)).sort((a,b)=>score(a,kind,rpcClass)-score(b,kind,rpcClass)||states.indexOf(a)-states.indexOf(b));}
- async function call(node,payload,signal){
+ async function call(node,payload,signal,isProbe=false){
   if(signal.aborted)throw cancelled(signal);
   if(!payload||!METHODS.has(payload.method))throw fail('RPC_FORBIDDEN');
   if(active>=MAX_ACTIVE)throw fail('SERVICE_BUSY');
@@ -67,7 +76,7 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
   let body;
   try{body=JSON.stringify({jsonrpc:'2.0',id,method:payload.method,params:payload.params??[]});}catch{throw fail('INVALID_INPUT');}
   if(Buffer.byteLength(body)>LIMIT)throw fail('UPSTREAM_LIMIT');
-  const stats=node.requests[payload.method]??=metric();
+  const stats=(isProbe?node.probeRequests:node.requests)[payload.method]??=metric();
   const started=clock(),controller=new AbortController();let timedOut=false;
   const onAbort=()=>controller.abort(signal.reason);
   signal.addEventListener('abort',onAbort,{once:true});
@@ -91,7 +100,7 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
    }finally{try{await reader.cancel();}catch{}reader.releaseLock();}
    let data;try{data=JSON.parse(Buffer.concat(chunks).toString());}catch{throw fail('UPSTREAM_UNAVAILABLE');}
    if(data?.id!==id||data.error||!Object.hasOwn(data,'result'))throw fail('UPSTREAM_UNAVAILABLE');
-   observe(stats,clock()-started);
+   observe(stats,clock()-started,clock());
    if(payload.method==='eth_getBlockByNumber'&&payload.params?.[0]==='latest'&&/^0x[0-9a-f]+$/i.test(data.result?.number)){
     node.head=BigInt(data.result.number);node.headAt=clock();
    }
@@ -109,14 +118,17 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
   const delay=error.code==='UPSTREAM_RATE_LIMIT'?error.retryAfterMs:Math.min(60000,5000*2**Math.min(node.failures,4));
   node.cooldown=Math.max(node.cooldown,clock()+delay);sync(node);
  }
- return {
+ const pool={
   nodes,
   run(operation,signal=new AbortController().signal,options={}){
    if(signal.aborted)return Promise.reject(cancelled(signal));
    if(typeof operation!=='function')return Promise.reject(fail('INVALID_INPUT'));
    const nodeId=options.nodeId;
    if(nodeId!==undefined&&!states.some(n=>n.id===nodeId))return Promise.reject(fail('INVALID_INPUT'));
-   const kind=['quote','balances','config','warm'].includes(options.operation)?options.operation:'read';
+   const isProbe=options[PROBE_READ]===true;
+   // Foreground work always takes priority over an in-progress background read.
+   if(!isProbe)activeProbeController?.abort();
+   const kind=isProbe?'probe':['quote','balances','config','warm'].includes(options.operation)?options.operation:'read';
    const rpcClass=options.rpcClass==='header'?'header':'call';
    const candidates=states.filter(n=>n.cooldown<=clock());
    const hedgeEligible=nodeId===undefined&&options.hedge===true&&candidates.length>=2;
@@ -143,16 +155,16 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
       if(settled||running.size!==1||globalHedges>=2||attempts>=MAX_ATTEMPTS)return;
       const backup=ordered(kind,attempted,nodeId,rpcClass).find(n=>n.cooldown<=clock());
       if(!backup)return;
-      hedgeStarted=true;globalHedges++;start(backup,true);
+      hedgeStarted=true;globalHedges++;ownHedges++;start(backup,true);
      },hedgeDelay);
     }
     function start(node,isHedge=false){
-     attempts++;attempted.add(node);node.inFlight++;
+     attempts++;attempted.add(node);node.inFlight++;if(isProbe)node.probeInFlight++;
      const controller=new AbortController(),entry={controller,isHedge};running.set(node,entry);
      const started=clock();
      const attempt=(async()=>{
-      const request=payload=>call(node,payload,controller.signal);
-      if(node.chainAt===null||clock()-node.chainAt>=10000){
+      const request=payload=>call(node,payload,controller.signal,isProbe);
+      if(isProbe||node.chainAt===null||clock()-node.chainAt>=10000){
        if(await request({method:'eth_chainId',params:[]})!=='0x38')throw fail('WRONG_CHAIN');
        node.chainAt=clock();sync(node);
       }
@@ -171,7 +183,7 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
       if(terminal(error)||error.code==='REQUEST_ABORTED'||error.code==='REQUEST_TIMEOUT'){finish(error);return;}
       recordFailure(node,error);
      }).finally(()=>{
-      running.delete(node);node.inFlight--;if(isHedge)globalHedges--;
+      running.delete(node);node.inFlight--;if(isProbe)node.probeInFlight--;if(isHedge){globalHedges--;ownHedges--;}
       if(settled)return;
       if(running.size===0){
        clearHedge();const next=ordered(kind,attempted,nodeId,rpcClass)[0];
@@ -184,8 +196,34 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
     start(primary);scheduleHedge();
    });
   },
+  async probe(options={}){
+   if(!options||typeof options!=='object'||Array.isArray(options)||Object.keys(options).some(key=>!['signal','busy'].includes(key)))throw fail('INVALID_INPUT');
+   const {signal,busy=false}=options;
+   if(signal!==undefined&&!(signal instanceof AbortSignal)||typeof busy!=='boolean')throw fail('INVALID_INPUT');
+   if(signal?.aborted)throw cancelled(signal);
+   if(probing)return {status:'skipped',reason:'running'};
+   if(busy||active||states.some(node=>node.inFlight))return {status:'skipped',reason:'busy'};
+   if(lastProbeStartedAt!==null&&clock()-lastProbeStartedAt<probeInterval)return {status:'skipped',reason:'interval'};
+   const candidates=states.filter(node=>node.cooldown<=clock());
+   if(!candidates.length)return {status:'skipped',reason:states.length?'cooldown':'empty'};
+   const measured=node=>recent(node.requests.eth_call)||recent(node.probeRequests.eth_call);
+   candidates.sort((a,b)=>Number(measured(a))-Number(measured(b))||(a.lastProbeAt??-Infinity)-(b.lastProbeAt??-Infinity)||states.indexOf(a)-states.indexOf(b));
+   const node=candidates[0];probing=true;lastProbeStartedAt=clock();node.lastProbeAt=clock();
+   const controller=new AbortController();activeProbeController=controller;
+   const timeout=AbortSignal.timeout(Math.min(12000,Math.max(1,timeoutMs*3))),combined=AbortSignal.any([controller.signal,timeout,...(signal?[signal]:[])]);
+   try{
+    await pool.run(async request=>{
+     const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});
+     if(!/^0x[0-9a-f]{1,64}$/i.test(block?.number)||!/^0x[0-9a-f]{64}$/i.test(block?.hash)||!/^0x[0-9a-f]{1,64}$/i.test(block?.timestamp)||Math.abs(clock()/1000-Number(BigInt(block.timestamp)))>120)throw fail('STALE_BLOCK');
+     const decimals=await request({method:'eth_call',params:[{to:PROBE_TOKEN,data:PROBE_DATA},block.number]});
+     if(!/^0x[0-9a-f]{64}$/i.test(decimals)||BigInt(decimals)!==18n)throw fail('UPSTREAM_UNAVAILABLE');
+    },combined,{nodeId:node.id,[PROBE_READ]:true});
+    node.lastProbeOk=clock();return {status:'ok',id:node.id,checkedAt:node.lastProbeOk};
+   }finally{if(activeProbeController===controller)activeProbeController=null;probing=false;}
+  },
   health(){
-   return {active,activeHedges:globalHedges,providers:states.map(n=>({id:n.id,ready:n.lastOk!==null&&clock()-n.lastOk<60000&&n.cooldown<=clock(),failures:n.failures,totalFailures:n.totalFailures,successes:n.successes,inFlight:n.inFlight,cooldownMs:Math.max(0,n.cooldown-clock()),headLag:headLag(n),headObservedAt:n.headAt,score:Math.round(score(n)),requests:snapshot(n.requests),operations:snapshot(n.operations)}))};
+   return {active,activeHedges:ownHedges,probing,providers:states.map(n=>({id:n.id,ready:n.lastOk!==null&&clock()-n.lastOk<60000&&n.cooldown<=clock(),failures:n.failures,totalFailures:n.totalFailures,successes:n.successes,inFlight:n.inFlight,cooldownMs:Math.max(0,n.cooldown-clock()),headLag:headLag(n),headObservedAt:n.headAt,lastProbeAt:n.lastProbeAt,lastProbeOk:n.lastProbeOk,measurementSource:latency(n).source,score:Math.round(score(n)),requests:snapshot(n.requests),probeRequests:snapshot(n.probeRequests),operations:snapshot(n.operations)}))};
   }
  };
+ return pool;
 }

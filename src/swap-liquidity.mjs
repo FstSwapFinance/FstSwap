@@ -1,5 +1,5 @@
 // Pool admission policy. All reserves and oracle rounds are read at one BSC block.
-import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter } from './swap-aggregator.mjs?v=mainnet-20261111-23';
+import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter, readSwapConfigFactory } from './swap-aggregator.mjs?v=mainnet-20261111-24';
 const ZERO='0x'+'00'.repeat(20),MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
 const lower=x=>String(x||ZERO).toLowerCase();
 const USDT=lower(SWAP_TOKENS.usdt.address),USDC='0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d';
@@ -92,7 +92,7 @@ export function createPoolPolicy(pools,prices,tokenIn,tokenOut,{tradeTokenIn=tok
  return{pools,prices,main,allows,allowsRoute,assertRoute(legs){if(!allowsRoute(legs))throw fail('池子流动性不足或不是主池，请刷新报价');},assertValue,assert(first,second){if(!allows(first,second))throw fail('池子流动性不足或不是主池，请刷新报价');}};
 }
 
-export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens=[],v3Mode='all',clock=Date.now}){
+export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens=[],v3Mode='all',clock=Date.now,deferCanonical=false}){
  const now=clock();
  const E=globalThis.ethers,router=new E.Interface(SWAP_ABI);
  const iface=new E.Interface(['function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])',
@@ -127,7 +127,8 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
  }
  // V3 discovery depends on its factory, not on V2 reserves or oracle responses.
  const readV3State=async()=>{
-  const [factoryResult]=await batch([call('0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997','factory')]);
+  const knownFactory=readSwapConfigFactory(config,request,block);
+  const [factoryResult]=knownFactory?[[knownFactory]]:await batch([call('0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997','factory')]);
   if(!factoryResult||lower(factoryResult[0])===ZERO)throw fail('无法读取 V3 池列表','data',true);
   const v3Specs=[];
   for(let n=0;n<tokens.length;n++)for(let j=n+1;j<tokens.length;j++)for(const fee of[100,500,2500,10000]){
@@ -193,8 +194,12 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
   }
  }
  const assertFresh=()=>{const time=clock()/1000;if(clock()-now>20000||Math.abs(time-timestamp)>120||expiry.some(t=>time>t))throw fail('流动性检查已过期，请刷新报价','stale',true);return true;};
- const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});
- if(!block.hash||lower(canonical?.hash)!==lower(block.hash))throw fail('区块状态已变化，请刷新报价','stale',true);
+ // The server engine validates this same pinned hash after route calculation.
+ // Standalone reads and wallet preflight retain their own canonical check.
+ if(deferCanonical!==true){
+  const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});
+  if(!block.hash||lower(canonical?.hash)!==lower(block.hash))throw fail('区块状态已变化，请刷新报价','stale',true);
+ }
  assertFresh();
  return{...createPoolPolicy(pools,prices,tokenIn,tokenOut),assertFresh,blockNumber:block.number,checkedAt:now};
 }

@@ -19,3 +19,9 @@
 当前版本支持调用方取消：同输入/同节点上下文按消费者共享，最后一个消费者退出才中断上游。RPC 按真实合约读取延迟与限流/错误评分；仅完整只读报价允许限频备用竞速，最多两个并发备用，不混合不同节点的状态。
 
 主进程默认预热 USDT/FIST 和最多三个近期活跃币对，每轮最多四个、串行执行，前台请求优先。预热不延长原始 `checkedAt + 15秒` 报价截止时间；通过 `FSTSWAP_CONTEXT_WARMUP=0` 可关闭。
+
+节点整理（2026-11-11）：服务器使用分离的报价池（Binance/dRPC/Fast）和余额池（BlockRazor/PublicNode/Musk 1–3），共 8 个主备节点，私有 dRPC URL 仅在服务环境中；浏览器 trade 回退为 Binance/Fast，balance 回退为 BlockRazor/PublicNode，共 4 个公共节点。`rpc-public.json` 记录本次轻量读取样本，不代表完整报价 SLA。
+
+主进程每 31 秒交替对报价池或余额池的一个空闲节点做固定 chain/header/USDT decimals 探测，真实报价样本优先于轻量探测；繁忙、冷却或退出时跳过/取消。新币对配置批量读取复用同 reader 和同区块证明的 V3 factory，最终报价统一核对 canonical hash；独立页面预检保留原检查。
+
+独立余额池通过 `FSTSWAP_BALANCE_RPC_URLS` 配置，报价池沿用 `FSTSWAP_RPC_URLS`；缺失时兼容原共享池。默认 HTTP 份额为报价 8、余额 4，总并发上限 12；health 的 `roles`、`pool`、`balancePool` 与 `activeByRole` 可核对分组状态。钱包广播仍由已连接钱包处理。

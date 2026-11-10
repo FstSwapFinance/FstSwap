@@ -2,8 +2,8 @@
 // 模板来自 swap-official-tpl.mjs（官方 DOM 快照），样式来自 swap-official.css（官方运行时样式）。
 // 钱包按品牌选择注入 provider；未安装时通过 WalletConnect 扫码连接。
 import { SWAP_CHAIN, connectInjected, injectedProvider, restoreInjected, walletAppLink, walletConnectAccount,
-  walletShort, loadSwapWalletConnect, disconnectWalletConnect } from "./swap-wallet.mjs?v=mainnet-20261111-23";
-import { swapPublicRpc, loadSwapLibrary } from "./swap-aggregator.mjs?v=mainnet-20261111-23";
+  walletShort, loadSwapWalletConnect, disconnectWalletConnect } from "./swap-wallet.mjs?v=mainnet-20261111-24";
+import { swapPublicRpc, loadSwapLibrary } from "./swap-aggregator.mjs?v=mainnet-20261111-24";
 import { TPL, EN } from "./swap-official-tpl.mjs?v=official-20261109";
 import { jazziconHtml } from "./swap-jazzicon.mjs?v=official-20261109";
 import "./swap-ui.mjs?v=review-20261110-3";
@@ -214,7 +214,7 @@ export async function refreshNativeBalance() {
   if (!walletState.wallet) return;
   try {
     const account = walletState.account, provider = walletState.provider;
-    const raw = await swapPublicRpc()({ method: "eth_getBalance", params: [account, "latest"] });
+    const raw = await swapPublicRpc(globalThis.fetch, undefined, { lane: "balance" })({ method: "eth_getBalance", params: [account, "latest"] });
     if (walletState.account !== account || walletState.provider !== provider) return;
     const next = BigInt(raw); if (next !== walletState.bnb) { walletState.bnb = next; renderHeader(); }
   } catch {}
