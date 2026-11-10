@@ -1,0 +1,1 @@
+{"name":"fstswap-api","private":true,"type":"module","version":"1.0.0","dependencies":{"ethers":"6.15.0"},"scripts":{"start":"node fstswap-service.mjs"}}

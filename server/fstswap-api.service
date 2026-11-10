@@ -1,0 +1,24 @@
+[Unit]
+Description=FstSwap aggregate quote and wallet balance read API
+After=network-online.target
+Wants=network-online.target
+[Service]
+User=fstswap-api
+Group=fstswap-api
+WorkingDirectory=/opt/fstswap-api/current
+EnvironmentFile=/etc/fstswap-api/service.env
+ExecStart=/opt/fstswap-api/bin/node /opt/fstswap-api/current/server/fstswap-service.mjs
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=512M
+TasksMax=64
+LimitNOFILE=4096
+[Install]
+WantedBy=multi-user.target

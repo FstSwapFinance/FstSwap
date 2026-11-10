@@ -1,0 +1,50 @@
+{
+  "checkedAt": "2026-11-11",
+  "chainId": 56,
+  "measurement": "one VPS USDT/FIST quote; sample only",
+  "nodes": [
+    {
+      "id": "h56-fast",
+      "url": "https://fast.bsc-rpc.com",
+      "enabled": true,
+      "quoteMs": 5200
+    },
+    {
+      "id": "h56-bsc",
+      "url": "https://bsc.publicnode.com",
+      "enabled": true,
+      "quoteMs": 3569
+    },
+    {
+      "id": "h56-bsc-dataseed",
+      "url": "https://bsc-dataseed.bnbchain.org",
+      "enabled": true,
+      "quoteMs": 2780
+    },
+    {
+      "id": "h56-rpc-1",
+      "url": "https://rpc1.muskswap.club",
+      "enabled": true,
+      "quoteMs": 5336
+    },
+    {
+      "id": "h56-rpc-2",
+      "url": "https://rpc2.muskswap.club",
+      "enabled": true,
+      "quoteMs": 5501
+    },
+    {
+      "id": "h56-rpc-3",
+      "url": "https://rpc3.muskswap.club",
+      "enabled": true,
+      "quoteMs": 5625
+    },
+    {
+      "id": "h56-rpc-4",
+      "url": "https://rpc4.muskswap.club",
+      "enabled": false,
+      "quoteMs": null,
+      "reason": "HTTP 502 during chain probe; quote also unavailable"
+    }
+  ]
+}

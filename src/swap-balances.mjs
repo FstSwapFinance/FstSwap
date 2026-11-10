@@ -1,3 +1,4 @@
+import { swapService } from './swap-service-client.mjs?v=mainnet-20261111-21';
 const MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
 const ABI=['function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])',
  'function getEthBalance(address) view returns(uint256)','function balanceOf(address) view returns(uint256)'];
@@ -49,7 +50,7 @@ export async function readWalletBalances(request,account,tokens,{fresh=false,clo
  }
  if(fresh){balanceSnapshots.clear();}
  const key=owner+':'+keys.join(','),entry={owner,keys,pending:true};
- entry.promise=readTokenBalances(request,account,wanted).then(result=>{entry.completedAt=clock();return result;}).finally(()=>{entry.pending=false;});
+ entry.promise=(async()=>await swapService.balances(account,wanted)||await readTokenBalances(request,account,wanted))().then(result=>{entry.completedAt=clock();return result;}).finally(()=>{entry.pending=false;});
  balanceSnapshots.set(key,entry);if(balanceSnapshots.size>6)balanceSnapshots.delete(balanceSnapshots.keys().next().value);
  return entry.promise;
 }
