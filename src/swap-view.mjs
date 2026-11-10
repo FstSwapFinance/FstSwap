@@ -1,10 +1,10 @@
-import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261110-15";
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261110-16";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-15";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-16";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
@@ -12,15 +12,15 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261110-15";
+} from "./swap-aggregator.mjs?v=mainnet-20261110-16";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-15";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-16";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-15";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-16";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261110-15";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261110-16";
 
 const approvals = createApprovalTracker();
 const BPS = 10000n;
@@ -94,8 +94,17 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
   const scroller = listHost.querySelector('div[style*="overflow: auto"]');
   const inner = scroller.firstElementChild;
   const rowTpl = {}; inner.querySelectorAll(":scope > div").forEach((r) => { const k = ["bnb", "usdt", "fist"].find((key) => r.className.toLowerCase().includes(TOKENS[key].item.toLowerCase())); if (k) rowTpl[k] = r.cloneNode(true); });
-  const emptyView = part("token_search_empty", 'div[style*="padding: 20px"]');
+  // The captured virtual-list wrapper has height:0 and a fixed 519px child.
+  // This list renders every row, so let normal flow determine its scroll height.
+  listHost.classList.add("fst-token-results");
+  inner.removeAttribute("style");
+  listHost.replaceChildren(inner);
+  const emptyView = html('<div class="fst-token-results" style="padding: 20px;"></div>');
+  emptyView.textContent = tr("未找到结果。", "No results found.");
   const search = overlay.querySelector("#token-search-input");
+  const common = html('<div class="fst-common-tokens" role="group"></div>');
+  common.setAttribute("aria-label", tr("常用代币", "Common tokens"));
+  search.parentElement.after(common);
   const genericTpl = rowTpl.usdt || rowTpl.fist;
   // 列表 / 用户添加代币的行：官方 CurrencyRow（图标加载失败 → 斜杠圆圈；用户添加的名称后缀「• 由用户添加」）
   const rowFor = (k) => {
@@ -118,6 +127,7 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
   // Token metadata always comes from BSC, even when the wallet is on another chain.
   const readRpc = swapPublicRpc();
   const dialog = overlay.querySelector("[data-reach-dialog-content]");
+  dialog.classList.add("fst-token-dialog");
   const searchCls = dialog.className, searchNodes = [...dialog.childNodes];
   let manager = null, searchSeq = 0;
   let unsubscribe = () => {}, stopWallet = () => {};
@@ -130,39 +140,56 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
   overlay.querySelector(".list-token-manage-button")?.addEventListener("click", () => manage());
   const draw = () => {
     if (!dialog.contains(search)) return;
+    common.replaceChildren();
+    const commonIds = [SWAP_TOKENS.fist.address, SWAP_TOKENS.usdt.address, null, "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d"];
+    for (const address of commonIds) {
+      const key = address == null ? "bnb" : ORDER.find(k => TOKENS[k].address?.toLowerCase() === address.toLowerCase());
+      if (!key) continue; // Respect disabled lists; never substitute a same-symbol token.
+      const button = html('<button type="button" class="fst-common-token"></button>');
+      const icon = rowFor(key).querySelector(":scope > svg, :scope > img");
+      if (icon) button.append(icon);
+      const label = document.createElement("span"); label.textContent = TOKENS[key].symbol; button.append(label);
+      button.disabled = key === selected;
+      button.setAttribute("aria-label", tr("选择 ", "Select ") + TOKENS[key].symbol);
+      button.addEventListener("click", () => { closePicker(); onPick(key); });
+      common.append(button);
+    }
     const q = search.value.trim().toLowerCase(); const seq = ++searchSeq;
     const keys = sortKeys(ORDER.filter((k) => !q || TOKENS[k].symbol.toLowerCase().includes(q) || TOKENS[k].name.toLowerCase().includes(q) || (TOKENS[k].address || "").toLowerCase() === q));
-    const container = overlay.querySelector('div[style*="flex: 1 1 0%"]') || overlay.querySelector('div[style*="padding: 20px"]');
+    const container = overlay.querySelector('.fst-token-results');
     if (!keys.length) {
       container.replaceWith(emptyView.cloneNode(true));
       // 官方 CurrencySearch：粘贴未在激活列表中的合约地址 → 显示导入行，点「导入」进入导入代币页
       if (isAddress(q)) readToken(readRpc, q).then((t) => {
         if (!t || seq !== searchSeq || !overlay.isConnected || !dialog.contains(search) || findActiveToken(t.address)) return;
-        const box = overlay.querySelector('div[style*="padding: 20px"]'); if (!box) return;
-        const col = document.createElement("div"); col.className = box.className; col.setAttribute("style", "padding: 20px 0px; height: 100%;");
+        const box = overlay.querySelector('.fst-token-results'); if (!box) return;
+        const col = document.createElement("div"); col.className = box.className; col.setAttribute("style", "padding: 20px 0px;");
         col.append(searchImportRow(t, () => manage({ initial: "importToken", importToken: t }))); box.replaceWith(col);
       }).catch(() => {});
       return;
     }
     const list = listHost; if (container !== list) container.replaceWith(list);
-    inner.replaceChildren(); inner.style.height = keys.length * 56 + "px";
+    inner.replaceChildren();
     keys.forEach((k, i) => {
       const r = rowFor(k); const base = r.className.replace(/\b(hkWdsr|hhKaCX|LPcFh)\b/, "").trim();
       r.className = base + " " + (k === selected ? "hhKaCX" : k === other ? "LPcFh" : "hkWdsr");
       if (k === selected) r.setAttribute("disabled", ""); else r.removeAttribute("disabled");
-      r.style.top = i * 56 + "px";
+      r.removeAttribute("style");
+      r.setAttribute("role", "button"); r.tabIndex = k === selected ? -1 : 0;
+      r.setAttribute("aria-disabled", String(k === selected));
       const balBox = r.querySelector(".hpHOqm");
       const bal = balances[k];
       if (balBox) { if (wallet.account && bal != null) { balBox.textContent = sigDown(bal, TOKENS[k].decimals, 4); balBox.title = swapFormatUnits(bal, TOKENS[k].decimals); } else balBox.parentElement.replaceChildren(); }
-      if (k !== selected) r.addEventListener("click", () => { closePicker(); onPick(k); });
+      if (k !== selected) {
+        r.addEventListener("click", () => { closePicker(); onPick(k); });
+        r.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); r.click(); } });
+      }
       inner.append(r);
     });
   };
   search.addEventListener("input", draw);
   overlay.querySelector(".jmNfaf > svg")?.addEventListener("click", closePicker);
   openModal(overlay, { onClose: cleanup });
-  const h = listHost.getBoundingClientRect().height; if (h > 0) scroller.style.height = Math.floor(h) + "px";
-  const trig = listHost.querySelector(".expand-trigger > div"); if (trig) { trig.style.width = Math.floor(listHost.getBoundingClientRect().width + 1) + "px"; trig.style.height = Math.floor(h + 1) + "px"; }
   draw(); search.focus();
   const refreshBalances = async () => {
     if (loadBalances) return loadBalances();
