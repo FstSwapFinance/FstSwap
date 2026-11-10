@@ -1,12 +1,14 @@
-import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261111-22';
-import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261111-22';
-import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261111-22";
+import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261111-23';
+import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261111-23';
+import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261111-23';
+import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261111-23';
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261111-23";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261111-22";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261111-23";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
@@ -14,16 +16,16 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261111-22";
+} from "./swap-aggregator.mjs?v=mainnet-20261111-23";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261111-22";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261111-23";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261111-22";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261111-23";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261111-22";
-import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261111-22";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261111-23";
+import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261111-23";
 
 const approvals = createApprovalTracker();
 const warmRequest = swapPublicRpc();
@@ -268,6 +270,7 @@ export async function mountSwapView(root) {
   if (!main.isConnected) return;
   main.inert = false;
   const ethers = globalThis.ethers;
+  const allowanceReader = createAllowanceReader(transactionRead);
   const $ = (s) => main.querySelector(s);
   const settingsWrap = $(".eWRqBu");
   const swapPage = $("#swap-page");
@@ -463,7 +466,7 @@ export async function mountSwapView(root) {
     if (state.quoteError === "AMOUNT_PRECISION") return tr("输入金额超出代币精度", "Amount exceeds token precision");
     if (state.quoteError) return tr("报价暂不可用，正在重试", "Quote unavailable; retrying");
     if (!state.quote) return tr("正在获取报价…", "Fetching quote…");
-    if (state.quote.serviceExpiresAt && Date.now() >= state.quote.serviceExpiresAt) { scheduleQuote(0); return tr("正在更新报价…", "Refreshing quote…"); }
+    if (state.quote.serviceExpiresAt && Date.now() >= state.quote.serviceExpiresAt) return tr("正在更新报价…", "Refreshing quote…");
     const bal = state.balances[page.inKey];
     if (bal != null && bal < (state.quote.maxIn ?? state.quote.amountIn)) return tr(inT().symbol + " 余额不足", "Insufficient " + inT().symbol + " balance");
     return "";
@@ -580,16 +583,19 @@ export async function mountSwapView(root) {
     return isAggPair() && state.quote?.route ? swapRouteSpenders(state.quote.route)[0] : null;
   }
   function approvalIdentity() { return { account: wallet.account, token: inT()?.address, spender: spender() }; }
-  async function refreshAllowance(blockTag="latest") {
-    state.allowance = null;
-    if (!wallet.account || !inT() || inT().key === "bnb" || !state.quote) return;
+  let allowanceRequestId=0;
+  async function refreshAllowance(blockTag="latest", {fresh=true, signal}={}) {
+    const requestId=++allowanceRequestId;
+    if (!wallet.account || !inT() || inT().key === "bnb") { state.allowance=null; return; }
     const sp = spender(); if (!sp) return;
-    const account=wallet.account,token=inT().address,quote=state.quote;
+    const account=wallet.account,token=inT().address;
+    const identity=[account,token,sp].map(x=>String(x).toLowerCase()).join(":");
+    if(state.allowanceIdentity!==identity){state.allowance=null;state.allowanceIdentity=identity;}
+    if(fresh)state.allowance=null;
     try {
-      const data = new ethers.Interface(ERC20_ABI).encodeFunctionData("allowance", [account, sp]);
-      const allowance=BigInt(await transactionRead({method:"eth_call",params:[{ to:token, data }, blockTag]}));
-      if(wallet.account===account&&inT()?.address===token&&state.quote===quote&&spender()===sp)state.allowance=allowance;
-    } catch { /* Unknown allowance is not the same as insufficient allowance. */ }
+      const allowance=await allowanceReader.read({chainId:56,account,token,spender:sp},{fresh,blockTag,signal});
+      if(requestId===allowanceRequestId && !signal?.aborted && wallet.account===account && inT()?.address===token && spender()===sp)state.allowance=allowance;
+    } catch(error) { if(error?.name==='AbortError')return; /* Unknown allowance is never treated as sufficient. */ }
   }
 
   function prewarmQuote() {
@@ -597,19 +603,20 @@ export async function mountSwapView(root) {
     if (main.isConnected && inT() && outT()) quoteContext.get(inT().address, outT().address).catch(() => {});
   }
   // —— 报价 ——
-  let quoteTimer = null;
-  function scheduleQuote(ms = 180) {
-    clearTimeout(quoteTimer); ++state.seq;
-    if (main.isConnected) quoteTimer = setTimeout(() => { if (main.isConnected) refreshQuote(); }, ms);
-  }
+  let quoteExpiryTimer=null,lastTypedAt=0;
+  const quoteFlow=createQuoteRefresh({run:options=>refreshQuote(options),
+    ready:()=>main.isConnected && !document.hidden && navigator.onLine!==false && !!inT() && !!outT() && Number(state.amount)>0,
+    blocked:()=>!!state.transactionBusy || !!document.querySelector('#confirm-swap-or-send')});
+  function scheduleQuote(ms=180) { ++state.seq;quoteFlow.schedule(ms); }
   function onAmountInput(e) {
+    const hadQuote=!!state.quote,now=Date.now();
     const v = limitAmountDecimals(e.target.value.replace(/,/g, "."));
     if (v !== "" && !/^\d*\.?\d*$/.test(v)) { e.target.value = state.amount; return; }
     e.target.value = v; state.amount = v;  state.quote = null; state.quoteError = ""; state.refocus = true;
     renderTrade(); renderBottom();
     prewarmQuote();
     const out = main.querySelector("#swap-currency-output input"); if (out) out.value = "";
-    scheduleQuote();
+    scheduleQuote(hadQuote || now-lastTypedAt<400 ? 100 : 0);lastTypedAt=now;
   }
   function setMax() {
     const bal = state.balances[page.inKey]; if (bal == null || !inT()) return;
@@ -640,19 +647,23 @@ export async function mountSwapView(root) {
   const impactOf = (amountIn, out, tiny, ref) => Math.max(0, 1 - (Number(out) / Number(amountIn)) / (Number(ref) / Number(tiny)));
   const feeBpsNow = () => state.config?.platformFeeBps ?? 30;
   // 根据支付数量比较已启用 DEX 和中间币候选。
-  async function refreshQuote() {
+  async function refreshQuote({background=false,signal}={}) {
     const seq = ++state.seq;
+    if(state.quote?.serviceExpiresAt && state.quote.serviceExpiresAt<=Date.now())state.quote=null;
     const ti = inT(), to = outT();
     const typed = state.amount;
     if (!ti || !to || !typed || !(Number(typed) > 0)) { state.quote = null; render(); return; }
     state.quoteError = ""; state.quoteErrorReason = "";
     let amount; try { amount = swapUnits(typed, ti.decimals); } catch { state.quote = null; state.quoteError = "AMOUNT_PRECISION"; render(); return; }
+    const inputKey=JSON.stringify([ti.address||ZERO,to.address||ZERO,amount.toString(),settings.slippageBps,settings.singleHop]);
+    const retained=background && state.quoteKey===inputKey && state.quote?.serviceExpiresAt>Date.now() ? state.quote : null;
+    const allowanceRead=refreshAllowance("latest",{fresh:false,signal});
     renderBottom();
     try {
       let q, poolPolicy;
       const remote = await swapService.quote({ tokenIn: ti.address, tokenOut: to.address, amountIn: amount,
-        slippageBps: settings.slippageBps, singleHop: settings.singleHop }, { router: swapActiveRouter(), adapters: SWAP_ADAPTERS });
-      if (seq !== state.seq || !main.isConnected) return;
+        slippageBps: settings.slippageBps, singleHop: settings.singleHop }, { router: swapActiveRouter(), adapters: SWAP_ADAPTERS, signal });
+      if (signal?.aborted || seq !== state.seq || !main.isConnected) return;
       if (remote) {
         state.config = remote.config; q = remote.quote;
         q.serviceMeta = {...remote}; delete q.serviceMeta.quote; q.serviceExpiresAt = remote.expiresAt;
@@ -718,17 +729,23 @@ export async function mountSwapView(root) {
       poolPolicy?.assertFresh();
       poolPolicy?.assertValue(q.maxIn || q.amountIn, minOut(q));
       if (seq !== state.seq || !main.isConnected) return;
-      state.quote = q; state.quoteError = "";
-      if (q.serviceExpiresAt) setTimeout(() => {
-        if (main.isConnected && state.quote === q) { state.quote = null; render(); scheduleQuote(0); }
-      }, Math.max(0, q.serviceExpiresAt - Date.now()));
-      // Render the read-only quote immediately; allowance only controls wallet actions.
-      state.allowance = null; render();
-      await refreshAllowance();
+      if(signal?.aborted || background && (state.transactionBusy || document.querySelector('#confirm-swap-or-send')))return;
+      q.serviceExpiresAt ??= q.poolCheckedAt+15000;
+      state.quote = q;state.quoteKey=inputKey;state.quoteError = "";
+      clearTimeout(quoteExpiryTimer);
+      quoteExpiryTimer=setTimeout(()=>{
+        if(main.isConnected && state.quote===q && !state.transactionBusy && !document.querySelector('#confirm-swap-or-send')) {state.quote=null;render();if(!quoteFlow.running?.())scheduleQuote(0);}
+      },Math.max(0,q.serviceExpiresAt-Date.now()));
+      // Read-only output and preloaded approval state render independently.
+      render();
+      await allowanceRead;
+      if (!swapV10Ready()) await refreshAllowance("latest",{fresh:false,signal});
       if (seq !== state.seq) return;
       render();
     } catch (err) {
-      if (seq !== state.seq) return;
+      if (signal?.aborted || err?.name==='AbortError' || seq !== state.seq) return;
+      const hardFailure=["NO_ROUTE","NO_FEE_ROUTE","UNSAFE_QUOTE","PRICE_IMPACT_TOO_HIGH"].includes(err?.code) || err?.code==="POOL_LIQUIDITY"&&!err?.retryable;
+      if(!hardFailure && retained && retained.serviceExpiresAt>Date.now() && state.quote===retained) {state.quoteError="";renderBottom();return;}
       state.quote = null;
       state.quoteError = err?.code === SWAP_V10_MISSING.code ? SWAP_V10_MISSING.code
         : err?.code === "NO_ROUTE" || /revert|INSUFFICIENT/i.test(err?.message || "") ? "NO_ROUTE" : (err?.code || "SWAP_RPC");
@@ -789,6 +806,7 @@ export async function mountSwapView(root) {
     catch { throw Object.assign(new Error(tr("报价已失效，请重新获取", "Quote is no longer valid; refresh it")), {code:"UNSAFE_QUOTE"}); }
   }
   function openConfirm() {
+    quoteFlow.pause();
     const q = state.quote; if (!q || refreshExpiredServiceQuote(q)) return;
     const confirmation = {account:wallet.account,inKey:page.inKey,outKey:page.outKey,slippage:settings.slippageBps};
     const overlay = tpl("confirm_modal");
@@ -811,7 +829,7 @@ export async function mountSwapView(root) {
       if(state.quote!==q || wallet.account!==confirmation.account || page.inKey!==confirmation.inKey || page.outKey!==confirmation.outKey || settings.slippageBps!==confirmation.slippage){errorModal(tr("报价、账户或设置已改变，请重新确认", "Quote, account or settings changed; review again"));return;}
       executeSwap(q);
     });
-    openModal(overlay);
+    openModal(overlay,{onClose:()=>{if(main.isConnected && state.amount && !state.transactionBusy)quoteFlow.schedule(0,{background:true});}});
   }
   function pendingModal(text) {
     const overlay = tpl("pending_modal");
@@ -867,6 +885,7 @@ export async function mountSwapView(root) {
     const submittedTokens = { tokenIn: inT().address, tokenOut: outT().address };
     const submittedSlippage = settings.slippageBps, submittedDeadline = settings.deadlineMinutes;
     let expectedRequest;
+    state.transactionBusy=true;quoteFlow.pause();
     try {
       checkServiceQuote(q);
       assertQuoteSafety({ ...submittedTokens, amountIn: q.maxIn || q.amountIn, amountOut: min, impact: q.impact, quotedAmountIn: q.amountIn, quotedAmountOut: q.out });
@@ -930,7 +949,7 @@ export async function mountSwapView(root) {
       if (err?.pendingIntent) errorModal(err.message, err.pendingIntent);
       else if (Number(err?.code) === 4001) errorModal(T("交易被拒绝。"));
       else errorModal(err?.message || tr("交易失败", "Transaction failed"));
-    }
+    } finally {state.transactionBusy=false;if(main.isConnected && state.amount)scheduleQuote(0);}
   }
 
   // 每次进入兑换页立即选择 USDT → FIST；明确的 URL 币对优先，连接钱包不覆盖用户选择。
@@ -949,15 +968,16 @@ export async function mountSwapView(root) {
     }).catch(()=>{});
   }
   applyDefaults();
-  wallet.subscribe(() => {
+  const stopWallet=wallet.subscribe(() => {
     if (!main.isConnected) return;
     if (wallet.account && !page.connectedDefaults) applyDefaults();
-    invalidateWalletBalances(); warmSwapData(wallet.account);
+    invalidateWalletBalances();allowanceReader.invalidate();state.allowance=null;state.allowanceIdentity=null; warmSwapData(wallet.account);
     state.quote = null; ++state.seq; ++state.balanceEpoch; closeModal(); state.balances = {}; state.balanceErrors = {}; render(); refreshBalances(false); restoreSubmittedTransaction(); scheduleQuote(0);
   });
 
-  onTokensChanged(() => { if (main.isConnected) { state.quote=null; state.allowance=null; render(); scheduleQuote(0); } });
+  const stopTokens=onTokensChanged(() => { if (main.isConnected) { state.quote=null; state.allowance=null; render(); scheduleQuote(0); } });
   approvals.subscribe(()=>{if(!main.isConnected)return false;renderBottom();});
+  globalThis.addEventListener('hashchange',()=>{stopWallet();stopTokens();clearTimeout(quoteExpiryTimer);quoteFlow.dispose();allowanceReader.invalidate();},{once:true});
   renderSettings(); render();
   refreshDefaultList();
   if (wallet.account) { warmSwapData(wallet.account); refreshBalances(false); restoreSubmittedTransaction(); }

@@ -6,7 +6,7 @@
 //  - 返回箭头回到选择代币；关闭按钮关闭弹窗。状态本地存储（localStorage），与官方 redux-persist 一致只存在浏览器。
 import { MANAGE_TPL, MANAGE_EN } from "./swap-manage-tpl.mjs?v=fstsi-v10-20261110";
 import { TOKEN_CHAIN_ID, isAddress, normalizeToken, validateTokenList, restoreTokenStore, activeEntries, listSourceUrls, addCustomEntry, removeCustomEntry, removeListEntry } from "./swap-token-lists.mjs?v=manage-20261110-1";
-import { tr, getLanguage } from "./swap-shell.mjs?v=mainnet-20261111-22";
+import { tr, getLanguage } from "./swap-shell.mjs?v=mainnet-20261111-23";
 
 import DEFAULT_LIST from "./swap-default-tokens.mjs";
 import { TOKEN_LIST_SOURCE, migrateDefaultSource, preferNewerList } from "./token-catalog.mjs";

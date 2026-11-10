@@ -2,8 +2,8 @@
 // 模板来自 swap-official-tpl.mjs（官方 DOM 快照），样式来自 swap-official.css（官方运行时样式）。
 // 钱包按品牌选择注入 provider；未安装时通过 WalletConnect 扫码连接。
 import { SWAP_CHAIN, connectInjected, injectedProvider, restoreInjected, walletAppLink, walletConnectAccount,
-  walletShort, loadSwapWalletConnect, disconnectWalletConnect } from "./swap-wallet.mjs?v=mainnet-20261111-22";
-import { swapPublicRpc, loadSwapLibrary } from "./swap-aggregator.mjs?v=mainnet-20261111-22";
+  walletShort, loadSwapWalletConnect, disconnectWalletConnect } from "./swap-wallet.mjs?v=mainnet-20261111-23";
+import { swapPublicRpc, loadSwapLibrary } from "./swap-aggregator.mjs?v=mainnet-20261111-23";
 import { TPL, EN } from "./swap-official-tpl.mjs?v=official-20261109";
 import { jazziconHtml } from "./swap-jazzicon.mjs?v=official-20261109";
 import "./swap-ui.mjs?v=review-20261110-3";
@@ -193,7 +193,10 @@ function pollingEl() {
 }
 function startPolling() {
   if (pollTimer) return;
+  let pending=false;
   const tick = async () => {
+    if(pending || document.hidden || navigator.onLine===false)return;
+    pending=true;
     try {
       const n = Number(BigInt(await swapPublicRpc()({ method: "eth_blockNumber" })));
       if (n) {
@@ -201,8 +204,10 @@ function startPolling() {
         document.querySelectorAll("#root .joauzn > a.fQylAf").forEach((a) => { a.href = "https://bscscan.com/block/" + n; a.querySelector(".gXlyCc").textContent = String(n); });
         if (walletState.account) refreshNativeBalance();
       }
-    } catch {}
+    } catch {} finally {pending=false;}
   };
+  document.addEventListener('visibilitychange',tick);
+  globalThis.addEventListener('online',tick);
   tick(); pollTimer = setInterval(tick, 6000);
 }
 export async function refreshNativeBalance() {

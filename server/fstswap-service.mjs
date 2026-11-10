@@ -3,9 +3,11 @@ import {pathToFileURL} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {isIP} from 'node:net';
 import {ethers} from 'ethers';
-import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261111-22';
-import {readPoolPolicy} from '../src/swap-liquidity.mjs?v=mainnet-20261111-22';
+import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261111-23';
+import {readPoolPolicy} from '../src/swap-liquidity.mjs?v=mainnet-20261111-23';
 import {readTokenBalances} from '../src/swap-balances.mjs';
+import {createReadPool} from './swap-read-pool.mjs';
+export {createReadPool};
 
 globalThis.ethers=ethers;
 const ZERO=ethers.ZeroAddress,FIST=SWAP_TOKENS.fist.address.toLowerCase(),BPS=10000n,MAX=(1n<<256n)-1n;
@@ -22,40 +24,7 @@ export function balanceInput(b){
 }
 export const encode=(v)=>JSON.stringify(v,(_,x)=>typeof x==='bigint'?{$bigint:x.toString()}:x);
 // The API never takes an RPC method, URL, calldata, private key or signed transaction.
-export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=Date.now}={}){
- let nextId=0,active=0;
- const nodes=endpoints.map((url,n)=>({url,id:'upstream-'+(n+1),chainAt:0,lastOk:0,failures:0,cooldown:0}));
- async function call(node,payload,signal){
-  if(!['eth_chainId','eth_getBlockByNumber','eth_call','eth_getBalance'].includes(payload.method))throw fail('RPC_FORBIDDEN');
-  if(active>=48)throw fail('SERVICE_BUSY');active++;
-  try{
-   const id=++nextId,response=await fetchImpl(node.url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id,...payload}),signal:AbortSignal.any([signal,AbortSignal.timeout(timeoutMs)])});
-   if(!response.ok)throw fail('UPSTREAM_UNAVAILABLE');
-   const chunks=[];let bytes=0;
-   for await(const chunk of response.body){bytes+=chunk.length;if(bytes>2*1024*1024)throw fail('UPSTREAM_LIMIT');chunks.push(chunk);}
-   const data=JSON.parse(Buffer.concat(chunks).toString());
-   if(data.id!==id||data.error||!Object.hasOwn(data,'result'))throw fail('UPSTREAM_UNAVAILABLE');
-   return data.result;
-  }finally{active--;}
- }
- return{
-  nodes,
-  async run(operation,signal){
-   const ordered=[...nodes].sort((a,b)=>Number(a.cooldown>clock())-Number(b.cooldown>clock())||b.lastOk-a.lastOk);
-   let last;
-   for(const node of ordered.slice(0,3)){
-    if(signal.aborted)throw fail('REQUEST_TIMEOUT');
-    try{
-     const request=p=>call(node,p,signal);
-     if(clock()-node.chainAt>10000){if(await request({method:'eth_chainId',params:[]})!=='0x38')throw fail('WRONG_CHAIN');node.chainAt=clock();}
-     const result=await operation(request,node);node.lastOk=clock();node.failures=0;node.cooldown=0;return result;
-    }catch(e){last=e;if(['INVALID_INPUT','NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','UNSUPPORTED_VERSION'].includes(e.code)||e.code==='POOL_LIQUIDITY'&&!e.retryable)throw e;node.failures++;node.cooldown=clock()+10000;}
-   }
-   throw last||fail('UPSTREAM_UNAVAILABLE');
-  },
-  health(){return{active,providers:nodes.map(n=>({id:n.id,ready:clock()-n.lastOk<60000,failures:n.failures}))};}
- };
-}
+
 function assertBlock(block,clock){
  if(!block?.hash||!block.number||!block.timestamp||Math.abs(clock()/1000-Number(BigInt(block.timestamp)))>120)throw fail('STALE_BLOCK');
 }
@@ -96,47 +65,134 @@ export async function computeQuote(request,input,config,poolPolicy){
  q.poolCheckedAt=poolPolicy.checkedAt;
  return q;
 }
-export function createEngine(pool,{clock=Date.now,readConfig=readSwapConfig,readPolicy=readPoolPolicy,calculate=computeQuote,readBalances=readTokenBalances}={}){
- const contexts=new Map(),inflight=new Map();
- function boundedSet(map,key,value,max){if(map.size>=max)map.delete(map.keys().next().value);map.set(key,value);}
- async function context(request,node,input){
-  const key=[node.id,input.tokenIn,input.tokenOut].join(':'),old=contexts.get(key);
-  if(old&&(old.pending||clock()-old.completedAt<2500))return old.promise;
-  const entry={pending:true};
-  entry.promise=(async()=>{
-   const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertBlock(block,clock);
-   const read=pinned(request,block),config=await readConfig(read);
-   const policy=await readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:'legacy',clock});
-   entry.completedAt=clock();return{block,config,policy};
-  })().finally(()=>{entry.pending=false;});boundedSet(contexts,key,entry,32);
-  try{return await entry.promise;}catch(e){if(contexts.get(key)===entry)contexts.delete(key);throw e;}
+// Each subscriber owns cancellation. A shared read owns its upstream signal and
+// abandons that read only after every subscriber has left.
+const abortError=signal=>fail(signal?.reason?.name==='TimeoutError'?'REQUEST_TIMEOUT':'REQUEST_ABORTED');
+function assertRunning(signal){if(signal?.aborted)throw abortError(signal);}
+function untilAborted(work,signal){
+ if(signal.aborted)return Promise.reject(abortError(signal));
+ return new Promise((resolve,reject)=>{
+  const abort=()=>{cleanup();reject(abortError(signal));},cleanup=()=>signal.removeEventListener('abort',abort);
+  signal.addEventListener('abort',abort,{once:true});
+  Promise.resolve(work).then(value=>{cleanup();resolve(value);},error=>{cleanup();reject(error);});
+ });
+}
+function sharedRead(start,{timeoutMs,onSettled,onAbandoned}={}){
+ const controller=new AbortController(),signal=AbortSignal.any([controller.signal,AbortSignal.timeout(timeoutMs)]);
+ const entry={controller,signal,consumers:new Set(),settled:false};
+ entry.promise=untilAborted(Promise.resolve().then(()=>{assertRunning(signal);return start(signal);}),signal).then(value=>{
+  entry.settled=true;onSettled?.(null);return value;
+ },error=>{entry.settled=true;onSettled?.(error);throw error;});
+ // A provider that ignores cancellation may finish after all its subscribers left.
+ // Keep its rejection handled; canceled results never enter a retained cache.
+ entry.promise.catch(()=>{});
+ entry.subscribe=consumerSignal=>{
+  if(consumerSignal?.aborted)return Promise.reject(abortError(consumerSignal));
+  return new Promise((resolve,reject)=>{
+   const consumer={},leave=()=>{consumerSignal?.removeEventListener('abort',abort);entry.consumers.delete(consumer);};
+   const abort=()=>{leave();reject(abortError(consumerSignal));if(!entry.settled&&!entry.consumers.size){onAbandoned?.();controller.abort();}};
+   entry.consumers.add(consumer);consumerSignal?.addEventListener('abort',abort,{once:true});
+   entry.promise.then(value=>{leave();resolve(value);},error=>{leave();reject(error);});
+  });
+ };
+ return entry;
+}
+export function createEngine(pool,{clock=Date.now,readConfig=readSwapConfig,readPolicy=readPoolPolicy,calculate=computeQuote,readBalances=readTokenBalances,warmup={}}={}){
+ const contexts=new Map(),inflight=new Map(),recentPairs=new Map();
+ const warmOptions={enabled:true,intervalMs:6000,activeTtlMs:60000,maxPairs:4,...warmup};
+ warmOptions.intervalMs=Math.max(1000,Number(warmOptions.intervalMs)||6000);
+ warmOptions.maxPairs=Math.max(1,Math.min(4,Number(warmOptions.maxPairs)||4));
+ const defaults=(warmOptions.pairs||[{tokenIn:SWAP_TOKENS.usdt.address.toLowerCase(),tokenOut:FIST}]).slice(0,warmOptions.maxPairs);
+ let foreground=0,warming=null,warmTimer=null;
+ const pairKey=input=>[input.tokenIn,input.tokenOut].join(':');
+ function boundedSet(map,key,value,max){
+  if(!map.has(key)&&map.size>=max){const evict=[...map].find(([,entry])=>entry.settled);if(evict)map.delete(evict[0]);else throw fail('SERVICE_BUSY');}
+  map.set(key,value);
  }
- return{
-  quote(raw){
-   const input=quoteInput(raw),key=JSON.stringify(input);if(inflight.has(key))return inflight.get(key);
-   const signal=AbortSignal.timeout(18000);
-   const promise=pool.run(async(request,node)=>{
-    const {block,config,policy}=await context(request,node,input);policy.assertFresh();
-    const q=await calculate(pinned(request,block),input,config,policy);
-    const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});
+ function touchPair(input){
+  const key=pairKey(input);if(defaults.some(pair=>pairKey(pair)===key))return;recentPairs.delete(key);recentPairs.set(key,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,seenAt:clock()});
+  while(recentPairs.size>3)recentPairs.delete(recentPairs.keys().next().value);
+ }
+ function activePairs(){
+  for(const[key,pair]of recentPairs)if(clock()-pair.seenAt>=warmOptions.activeTtlMs)recentPairs.delete(key);
+  const pairs=new Map(defaults.map(pair=>[pairKey(pair),pair]));
+  for(const[key,pair]of [...recentPairs].reverse())if(!pairs.has(key)&&pairs.size<warmOptions.maxPairs)pairs.set(key,pair);
+  return[...pairs.values()];
+ }
+ function context(input,consumerSignal,{warm=false,node}={}){
+  const nodeId=node?.id||'primary',key=[nodeId,pairKey(input)].join(':'),old=contexts.get(key);
+  // Prewarmed data is useful until the next refresh, while its original policy
+  // deadline remains authoritative. Ordinary foreground reuse stays at 2.5 s.
+  if(old&&!old.signal.aborted&&(!old.settled||clock()-old.completedAt<(warm?2500:old.warmed?warmOptions.intervalMs+2500:2500))){
+   if(!warm||old.warmed)return old.subscribe(consumerSignal);
+   return old.subscribe(consumerSignal).then(snapshot=>untilAborted(pool.run(async request=>{
+    const canonical=await request({method:'eth_getBlockByNumber',params:[snapshot.block.number,false]});assertRunning(consumerSignal);
+    if(canonical?.hash!==snapshot.block.hash)throw fail('STALE_BLOCK');snapshot.policy.assertFresh();if(clock()>=snapshot.policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');old.warmed=true;return snapshot;
+   },consumerSignal,{operation:'warm',nodeId}),consumerSignal)).catch(error=>{if(contexts.get(key)===old)contexts.delete(key);throw error;});
+  }
+  let entry;
+  entry=sharedRead(signal=>pool.run(async request=>{
+   const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertRunning(signal);assertBlock(block,clock);
+   const read=pinned(request,block),config=await readConfig(read);assertRunning(signal);
+   const policy=await readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:'legacy',clock});assertRunning(signal);policy.assertFresh();
+   if(warm){const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(signal);if(canonical?.hash!==block.hash)throw fail('STALE_BLOCK');policy.assertFresh();if(clock()>=policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');}
+   entry.completedAt=clock();entry.warmed=warm;return{block,config,policy};
+  },signal,{operation:warm?'warm':'config',nodeId}),{timeoutMs:18000,
+   onSettled:error=>{if(error&&contexts.get(key)===entry)contexts.delete(key);},
+   onAbandoned:()=>{if(contexts.get(key)===entry)contexts.delete(key);}});
+  try{boundedSet(contexts,key,entry,32);}catch(error){entry.controller.abort();return Promise.reject(error);}return entry.subscribe(consumerSignal);
+ }
+ const engine={
+  quote(raw,{signal}={}){
+   const input=quoteInput(raw),key=JSON.stringify([input.chainId,input.tokenIn,input.tokenOut,input.amountIn,input.slippageBps,input.singleHop]);if(signal?.aborted)return Promise.reject(abortError(signal));touchPair(input);
+   const old=inflight.get(key);if(old&&!old.signal.aborted)return old.subscribe(signal);
+   if(warming&&warming.key!==pairKey(input))warming.controller.abort();
+   foreground++;let entry;
+   entry=sharedRead(sharedSignal=>pool.run(async(request,node,attemptSignal)=>{
+    // Consumers share the quote lifetime; each provider attempt owns its context
+    // subscription so a hedge winner releases only the losing attempt's work.
+    const activeSignal=attemptSignal||sharedSignal;
+    if(warming&&warming.nodeId!==(node?.id||'primary'))warming.controller.abort();
+    const {block,config,policy}=await context(input,activeSignal,{node});assertRunning(activeSignal);policy.assertFresh();
+    const q=await untilAborted(calculate(pinned(request,block),input,config,policy,{signal:activeSignal}),activeSignal);assertRunning(activeSignal);
+    const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(activeSignal);
     if(canonical?.hash!==block.hash)throw fail('STALE_BLOCK');policy.assertFresh();
     const expiresAt=policy.checkedAt+15000;if(clock()>=expiresAt)throw fail('QUOTE_EXPIRED');
     return{schema:1,chainId:56,router:swapActiveRouter(),input,config,quote:q,blockNumber:block.number,blockHash:block.hash,quotedAt:clock(),expiresAt};
-   },signal).finally(()=>{if(inflight.get(key)===promise)inflight.delete(key);});
-   boundedSet(inflight,key,promise,32);return promise;
+   },sharedSignal,{hedge:true,operation:'quote'}),{timeoutMs:18000,
+    onSettled:()=>{foreground--;if(inflight.get(key)===entry)inflight.delete(key);},
+    onAbandoned:()=>{if(inflight.get(key)===entry)inflight.delete(key);}});
+   try{boundedSet(inflight,key,entry,32);}catch(error){entry.controller.abort();return Promise.reject(error);}
+   return entry.subscribe(signal);
   },
-  balances(raw){
-   const input=balanceInput(raw);
-   return pool.run(async request=>{
-    const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertBlock(block,clock);
+  balances(raw,{signal}={}){
+   const input=balanceInput(raw);if(signal?.aborted)return Promise.reject(abortError(signal));
+   const combined=signal?AbortSignal.any([signal,AbortSignal.timeout(12000)]):AbortSignal.timeout(12000);
+   return untilAborted(pool.run(async request=>{
+    const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertRunning(combined);assertBlock(block,clock);
     const tokens=input.tokens.map(a=>({key:a===ZERO?'bnb':a,address:a===ZERO?null:a}));
-    const result=await readBalances(pinned(request,block),input.account,tokens);
+    const result=await readBalances(pinned(request,block),input.account,tokens);assertRunning(combined);
     if(!Object.keys(result.balances).length)throw fail('BALANCE_UNAVAILABLE');
-    const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});if(canonical?.hash!==block.hash)throw fail('STALE_BLOCK');
+    const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(combined);if(canonical?.hash!==block.hash)throw fail('STALE_BLOCK');
     return{schema:1,chainId:56,account:input.account,blockNumber:block.number,blockHash:block.hash,readAt:clock(),balances:Object.fromEntries(tokens.filter(t=>result.balances[t.key]!=null).map(t=>[t.address||ZERO,result.balances[t.key].toString()])),failedTokens:tokens.filter(t=>result.failed.includes(t.key)).map(t=>t.address||ZERO)};
-   },AbortSignal.timeout(12000));
-  }
+   },combined,{operation:'balances'}),combined);
+  },
+  async warmupOnce(){
+   if(!warmOptions.enabled||foreground||warming)return false;
+   const pairs=activePairs();if(!pairs.length)return false;const controller=new AbortController(),run={key:null,controller};warming=run;
+   let completed=false;
+   try{
+    for(const input of pairs){if(foreground||controller.signal.aborted)break;run.key=pairKey(input);await pool.run((_request,node)=>{run.nodeId=node?.id||'primary';return context(input,controller.signal,{warm:true,node});},controller.signal,{operation:'warm'});completed=true;}
+    return completed&&!controller.signal.aborted;
+   }catch{return false;}finally{if(warming===run)warming=null;}
+  },
+  startWarmup(){
+   if(!warmOptions.enabled||warmTimer)return;
+   void engine.warmupOnce();warmTimer=setInterval(()=>{void engine.warmupOnce();},warmOptions.intervalMs);warmTimer.unref();
+  },
+  stopWarmup(){if(warmTimer)clearInterval(warmTimer);warmTimer=null;warming?.controller.abort();}
  };
+ return engine;
 }
 const publicErrors=new Set(['INVALID_INPUT','NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY','UNSUPPORTED_VERSION','QUOTE_EXPIRED','STALE_BLOCK','BALANCE_UNAVAILABLE','SERVICE_BUSY','RATE_LIMIT','BODY_LIMIT','BODY_TIMEOUT']);
 export function createApi({engine,pool,clock=Date.now,maxActive=12,rateLimit=240,allowedOrigins=['http://127.0.0.1:8124','http://localhost:8124','https://fstswap-live.vercel.app','https://fstswap-live-haocutbabas.vercel.app','https://fstswap.pro','https://www.fstswap.pro']}={}){
@@ -154,6 +210,8 @@ export function createApi({engine,pool,clock=Date.now,maxActive=12,rateLimit=240
   let rate=rates.get(ip);if(!rate||clock()-rate.at>60000){rate={at:clock(),count:0};if(rates.size>4096)rates.delete(rates.keys().next().value);rates.set(ip,rate);}
   if(++rate.count>rateLimit)return reply(429,{error:'RATE_LIMIT'});
   if(active>=maxActive)return reply(503,{error:'SERVICE_BUSY'});
+  const controller=new AbortController(),disconnected=()=>{if(!res.writableEnded)controller.abort();};
+  req.once('aborted',disconnected);res.once('close',disconnected);
   active++;let timer;
   try{
    if(Number(req.headers['content-length'])>16384)throw fail('BODY_LIMIT');
@@ -161,11 +219,11 @@ export function createApi({engine,pool,clock=Date.now,maxActive=12,rateLimit=240
    timer=setTimeout(()=>req.destroy(),2000);
    for await(const chunk of req){length+=chunk.length;if(length>16384)throw fail('BODY_LIMIT');chunks.push(chunk);}
    clearTimeout(timer);let body;try{body=JSON.parse(Buffer.concat(chunks).toString())}catch{throw fail('INVALID_INPUT');}
-   reply(200,await engine[action](body));
+   reply(200,await engine[action](body,{signal:controller.signal}));
   }catch(e){const code=publicErrors.has(e.code)?e.code:'SERVICE_UNAVAILABLE';reply(code==='INVALID_INPUT'?400:code==='BODY_LIMIT'?413:422,{error:code,...(e.code==='POOL_LIQUIDITY'&&['data','stale','oracle','price'].includes(e.reason)?{reason:e.reason}:{})});}
-  finally{clearTimeout(timer);active--;}
+  finally{clearTimeout(timer);req.removeListener('aborted',disconnected);res.removeListener('close',disconnected);active--;}
  });
- server.keepAliveTimeout=5000;return server;
+ server.keepAliveTimeout=5000;server.once('close',()=>engine.stopWarmup?.());return server;
 }
 export function endpointsFromEnv(env){
  const configured=env.FSTSWAP_RPC_URLS?env.FSTSWAP_RPC_URLS.split(','):[env.FSTSI_ROUTE_RPC_DRPC,env.FSTSI_ROUTE_RPC_BLOCKRAZOR,env.FSTSI_ROUTE_RPC_BINANCE,env.FSTSI_ROUTE_RPC_PUBLICNODE].filter(Boolean);
@@ -173,9 +231,10 @@ export function endpointsFromEnv(env){
  return endpoints.map(value=>{let u;try{u=new URL(value);}catch{throw fail('RPC_CONFIG');}if(u.protocol!=='https:'||u.username||u.password||u.hash)throw fail('RPC_CONFIG');return u.href;});
 }
 if(process.argv[1]&&pathToFileURL(realpathSync(process.argv[1])).href===import.meta.url){
- const pool=createReadPool(endpointsFromEnv(process.env)),engine=createEngine(pool),server=createApi({engine,pool});
- const warm=()=>pool.run(async r=>{const b=await r({method:'eth_getBlockByNumber',params:['latest',false]});assertBlock(b,Date.now);},AbortSignal.timeout(12000)).catch(()=>{});
- await warm();const timer=setInterval(warm,20000);timer.unref();
+ const pool=createReadPool(endpointsFromEnv(process.env)),engine=createEngine(pool,{warmup:{enabled:process.env.FSTSWAP_CONTEXT_WARMUP!=='0'}}),server=createApi({engine,pool});
+ const shutdown=new AbortController();
+ const warm=()=>pool.run(async r=>{const b=await r({method:'eth_getBlockByNumber',params:['latest',false]});assertBlock(b,Date.now);},AbortSignal.any([shutdown.signal,AbortSignal.timeout(12000)]),{operation:'warm',rpcClass:'header'}).catch(()=>{});
+ await warm();const timer=setInterval(warm,20000);timer.unref();engine.startWarmup();
  const port=Number(process.env.FSTSWAP_API_PORT||4375);server.listen(port,'127.0.0.1',()=>console.log('FstSwap read API ready on loopback port '+port));
- for(const name of ['SIGTERM','SIGINT'])process.once(name,()=>{clearInterval(timer);server.close();});
+ for(const name of ['SIGTERM','SIGINT'])process.once(name,()=>{shutdown.abort();clearInterval(timer);engine.stopWarmup();server.close();});
 }

@@ -1,10 +1,18 @@
-import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261111-22';
+import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261111-23';
 // Read-only API acceleration. Wallet requests and final transaction preflight stay local.
 const ZERO='0x'+'00'.repeat(20),ADDRESS=/^0x[0-9a-f]{40}$/i,HASH=/^0x[0-9a-f]{64}$/i;
 const businessErrors=new Set(['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY']);
 const addr=v=>typeof v==='string'&&ADDRESS.test(v),lower=v=>String(v||ZERO).toLowerCase();
 function parseWire(text){return JSON.parse(text,(_,v)=>v&&typeof v==='object'&&Object.keys(v).length===1&&typeof v.$bigint==='string'&&/^-?[0-9]{1,78}$/.test(v.$bigint)?BigInt(v.$bigint):v);}
 function check(value){if(!value)throw Error('INVALID_SERVICE_RESPONSE');}
+function checkCallerSignal(signal){if(signal?.aborted)throw new DOMException('Service request canceled','AbortError');}
+async function waitForSignal(promise,signal){
+ let onAbort;
+ const canceled=new Promise((_,reject)=>{onAbort=()=>reject(signal.reason);signal.addEventListener('abort',onAbort,{once:true});if(signal.aborted)onAbort();});
+ // Keep handlers on both promises after the race, including ignored late failures.
+ try{return await Promise.race([canceled,promise]);}
+ finally{signal.removeEventListener('abort',onAbort);}
+}
 export function validateServiceQuote(data,input,{router,adapters,clock=Date.now}={}){
  check(data?.schema===1&&data.chainId===56&&lower(data.router)===lower(router));
  check(addr(data.router)&&HASH.test(data.blockHash)&&/^0x[0-9a-f]+$/i.test(data.blockNumber));
@@ -56,26 +64,31 @@ export function validateServiceQuote(data,input,{router,adapters,clock=Date.now}
 }
 export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Date.now,quoteTimeout=6500,balanceTimeout=3500}={}){
  const cooldown={quote:0,balances:0};
- async function post(action,input,timeout){
+ async function post(action,input,timeout,signal){
+  checkCallerSignal(signal);
   if(!base||clock()<cooldown[action])return null;
   try{
-   const r=await fetchImpl(base+'/'+action,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input),signal:AbortSignal.timeout(timeout),credentials:'omit'});
-   const text=await r.text();check(text.length<1024*1024);const data=parseWire(text);
+   const timeoutSignal=AbortSignal.timeout(timeout),activeSignal=signal?AbortSignal.any([signal,timeoutSignal]):timeoutSignal;
+   const r=await waitForSignal(fetchImpl(base+'/'+action,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input),signal:activeSignal,credentials:'omit'}),activeSignal);
+   checkCallerSignal(signal);
+   const text=await waitForSignal(r.text(),activeSignal);checkCallerSignal(signal);check(text.length<1024*1024);const data=parseWire(text);checkCallerSignal(signal);
    if(!r.ok){if(businessErrors.has(data?.error))throw Object.assign(new Error(data.error),{code:data.error,reason:data.reason,retryable:['data','stale','oracle'].includes(data.reason)});throw Error('SERVICE_UNAVAILABLE');}
    return data;
-  }catch(e){if(businessErrors.has(e.code))throw e;cooldown[action]=clock()+30000;return null;}
+  }catch(e){checkCallerSignal(signal);if(businessErrors.has(e.code))throw e;cooldown[action]=clock()+30000;return null;}
  }
  return{
   available(){return !!base&&clock()>=cooldown.quote;},
-  async quote({tokenIn,tokenOut,amountIn,slippageBps,singleHop},{router,adapters}={}){
+  async quote({tokenIn,tokenOut,amountIn,slippageBps,singleHop},{router,adapters,signal}={}){
+   checkCallerSignal(signal);
    const input={chainId:56,tokenIn:lower(tokenIn),tokenOut:lower(tokenOut),amountIn:amountIn.toString(),slippageBps,singleHop};
-   const data=await post('quote',input,quoteTimeout);if(!data)return null;
-   try{return validateServiceQuote(data,input,{router,adapters,clock});}catch{cooldown.quote=clock()+30000;return null;}
+   const data=await post('quote',input,quoteTimeout,signal);checkCallerSignal(signal);if(!data)return null;
+   try{const result=validateServiceQuote(data,input,{router,adapters,clock});checkCallerSignal(signal);return result;}catch{checkCallerSignal(signal);cooldown.quote=clock()+30000;return null;}
   },
-  async balances(account,tokens){
+  async balances(account,tokens,{signal}={}){
+   checkCallerSignal(signal);
    if(!tokens.length||tokens.length>64)return null;
    const input={chainId:56,account:lower(account),tokens:[...new Set(tokens.map(t=>lower(t.address)))]};
-   const data=await post('balances',input,balanceTimeout);if(!data)return null;
+   const data=await post('balances',input,balanceTimeout,signal);checkCallerSignal(signal);if(!data)return null;
    try{
     check(data.schema===1&&data.chainId===56&&data.account===input.account&&HASH.test(data.blockHash)&&/^0x[0-9a-f]+$/i.test(data.blockNumber));
     check(Number.isFinite(data.readAt)&&clock()-data.readAt<15000&&data.readAt<=clock()+2000);
@@ -83,8 +96,9 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
     check(Object.entries(data.balances).every(([k,v])=>input.tokens.includes(k)&&typeof v==='string'&&/^[0-9]{1,78}$/.test(v)&&BigInt(v)<(1n<<256n)));
     check(data.failedTokens.every(k=>input.tokens.includes(k)&&data.balances[k]==null));
     check(input.tokens.every(k=>data.balances[k]!=null||data.failedTokens.includes(k)));
-    return{balances:Object.fromEntries(tokens.filter(t=>data.balances[lower(t.address)]!=null).map(t=>[t.key,BigInt(data.balances[lower(t.address)])])),failed:tokens.filter(t=>data.failedTokens.includes(lower(t.address))).map(t=>t.key)};
-   }catch{cooldown.balances=clock()+30000;return null;}
+    const result={balances:Object.fromEntries(tokens.filter(t=>data.balances[lower(t.address)]!=null).map(t=>[t.key,BigInt(data.balances[lower(t.address)])])),failed:tokens.filter(t=>data.failedTokens.includes(lower(t.address))).map(t=>t.key)};
+    checkCallerSignal(signal);return result;
+   }catch{checkCallerSignal(signal);cooldown.balances=clock()+30000;return null;}
   }
  };
 }
