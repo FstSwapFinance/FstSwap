@@ -1,4 +1,4 @@
-import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261111-21';
+import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261111-22';
 // Read-only API acceleration. Wallet requests and final transaction preflight stay local.
 const ZERO='0x'+'00'.repeat(20),ADDRESS=/^0x[0-9a-f]{40}$/i,HASH=/^0x[0-9a-f]{64}$/i;
 const businessErrors=new Set(['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY']);
@@ -66,6 +66,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
   }catch(e){if(businessErrors.has(e.code))throw e;cooldown[action]=clock()+30000;return null;}
  }
  return{
+  available(){return !!base&&clock()>=cooldown.quote;},
   async quote({tokenIn,tokenOut,amountIn,slippageBps,singleHop},{router,adapters}={}){
    const input={chainId:56,tokenIn:lower(tokenIn),tokenOut:lower(tokenOut),amountIn:amountIn.toString(),slippageBps,singleHop};
    const data=await post('quote',input,quoteTimeout);if(!data)return null;

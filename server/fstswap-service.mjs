@@ -3,8 +3,8 @@ import {pathToFileURL} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {isIP} from 'node:net';
 import {ethers} from 'ethers';
-import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261111-21';
-import {readPoolPolicy} from '../src/swap-liquidity.mjs?v=mainnet-20261111-21';
+import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261111-22';
+import {readPoolPolicy} from '../src/swap-liquidity.mjs?v=mainnet-20261111-22';
 import {readTokenBalances} from '../src/swap-balances.mjs';
 
 globalThis.ethers=ethers;
@@ -59,7 +59,12 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
 function assertBlock(block,clock){
  if(!block?.hash||!block.number||!block.timestamp||Math.abs(clock()/1000-Number(BigInt(block.timestamp)))>120)throw fail('STALE_BLOCK');
 }
-function pinned(request,block){return p=>request({...p,params:p.method==='eth_call'?[p.params[0],block.number]:p.method==='eth_getBalance'?[p.params[0],block.number]:p.method==='eth_getBlockByNumber'&&p.params[0]==='latest'?[block.number,false]:p.params});}
+function pinned(request,block){return p=>{
+ // Nested policy readers need this exact header, not another network round trip.
+ // Explicit-height reads still go upstream for independent reorg checks.
+ if(p.method==='eth_getBlockByNumber'&&p.params[0]==='latest')return Promise.resolve({...block});
+ return request({...p,params:p.method==='eth_call'?[p.params[0],block.number]:p.method==='eth_getBalance'?[p.params[0],block.number]:p.params});
+};}
 export async function computeQuote(request,input,config,poolPolicy){
  const {tokenIn,tokenOut,slippageBps,singleHop}=input,amountIn=BigInt(input.amountIn),feeBps=config.platformFeeBps;
  if(config.version!=='1.11')throw fail('UNSUPPORTED_VERSION');
@@ -69,7 +74,7 @@ export async function computeQuote(request,input,config,poolPolicy){
  if(agg){
   const route=await quoteSwap(request,{side:tokenIn===ZERO?'buy':'sell',amountIn,feeBps,poolPolicy,singleHop});
   q={kind:'agg',route,amountIn,out:route.estimateOut,lpFee:route.platformFee,feeToken:policy.token};
-  q.impact=await v10RouteImpact(request,[route.first,route.second].filter(Boolean),route.swapBudget,q.out);
+  q.impact=await v10RouteImpact(request,[route.first,route.second].filter(Boolean),route.swapBudget,q.out,{poolPolicy,blockNumber:poolPolicy.blockNumber});
  }else{
   let swapIn,method;
   if(tokenIn===ZERO){swapIn=swapBuyBudget(amountIn,feeBps).budget;method='swapBnbToToken';}
@@ -82,7 +87,7 @@ export async function computeQuote(request,input,config,poolPolicy){
    if(!feePlan)throw lastError||fail('NO_FEE_ROUTE');
   }
   const gross=best.out,out=policy.mode==='output'?swapSellNet(gross,feeBps).net:gross;
-  q={kind:'v10',method,path:best.first.path,amountIn,out,impact:await v10RouteImpact(request,[best.first,best.second].filter(Boolean),swapIn,gross),feeToken:policy.token,adapterKey:best.key,lpFee:(policy.mode==='output'?gross:amountIn)*BigInt(feeBps)/BPS,first:best.first,second:best.second};
+  q={kind:'v10',method,path:best.first.path,amountIn,out,impact:await v10RouteImpact(request,[best.first,best.second].filter(Boolean),swapIn,gross,{poolPolicy,blockNumber:poolPolicy.blockNumber}),feeToken:policy.token,adapterKey:best.key,lpFee:(policy.mode==='output'?gross:amountIn)*BigInt(feeBps)/BPS,first:best.first,second:best.second};
   if(feePlan){q.method='swapTokenToTokenWithFee';q.conversion=feePlan.conversion;q.lpFee=feePlan.fee;}
  }
  const minimum=q.out*(BPS-BigInt(slippageBps))/BPS;
@@ -96,14 +101,14 @@ export function createEngine(pool,{clock=Date.now,readConfig=readSwapConfig,read
  function boundedSet(map,key,value,max){if(map.size>=max)map.delete(map.keys().next().value);map.set(key,value);}
  async function context(request,node,input){
   const key=[node.id,input.tokenIn,input.tokenOut].join(':'),old=contexts.get(key);
-  if(old&&clock()-old.started<2500)return old.promise;
-  const entry={started:clock()};
+  if(old&&(old.pending||clock()-old.completedAt<2500))return old.promise;
+  const entry={pending:true};
   entry.promise=(async()=>{
    const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertBlock(block,clock);
    const read=pinned(request,block),config=await readConfig(read);
    const policy=await readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:'legacy',clock});
-   return{block,config,policy};
-  })();boundedSet(contexts,key,entry,32);
+   entry.completedAt=clock();return{block,config,policy};
+  })().finally(()=>{entry.pending=false;});boundedSet(contexts,key,entry,32);
   try{return await entry.promise;}catch(e){if(contexts.get(key)===entry)contexts.delete(key);throw e;}
  }
  return{

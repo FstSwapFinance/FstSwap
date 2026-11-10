@@ -1,5 +1,5 @@
-import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261111-21";
-import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261111-21";
+import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261111-22";
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261111-22";
 // 聚合路由 Swap 引擎（BSC 主网 56，FstSi aggregator-live v9「multi-pool」，合约 VERSION 1.01）。
 // 与 market-trade.mjs 相同的约束风格：全部函数只通过注入的 JSON-RPC
 // request 访问链上，返回精确的十进制字符串/大整数，浏览器与 Node 均可运行。
@@ -537,7 +537,7 @@ async function v10V3Impact(request, leg, amountIn, amountOut) {
 }
 
 /// 用储备计算交易前的边际价格，避免“小额试报价”本身耗尽微小池子。
-export async function v10RouteImpact(request, first, amountIn, amountOut) {
+export async function v10RouteImpact(request, first, amountIn, amountOut, {poolPolicy, blockNumber} = {}) {
   const legs = Array.isArray(first) ? first : [first];
   if (legs.length === 1 && legs[0]?.kind === 'v3') return v10V3Impact(request, legs[0], amountIn, amountOut);
   const iface = swapInterface(globalThis.ethers?.Interface), edges = [];
@@ -546,12 +546,36 @@ export async function v10RouteImpact(request, first, amountIn, amountOut) {
     for (let n = 1; n < leg.path.length; n++) edges.push({ adapter: leg.adapter, a: leg.path[n - 1], b: leg.path[n] });
   }
   if (!edges.length || amountIn <= 0n || amountOut <= 0n) throw error('UNSAFE_QUOTE', '兑换报价无效');
-  const entries = await multicallTryAggregate(request, edges.map(({ adapter, a, b }) => ({ target: swapActiveRouter(),
+  // A caller that pins the quote may reuse its verified pool snapshot. Never
+  // substitute another DEX or silently fall back to mixed-block reserve reads.
+  const snapshot = poolPolicy !== undefined || blockNumber !== undefined;
+  let reserves;
+  if (snapshot) {
+    const block = value => typeof value === 'string' && /^0x[0-9a-f]+$/i.test(value);
+    if (!poolPolicy || !block(blockNumber) || !block(poolPolicy.blockNumber) || BigInt(blockNumber) !== BigInt(poolPolicy.blockNumber) ||
+      !(poolPolicy.pools instanceof Map) || typeof poolPolicy.assertFresh !== 'function')
+      throw error('UNSAFE_QUOTE', '兑换池快照与报价区块不符');
+    if (poolPolicy.assertFresh() !== true) throw error('UNSAFE_QUOTE', '兑换池快照已失效');
+    const validAddress = value => typeof value === 'string' && isAddr(value);
+    if (legs.some(leg => leg.kind && leg.kind !== 'v2')) throw error('UNSAFE_QUOTE', '兑换池快照类型不符');
+    reserves = edges.map(({adapter, a, b}) => {
+      if (![adapter, a, b].every(validAddress) || sameToken(a, b)) throw error('UNSAFE_QUOTE', '兑换池与报价路线不符');
+      const id = [lower(adapter), ...[lower(a), lower(b)].sort(), 'v2'].join(':');
+      const pool = poolPolicy.pools.get(id);
+      if (!pool || pool.id !== id || pool.kind !== 'v2' || !validAddress(pool.address) || !validAddress(pool.adapter) ||
+        !sameToken(pool.adapter, adapter) || ![pool.token0, pool.token1].every(validAddress) ||
+        !((sameToken(pool.token0, a) && sameToken(pool.token1, b)) || (sameToken(pool.token0, b) && sameToken(pool.token1, a))) ||
+        !Array.isArray(pool.reserves) || pool.reserves.length !== 2 || pool.reserves.some(r => typeof r !== 'bigint' || r <= 0n))
+        throw error('UNSAFE_QUOTE', '兑换池快照不完整或与报价路线不符');
+      return [pool.address, pool.token0, pool.token1, ...pool.reserves];
+    });
+  }
+  const entries = snapshot ? null : await multicallTryAggregate(request, edges.map(({ adapter, a, b }) => ({ target: swapActiveRouter(),
     data: iface.encodeFunctionData('getPairInfo', [adapter, a, b, ZERO_ADDRESS]) })));
   let numerator = amountIn, denominator = 1n;
   for (let n = 0; n < edges.length; n++) {
-    let pool;
-    try { if (entries[n]?.success) pool = iface.decodeFunctionResult('getPairInfo', entries[n].returnData); } catch {}
+    let pool = reserves?.[n];
+    try { if (entries?.[n]?.success) pool = iface.decodeFunctionResult('getPairInfo', entries[n].returnData); } catch {}
     const { a, b } = edges[n];
     if (!pool || !isAddr(pool[0]) || pool[3] <= 0n || pool[4] <= 0n) throw error('UNSAFE_QUOTE', '流动性不足，无法安全报价');
     const forward = sameToken(pool[1], a) && sameToken(pool[2], b);

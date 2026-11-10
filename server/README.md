@@ -6,7 +6,7 @@
 - `POST /api/swap/quote`：`chainId:56, tokenIn, tokenOut, amountIn, slippageBps, singleHop`。`amountIn` 为最小单位十进制字符串；原生 BNB 地址为全零地址。
 - `POST /api/swap/balances`：`chainId:56, account, tokens`，最多 64 个资产。成功余额为整数字符串；读取失败单独列入 `failedTokens`。
 
-报价返回对应区块、路径、配置和过期时间；大整数以 `{"$bigint":"整数"}` 传输。相同进行中报价合并，配置/池上下文复用最多 2.5 秒；余额每次读取当前区块。客户端共享 3 秒展示缓存，交易后刷新绕过缓存。
+报价返回对应区块、路径、配置和过期时间；大整数以 `{"$bigint":"整数"}` 传输。相同进行中报价合并，配置/池上下文在读取完成后复用最多 2.5 秒，原始报价有效期不延长；余额每次读取当前区块。客户端共享 3 秒展示缓存，交易后刷新绕过缓存。
 
 安装依赖：`npm install --prefix server --omit=dev`。启动：`node server/fstswap-service.mjs`。默认仅监听 `127.0.0.1:4375`。
 

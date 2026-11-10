@@ -1,4 +1,4 @@
-import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261111-21";
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261111-22";
 // Track submitted transactions; only a fresh user action may request another wallet transaction.
 const prefix='fstswap-wallet-intent-v1:56:';
 const fail=(code,message,intent)=>Object.assign(new Error(message),{code,pendingIntent:intent});
