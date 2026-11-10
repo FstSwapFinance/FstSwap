@@ -2,9 +2,9 @@ import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 // 流动池（#/pool、#/pool/v2/find）、注入流动资金（#/add/v2/A/B）、去除流动资金（#/remove/v2/A/B）——
 // 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css）；
 // 链上逻辑：直接调用 FstSwap 路由器（Pancake V2 fork，同官方授权对象 0x1B6C…ABC2d），FIST-USDT / FIST-WBNB 官方池。
-import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261110-12";
-import { tr, T, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal, popup, refreshNativeBalance, hashParts } from "./swap-shell.mjs?v=mainnet-20261110-12";
-import { TOKENS, sigDown } from "./swap-view.mjs?v=mainnet-20261110-12";
+import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261110-13";
+import { tr, T, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal, popup, refreshNativeBalance, hashParts } from "./swap-shell.mjs?v=mainnet-20261110-13";
+import { TOKENS, sigDown } from "./swap-view.mjs?v=mainnet-20261110-13";
 
 import { tokenLogo, applyTokenLogo } from "./swap-token-logo.mjs";
 
@@ -479,9 +479,15 @@ async function mountAdd(root, request, parts) {
     await Promise.all(["usdt", "fist"].map(async (k) => { st.allowance[k] = await reads.allowance(TOKENS[k].address, wallet.account, FST_ROUTER).catch(() => null); }));
   }
   async function approveToken(k) {
+    const account = wallet.account;
     st.approving[k] = true; render();
     try {
-      await tx.approve(TOKENS[k].address, TOKENS[k].symbol, async (ok) => { st.approving[k] = false; if (ok) st.allowance[k] = MAX_UINT; if (main.isConnected) render(); });
+      await tx.approve(TOKENS[k].address, TOKENS[k].symbol, async (ok) => {
+        const actual = ok ? await reads.allowance(TOKENS[k].address, account, FST_ROUTER).catch(() => null) : null;
+        st.approving[k] = false;
+        if (wallet.account === account) st.allowance[k] = actual;
+        if (main.isConnected) render();
+      });
     } catch (err) {
       st.approving[k] = false; render();
       if (!isReject(err)) popup({ summary: err?.message || tr("授权失败", "Approval failed"), success: false });
@@ -600,9 +606,15 @@ async function mountRemove(root, request, parts) {
     }
   }
   async function approveLp() {
+    const account = wallet.account;
     st.approving = true; render();
     try {
-      await tx.approve(pool.pair, "FST-LP", (ok) => { st.approving = false; if (ok) st.allowance = MAX_UINT; if (main.isConnected) render(); });
+      await tx.approve(pool.pair, "FST-LP", async (ok) => {
+        const actual = ok ? await reads.allowance(pool.pair, account, FST_ROUTER).catch(() => null) : null;
+        st.approving = false;
+        if (wallet.account === account) st.allowance = actual;
+        if (main.isConnected) render();
+      });
     } catch (err) { st.approving = false; render(); if (!isReject(err)) popup({ summary: err?.message || tr("授权失败", "Approval failed"), success: false }); }
   }
   async function removeLp() {

@@ -1,4 +1,4 @@
-import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261110-12";
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261110-13";
 // 聚合路由 Swap 引擎（BSC 主网 56，FstSi aggregator-live v9「multi-pool」，合约 VERSION 1.01）。
 // 与 market-trade.mjs 相同的约束风格：全部函数只通过注入的 JSON-RPC
 // request 访问链上，返回精确的十进制字符串/大整数，浏览器与 Node 均可运行。
@@ -586,12 +586,12 @@ export function v10Request(Interface, { account, method, args, value = 0n }) {
 /// 两轮 Multicall3：第一轮覆盖直接候选 + 两段第一腿 + v3 尝试；
 /// 第二轮用第一腿输出对两段第二腿报价。返回最优路线。
 export async function quoteSwap(request, options) {
-  const { side, amountIn, feeBps = 30, tokens = SWAP_TOKENS, adapters = SWAP_ADAPTERS, includeV3 = true, poolPolicy } = options ?? {};
+  const { side, amountIn, feeBps = 30, tokens = SWAP_TOKENS, adapters = SWAP_ADAPTERS, includeV3 = true, poolPolicy, singleHop = false } = options ?? {};
   if (!["buy", "sell"].includes(side) || typeof amountIn !== "bigint" || amountIn <= 0n) throw invalid();
   const usdt = tokens.usdt.address, fist = tokens.fist.address;
   // 候选种子清单：2026-11-09 主网已核验的池。BUSD 无 FIST 池不列入；
   // Thena/Kyber/V3 暂无 FIST 池，报价失败自动跳过。
-  const seeds = side === "buy" ? [
+  const seeds = (side === "buy" ? [
     { kind: "direct", first: "pancake" },
     { kind: "direct", first: "fst" },
     { kind: "two", first: "pancake", second: "fst", via: usdt },
@@ -610,7 +610,7 @@ export async function quoteSwap(request, options) {
     { kind: "two", first: "pancake", second: "biswap", via: usdt },
     { kind: "two", first: "biswap", second: "pancake", via: usdt },
     { kind: "two", first: "biswap", second: "biswap", via: usdt },
-  ];
+  ]).filter(seed => !singleHop || seed.kind === "direct");
 
   const state = side === "buy"
     ? (({ fee, reserve, budget }) => ({ fee, reserve, budget, netInput: null }))(swapBuyBudget(amountIn, feeBps))

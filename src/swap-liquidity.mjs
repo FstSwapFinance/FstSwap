@@ -1,5 +1,5 @@
 // Pool admission policy. All reserves and oracle rounds are read at one BSC block.
-import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter } from './swap-aggregator.mjs?v=mainnet-20261110-12';
+import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter } from './swap-aggregator.mjs?v=mainnet-20261110-13';
 const ZERO='0x'+'00'.repeat(20),MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
 const lower=x=>String(x||ZERO).toLowerCase();
 const USDT=lower(SWAP_TOKENS.usdt.address),USDC='0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d';
@@ -16,7 +16,7 @@ const FEEDS=[
  {tokens:[BTCB],address:'0x264990fbd0A4796A3E3d8E37C4d5F87a3aCa5Ebf',maxAge:180},
  {tokens:[ETH],address:'0x9ef1B8c0E4F7dc8bF5719Ea496883DC6401d5b2e',maxAge:180},
 ];
-const fail=message=>Object.assign(new Error(message),{code:'POOL_LIQUIDITY'});
+const fail=(message,reason='liquidity',retryable=false)=>Object.assign(new Error(message),{code:'POOL_LIQUIDITY',reason,retryable});
 const key=(adapter,a,b,fee='v2')=>[lower(adapter),...[lower(a),lower(b)].sort(),String(fee)].join(':');
 export function poolLiquidityUsd(pool,prices){
  const values=[pool.token0,pool.token1].map((token,n)=>{const p=prices.get(lower(token));return p?pool.reserves[n]*p/SCALE:null;});
@@ -63,8 +63,8 @@ export function createPoolPolicy(pools,prices,tokenIn,tokenOut){
  const assertValue=(amountIn,amountOut)=>{
   if(alts.length)return;
   const input=prices.get(endpoints[0]===ZERO?WRAPPED[0]:endpoints[0]),output=prices.get(endpoints[1]===ZERO?WRAPPED[0]:endpoints[1]);
-  if(!input||!output||amountIn<=0n||amountOut<=0n)throw fail('无法核对独立参考价格');
-  if(amountOut*output*100n<amountIn*input*98n)throw fail('成交下限偏离独立参考价格超过 2%，请减少金额或滑点');
+  if(!input||!output||amountIn<=0n||amountOut<=0n)throw fail('无法核对独立参考价格','oracle',true);
+  if(amountOut*output*100n<amountIn*input*98n)throw fail('成交下限偏离独立参考价格超过 2%，请减少金额或滑点','price');
  };
  return{pools,main,allows,assertValue,assert(first,second){if(!allows(first,second))throw fail('池子流动性不足或不是主池，请刷新报价');}};
 }
@@ -80,12 +80,12 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,clock=Date
   'function token0() view returns(address)','function token1() view returns(address)','function balanceOf(address) view returns(uint256)']);
  const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});
  const timestamp=Number(BigInt(block?.timestamp||0));
- if(!block?.number||Math.abs(now/1000-timestamp)>120)throw fail('节点区块过期，无法检查流动性');
+ if(!block?.number||Math.abs(now/1000-timestamp)>120)throw fail('节点区块过期，无法检查流动性','stale',true);
  const batch=async calls=>{
   if(!calls.length)return[];
   if(calls.length>80){const parts=[];for(let n=0;n<calls.length;n+=80)parts.push(calls.slice(n,n+80));return(await Promise.all(parts.map(batch))).flat();}
   const raw=await request({method:'eth_call',params:[{to:MULTICALL,data:iface.encodeFunctionData('tryAggregate',[false,calls.map(c=>[c.target,c.data])])},block.number]});
-  const entries=iface.decodeFunctionResult('tryAggregate',raw)[0];if(entries.length!==calls.length)throw fail('池子数据不完整');
+  const entries=iface.decodeFunctionResult('tryAggregate',raw)[0];if(entries.length!==calls.length)throw fail('池子数据不完整','data',true);
   return entries.map((r,n)=>{
    if(!r.success)return null;try{return(calls[n].iface||iface).decodeFunctionResult(calls[n].method,r.returnData);}catch{return null;}
   });
@@ -101,7 +101,7 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,clock=Date
   expiry.push(updated+f.maxAge);
  });
  // Require independent prices for the liquid anchors used to compare main pools.
- if([...MAINSTREAM_TOKENS].filter(t=>t!==ZERO).some(t=>!prices.has(t)))throw fail('价格数据过期或不可用，暂停报价');
+ if([...MAINSTREAM_TOKENS].filter(t=>t!==ZERO).some(t=>!prices.has(t)))throw fail('价格数据过期或不可用，暂停报价','oracle',true);
  const anchors=[USDT,USDC,...WRAPPED,BTCB,ETH],tokens=[...new Set([lower(tokenIn),lower(tokenOut),...anchors].filter(t=>t!==ZERO))];
  const specs=[],seen=new Set();
  for(const item of Object.values(SWAP_ADAPTERS)){
@@ -109,7 +109,7 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,clock=Date
   for(const a of tokens)for(const b of tokens){if(a===b)continue;const id=key(item.adapter,a,b);if(seen.has(id))continue;seen.add(id);specs.push({id,adapter:item.adapter,a,b});}
  }
  const results=await batch(specs.map(p=>call(swapActiveRouter(),'getPairInfo',[p.adapter,p.a,p.b,ZERO],router)));
- if(results.some(r=>!r))throw fail('部分池子读取失败，无法确定主池');
+ if(results.some(r=>!r))throw fail('部分池子读取失败，无法确定主池','data',true);
  const pools=new Map();results.forEach((r,n)=>{
   const p=specs[n];if(!r||lower(r[0])===ZERO||r[3]<=0n||r[4]<=0n)return;
   if(![lower(r[1]),lower(r[2])].includes(p.a)||![lower(r[1]),lower(r[2])].includes(p.b))return;
@@ -119,16 +119,16 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,clock=Date
  const v3=SWAP_ADAPTERS.v3;
  if(v3&&!config?.adaptersOff?.includes('v3')){
   const [factoryResult]=await batch([call('0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997','factory')]);
-  if(!factoryResult||lower(factoryResult[0])===ZERO)throw fail('无法读取 V3 池列表');
+  if(!factoryResult||lower(factoryResult[0])===ZERO)throw fail('无法读取 V3 池列表','data',true);
   const v3Specs=[];
   for(let n=0;n<tokens.length;n++)for(let j=n+1;j<tokens.length;j++)for(const fee of[100,500,2500,10000]){
    const a=tokens[n],b=tokens[j];v3Specs.push({id:key(v3.adapter,a,b,fee),adapter:v3.adapter,a,b,fee});
   }
   const addresses=await batch(v3Specs.map(p=>call(factoryResult[0],'getPool',[p.a,p.b,p.fee])));
-  if(addresses.some(r=>!r))throw fail('V3 池发现不完整');
+  if(addresses.some(r=>!r))throw fail('V3 池发现不完整','data',true);
   const existing=addresses.flatMap((r,n)=>r&&lower(r[0])!==ZERO?[{...v3Specs[n],address:lower(r[0])}]:[]);
   const states=await batch(existing.flatMap(p=>[call(p.address,'slot0'),call(p.address,'liquidity'),call(p.address,'token0'),call(p.address,'token1'),call(p.a,'balanceOf',[p.address]),call(p.b,'balanceOf',[p.address])]));
-  if(states.some(r=>!r))throw fail('部分 V3 池读取失败，无法确定主池');
+  if(states.some(r=>!r))throw fail('部分 V3 池读取失败，无法确定主池','data',true);
   existing.forEach((p,n)=>{
    const [s,l,t0,t1,ba,bb]=states.slice(n*6,n*6+6);if(!s||!l||!t0||!t1||!ba||!bb||s[0]<=0n||l[0]<=0n)return;
    const token0=lower(t0[0]),token1=lower(t1[0]);if(![token0,token1].includes(p.a)||![token0,token1].includes(p.b))return;
@@ -153,9 +153,9 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,clock=Date
    probes[n].pool.depthVerified=pass(n)&&pass(n+1);
   }
  }
- const assertFresh=()=>{const time=clock()/1000;if(clock()-now>20000||Math.abs(time-timestamp)>120||expiry.some(t=>time>t))throw fail('流动性检查已过期，请刷新报价');return true;};
+ const assertFresh=()=>{const time=clock()/1000;if(clock()-now>20000||Math.abs(time-timestamp)>120||expiry.some(t=>time>t))throw fail('流动性检查已过期，请刷新报价','stale',true);return true;};
  const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});
- if(!block.hash||lower(canonical?.hash)!==lower(block.hash))throw fail('区块状态已变化，请刷新报价');
+ if(!block.hash||lower(canonical?.hash)!==lower(block.hash))throw fail('区块状态已变化，请刷新报价','stale',true);
  assertFresh();
  return{...createPoolPolicy(pools,prices,tokenIn,tokenOut),assertFresh,blockNumber:block.number,checkedAt:now};
 }

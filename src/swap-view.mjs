@@ -3,7 +3,7 @@
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价 + 精确输出；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia / quoteExactOutput。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对与精确输出显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-12";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-13";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, v10AmountsIn, readV10Receipt,
@@ -11,15 +11,15 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10QuoteExactOutput, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261110-12";
+} from "./swap-aggregator.mjs?v=mainnet-20261110-13";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-12";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-13";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-12";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-13";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261110-12";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261110-13";
 
 const approvals = createApprovalTracker();
 const BPS = 10000n;
@@ -91,7 +91,7 @@ export async function mountSwapView(root) {
   const transactionRead = payload => swapPublicRpc(globalThis.fetch, AbortSignal.timeout(6000), { attempts: 2, timeoutMs: 2000 })(payload);
   const settings = readSettings();
   const state = {
-    amount: "", amountOut: "", independent: "in", quote: null, quoteError: "", balances: {}, balanceErrors: {}, balanceEpoch: 0, allowance: null, config: null,
+    amount: "", amountOut: "", independent: "in", quote: null, quoteError: "", quoteErrorReason: "", balances: {}, balanceErrors: {}, balanceEpoch: 0, allowance: null, config: null,
     showInverted: false, settingsOpen: false, seq: 0,
   };
   try { await loadSwapLibrary(); } catch {}
@@ -284,11 +284,20 @@ export async function mountSwapView(root) {
     const typed = state.independent === "out" ? state.amountOut : state.amount;
     if (!typed || !(Number(typed) > 0)) return T("输入数额");
     if (state.quoteError === SWAP_V10_MISSING.code) return tr(SWAP_V10_MISSING.zh, SWAP_V10_MISSING.en);
-    if (state.quoteError === "NO_ROUTE") return T("现有流动量不足以支持此交易。");
-    if (state.quoteError === "POOL_LIQUIDITY") return tr("没有符合流动性要求的池子，请稍后重试", "No pool meets the liquidity requirements");
+    if (state.quoteError === "NO_ROUTE") return settings.singleHop ? tr("没有符合要求的直达池，可关闭禁用多跳", "No eligible direct pool; enable multihop") : tr("没有符合流动性要求的交易路线", "No route meets the liquidity requirements");
+    if (state.quoteError === "POOL_LIQUIDITY") {
+      if (state.quoteErrorReason === "oracle") return tr("价格数据暂不可用，正在重试", "Price data unavailable; retrying");
+      if (state.quoteErrorReason === "data") return tr("池子数据读取失败，正在重试", "Pool data unavailable; retrying");
+      if (state.quoteErrorReason === "stale") return tr("链上数据已过期，正在重新报价", "Chain data expired; refreshing quote");
+      if (state.quoteErrorReason === "price") return tr("成交下限偏离参考价超过 2%，请减少金额或滑点", "Minimum value deviates over 2%; reduce amount or slippage");
+      return tr("没有符合流动性要求的池子", "No pool meets the liquidity requirements");
+    }
     if (state.quoteError === "PRICE_IMPACT_TOO_HIGH") return tr("价格影响与滑点超过 15%，请减少金额或滑点", "Price impact and slippage exceed 15%; reduce amount or slippage");
     if (state.quoteError === "UNSAFE_QUOTE") return tr("兑换价格或流动性异常，已停止兑换", "Unsafe price or liquidity; swap unavailable");
-    if (!state.quote) return T("输入数额");
+    if (state.quoteError === "NO_FEE_ROUTE") return tr("没有可用的手续费兑换路线", "No eligible fee conversion route");
+    if (state.quoteError === "AMOUNT_PRECISION") return tr("输入金额超出代币精度", "Amount exceeds token precision");
+    if (state.quoteError) return tr("报价暂不可用，正在重试", "Quote unavailable; retrying");
+    if (!state.quote) return tr("正在获取报价…", "Fetching quote…");
     const bal = state.balances[page.inKey];
     if (bal != null && bal < (state.quote.maxIn ?? state.quote.amountIn)) return tr(inT().symbol + " 余额不足", "Insufficient " + inT().symbol + " balance");
     return "";
@@ -342,7 +351,9 @@ export async function mountSwapView(root) {
         t.addEventListener("click", () => { settings[key] = !settings[key]; saveSettings(settings); renderSettings(); onChange?.(); });
       };
       toggle("toggle-expert-mode-button", "expert");
-      toggle("toggle-disable-multihop-button", "singleHop", () => scheduleQuote(0));
+      toggle("toggle-disable-multihop-button", "singleHop", () => {
+        state.quote = null; renderTrade(); renderBottom(); scheduleQuote(0);
+      });
     }
     settingsWrap.replaceChildren(...fresh.childNodes);
   }
@@ -491,7 +502,10 @@ export async function mountSwapView(root) {
 
   // —— 报价 ——
   let quoteTimer = null;
-  function scheduleQuote(ms = 300) { clearTimeout(quoteTimer); quoteTimer = setTimeout(refreshQuote, ms); }
+  function scheduleQuote(ms = 300) {
+    clearTimeout(quoteTimer); ++state.seq;
+    if (main.isConnected) quoteTimer = setTimeout(() => { if (main.isConnected) refreshQuote(); }, ms);
+  }
   function onAmountInput(e) {
     const v = limitAmountDecimals(e.target.value.replace(/,/g, "."));
     if (v !== "" && !/^\d*\.?\d*$/.test(v)) { e.target.value = state.amount; return; }
@@ -547,7 +561,9 @@ export async function mountSwapView(root) {
     const exactOut = state.independent === "out";
     const typed = exactOut ? state.amountOut : state.amount;
     if (!ti || !to || !typed || !(Number(typed) > 0)) { state.quote = null; render(); return; }
-    let amount; try { amount = swapUnits(typed, (exactOut ? to : ti).decimals); } catch { state.quote = null; render(); return; }
+    state.quoteError = ""; state.quoteErrorReason = "";
+    let amount; try { amount = swapUnits(typed, (exactOut ? to : ti).decimals); } catch { state.quote = null; state.quoteError = "AMOUNT_PRECISION"; render(); return; }
+    renderBottom();
     try {
       let q;
       if (swapV10Ready()) state.config = await readSwapConfig(request);
@@ -578,7 +594,7 @@ export async function mountSwapView(root) {
         q.impact = await v10RouteImpact(request, [best.first, best.second].filter(Boolean), best.amountIn, amount);
       } else if (isAggPair()) {
         const amountIn = amount;
-        const route = await quoteSwap(request, { side: side(), amountIn, feeBps, poolPolicy });
+        const route = await quoteSwap(request, { side: side(), amountIn, feeBps, poolPolicy, singleHop: settings.singleHop });
         q = { kind: "agg", route, amountIn, out: route.estimateOut, lpFee: route.platformFee, feeAsset: swapV10Ready() ? feeAsset : TOKENS.bnb };
         if (swapV10Ready()) {
           q.impact = await v10RouteImpact(request, [route.first, route.second].filter(Boolean), route.swapBudget, q.out);
@@ -633,8 +649,9 @@ export async function mountSwapView(root) {
       state.quote = null;
       state.quoteError = err?.code === SWAP_V10_MISSING.code ? SWAP_V10_MISSING.code
         : err?.code === "NO_ROUTE" || /revert|INSUFFICIENT/i.test(err?.message || "") ? "NO_ROUTE" : (err?.code || "SWAP_RPC");
+      state.quoteErrorReason = err?.reason || "";
       render();
-      if (!["NO_ROUTE", "POOL_LIQUIDITY", "UNSAFE_QUOTE", "PRICE_IMPACT_TOO_HIGH", SWAP_V10_MISSING.code].includes(state.quoteError)) scheduleQuote(8000);
+      if (err?.retryable || !["NO_ROUTE", "NO_FEE_ROUTE", "POOL_LIQUIDITY", "UNSAFE_QUOTE", "PRICE_IMPACT_TOO_HIGH", SWAP_V10_MISSING.code].includes(state.quoteError)) scheduleQuote(8000);
     }
   }
 
