@@ -1,7 +1,7 @@
 // Fstswap 聚合前端入口：官方同款路由（#/swap、#/pool、#/pool/v2/find、#/add/v2/A/B、#/remove/v2/A/B、#/analysis/A/B、#/my）。
-import { currentRoute, restoreWallet, useWallet, closeModal } from "./swap-shell.mjs?v=mainnet-20261110-19";
+import { currentRoute, restoreWallet, useWallet, closeModal } from "./swap-shell.mjs?v=mainnet-20261110-20";
 
-import { refreshDefaultList, onTokensChanged, findActiveToken } from "./swap-manage.mjs?v=mainnet-20261110-19";
+import { refreshDefaultList, onTokensChanged, findActiveToken } from "./swap-manage.mjs?v=mainnet-20261110-20";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
 
 const root = document.getElementById("root");
@@ -14,16 +14,16 @@ async function render() {
     closeModal();
     document.body.classList.remove("agg-scroll-lock");
     if (route === "swap") {
-      const { mountSwapView } = await import("./swap-view.mjs?v=mainnet-20261110-19");
+      const { mountSwapView } = await import("./swap-view.mjs?v=mainnet-20261110-20");
       if (ticket === rendering) await mountSwapView(root);
     } else if (route === "pool" || route === "add" || route === "remove") {
-      const { mountPoolPage } = await import("./swap-pool.mjs?v=mainnet-20261110-19");
+      const { mountPoolPage } = await import("./swap-pool.mjs?v=mainnet-20261110-20");
       if (ticket === rendering) await mountPoolPage(root, route);
     } else if (route === "analysis") {
-      const { mountAnalysisPage } = await import("./swap-pages.mjs?v=mainnet-20261110-19");
+      const { mountAnalysisPage } = await import("./swap-pages.mjs?v=mainnet-20261110-20");
       if (ticket === rendering) await mountAnalysisPage(root);
     } else if (route === "my") {
-      const { mountMyPage } = await import("./swap-pages.mjs?v=mainnet-20261110-19");
+      const { mountMyPage } = await import("./swap-pages.mjs?v=mainnet-20261110-20");
       if (ticket === rendering) await mountMyPage(root);
     }
   } catch (err) {
@@ -44,9 +44,9 @@ useWallet().subscribe(wallet => {
   const account = wallet?.account || null;
   if (!account || account === warmedAccount) { warmedAccount = account; return; }
   warmedAccount = account;
-  background(async () => { const {warmSwapData} = await import('./swap-view.mjs?v=mainnet-20261110-19'); await warmSwapData(account); });
+  background(async () => { const {warmSwapData} = await import('./swap-view.mjs?v=mainnet-20261110-20'); await warmSwapData(account); });
 });
-background(async () => { const {warmSwapData} = await import('./swap-view.mjs?v=mainnet-20261110-19'); await warmSwapData(useWallet().account); });
+background(async () => { const {warmSwapData} = await import('./swap-view.mjs?v=mainnet-20261110-20'); await warmSwapData(useWallet().account); });
 
 // Background refresh also runs when users land directly on analysis/pool pages.
 onTokensChanged(() => root.querySelectorAll('[data-token-address]').forEach(el => applyTokenLogo(el, findActiveToken(el.dataset.tokenAddress))));
