@@ -3,7 +3,7 @@
 // 钱包连接逻辑沿用（注入式 / WalletConnect / Coinbase→injected→WC / Fortmatic·Portis 已停服回退）。
 import { SWAP_CHAIN, connectInjected, walletConnectAccount,
   walletShort, loadSwapWalletConnect, disconnectWalletConnect } from "./swap-wallet.mjs?v=review-20261110-3";
-import { swapPublicRpc, loadSwapLibrary } from "./swap-aggregator.mjs?v=mainnet-20261110-14";
+import { swapPublicRpc, loadSwapLibrary } from "./swap-aggregator.mjs?v=mainnet-20261110-15";
 import { TPL, EN } from "./swap-official-tpl.mjs?v=official-20261109";
 import { jazziconHtml } from "./swap-jazzicon.mjs?v=official-20261109";
 import "./swap-ui.mjs?v=review-20261110-3";
@@ -124,7 +124,7 @@ function headerEl(route) {
   const brand = el.querySelector(".APMAQ");
   if (brand) { brand.textContent = "FstSwap"; brand.title = "FstSwap"; }
   const logo = el.querySelector(".dmxuPu img");
-  if (logo) logo.alt = "FstSwap";
+  if (logo) { logo.alt = "FstSwap"; logo.src = "assets/official/fstswap-pro-logo.png"; }
   el.querySelectorAll("a[id]").forEach((a) => {
     const item = navItems().find((n) => n.id === a.id); if (!item) return;
     a.classList.toggle("ACTIVE", item.key === active);

@@ -1,5 +1,5 @@
 // Pool admission policy. All reserves and oracle rounds are read at one BSC block.
-import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter } from './swap-aggregator.mjs?v=mainnet-20261110-14';
+import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter } from './swap-aggregator.mjs?v=mainnet-20261110-15';
 const ZERO='0x'+'00'.repeat(20),MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
 const lower=x=>String(x||ZERO).toLowerCase();
 const USDT=lower(SWAP_TOKENS.usdt.address),USDC='0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d';
@@ -51,8 +51,8 @@ export function createPoolPolicy(pools,prices,tokenIn,tokenOut){
   if(!Array.isArray(leg.path)||leg.path.length<2)return[null];
   return leg.path.slice(1).map((b,n)=>pools.get(key(leg.adapter,leg.path[n],b)));
  };
- const allows=(first,second)=>{
-  const route=[...edges(first),...edges(second)];if(!route.length||route.some(p=>!p||p.usd<=0n||!p.priceAligned||p.depthVerified===false))return false;
+ const allowsRoute=legs=>{
+  const route=legs.flatMap(edges);if(!route.length||route.some(p=>!p||p.usd<=0n||!p.priceAligned||p.depthVerified===false))return false;
   for(const pool of route){
    const a=[pool.token0,pool.token1].filter(t=>!MAINSTREAM_TOKENS.has(t));
    if(a.length){if(a.some(t=>!alts.includes(t)||main.get(t)?.id!==pool.id))return false;}
@@ -60,16 +60,17 @@ export function createPoolPolicy(pools,prices,tokenIn,tokenOut){
   }
   return alts.every(t=>route.some(p=>p.id===main.get(t)?.id));
  };
+ const allows=(first,second)=>allowsRoute([first,second].filter(Boolean));
  const assertValue=(amountIn,amountOut)=>{
   if(alts.length)return;
   const input=prices.get(endpoints[0]===ZERO?WRAPPED[0]:endpoints[0]),output=prices.get(endpoints[1]===ZERO?WRAPPED[0]:endpoints[1]);
   if(!input||!output||amountIn<=0n||amountOut<=0n)throw fail('无法核对独立参考价格','oracle',true);
   if(amountOut*output*100n<amountIn*input*98n)throw fail('成交下限偏离独立参考价格超过 2%，请减少金额或滑点','price');
  };
- return{pools,main,allows,assertValue,assert(first,second){if(!allows(first,second))throw fail('池子流动性不足或不是主池，请刷新报价');}};
+ return{pools,prices,main,allows,allowsRoute,assertRoute(legs){if(!allowsRoute(legs))throw fail('池子流动性不足或不是主池，请刷新报价');},assertValue,assert(first,second){if(!allows(first,second))throw fail('池子流动性不足或不是主池，请刷新报价');}};
 }
 
-export async function readPoolPolicy(request,{tokenIn,tokenOut,config,clock=Date.now}){
+export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens=[],clock=Date.now}){
  const now=clock();
  const E=globalThis.ethers,router=new E.Interface(SWAP_ABI);
  const iface=new E.Interface(['function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])',
@@ -102,7 +103,7 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,clock=Date
  });
  // Require independent prices for the liquid anchors used to compare main pools.
  if([...MAINSTREAM_TOKENS].filter(t=>t!==ZERO).some(t=>!prices.has(t)))throw fail('价格数据过期或不可用，暂停报价','oracle',true);
- const anchors=[USDT,USDC,...WRAPPED,BTCB,ETH],tokens=[...new Set([lower(tokenIn),lower(tokenOut),...anchors].filter(t=>t!==ZERO))];
+ const anchors=[USDT,USDC,...WRAPPED,BTCB,ETH],tokens=[...new Set([lower(tokenIn),lower(tokenOut),...extraTokens.map(lower),...anchors].filter(t=>t!==ZERO))];
  const specs=[],seen=new Set();
  for(const item of Object.values(SWAP_ADAPTERS)){
   if(item.v3||config?.adaptersOff?.includes(item.key))continue;

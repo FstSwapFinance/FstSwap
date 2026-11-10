@@ -1,25 +1,26 @@
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261110-15";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
-//  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价 + 精确输出；
-//    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia / quoteExactOutput。
-//  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对与精确输出显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-14";
+//  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
+//    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
+//  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-15";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
-  swapFeePolicy, v10PlanFeeConversion, v10AmountsIn, readV10Receipt,
-  v10RouteCandidates, v10BestAmountsOut, v10RouteImpact, assertQuoteSafety,
+  swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
+  v10BestAmountsOut, v10RouteImpact, assertQuoteSafety,
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
-  swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10QuoteExactOutput, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261110-14";
+  swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
+} from "./swap-aggregator.mjs?v=mainnet-20261110-15";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-14";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-15";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-14";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-15";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261110-14";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261110-15";
 
 const approvals = createApprovalTracker();
 const BPS = 10000n;
@@ -197,7 +198,7 @@ export async function mountSwapView(root) {
   const transactionRead = payload => swapPublicRpc(globalThis.fetch, AbortSignal.timeout(6000), { attempts: 2, timeoutMs: 2000 })(payload);
   const settings = readSettings();
   const state = {
-    amount: "", amountOut: "", independent: "in", quote: null, quoteError: "", quoteErrorReason: "", balances: {}, balanceErrors: {}, balanceEpoch: 0, allowance: null, config: null,
+    amount: "", quote: null, quoteError: "", quoteErrorReason: "", balances: {}, balanceErrors: {}, balanceEpoch: 0, allowance: null, config: null,
     showInverted: false, settingsOpen: false, seq: 0,
   };
   try { await loadSwapLibrary(); } catch {}
@@ -221,6 +222,10 @@ export async function mountSwapView(root) {
   const side = () => (page.inKey === "bnb" ? "buy" : "sell");
   const routeSymbols = () => {
     if (!inT() || !outT()) return [];
+    if (state.quote?.kind === "fstswap") {
+      const addresses = [state.quote.tokenIn, ...state.quote.stages.map(stage => stage.tokenOut)];
+      return addresses.map(address => Object.values(TOKENS).find(t => (t.address || ZERO).toLowerCase() === address.toLowerCase())?.symbol || address.slice(0, 6) + "…");
+    }
     const firstPath = state.quote?.first?.path;
     const p = Array.isArray(firstPath) ? [...firstPath, ...(state.quote?.second?.path?.slice(1) || [])] : null;
     if (!Array.isArray(p)) return [inT().symbol, outT().symbol];
@@ -242,7 +247,7 @@ export async function mountSwapView(root) {
     }
     const input = src.querySelector("input.token-amount-input");
     input.value = limitAmountDecimals(value); input.setAttribute("value", input.value); input.title = value || "";
-    if (id === "swap-currency-output") input.readOnly = false; // 精确输出（v10）：可在输出框输入
+    if (id === "swap-currency-output") input.readOnly = true;
     const fiat = src.querySelector(".fNKPVt > div");
     if (fiat) {
       const left = fiat.firstElementChild;
@@ -267,7 +272,6 @@ export async function mountSwapView(root) {
     }
     btn.addEventListener("click", () => openTokenModal(id === "swap-currency-input" ? "in" : "out"));
     if (id === "swap-currency-input") input.addEventListener("input", onAmountInput);
-    else input.addEventListener("input", onAmountOutInput);
     return src;
   }
   function formatBalance(bal, tk) {
@@ -278,9 +282,9 @@ export async function mountSwapView(root) {
   }
 
   function renderPanels() {
-    const exactOut = state.independent === "out";
-    const outVal = exactOut ? state.amountOut : state.quote ? formatAmountInput(state.quote.out, outT().decimals) : "";
-    const inVal = exactOut ? (state.quote ? formatAmountInput(state.quote.amountIn, inT().decimals) : "") : state.amount;
+    const outVal = state.quote ? formatAmountInput(state.quote.out, outT().decimals) : "";
+    const inVal = state.amount;
+    const refocus = state.refocus || document.activeElement === main.querySelector("#swap-currency-input input");
     const arrow = part("swap_quoted", ".hDVbXn");
     arrow.style.cursor = "pointer";
     arrow.addEventListener("click", flip);
@@ -288,8 +292,8 @@ export async function mountSwapView(root) {
     const inEl = panel("swap-currency-input", inT(), inVal, { showMax });
     const outEl = panel("swap-currency-output", outT(), outVal, { showMax: false });
     panelsCol.replaceChildren(inEl, arrow, outEl);
-    const input = (exactOut ? outEl : inEl).querySelector("input");
-    if (document.activeElement?.classList?.contains("token-amount-input") || state.refocus) {
+    const input = inEl.querySelector("input");
+    if (refocus) {
       state.refocus = false; input.focus(); input.setSelectionRange(input.value.length, input.value.length);
     }
   }
@@ -332,11 +336,7 @@ export async function mountSwapView(root) {
     syms.forEach((s, i) => { if (i) routeBox.append(chevron.cloneNode(true)); const t = tokenTpl.cloneNode(true); t.querySelector(".css-5ds0tb").textContent = s; routeBox.append(t); });
     if (q.route) val(1).title = describeRoute(q.route, getLanguage());
     const impact = val(2).querySelector(".hHwHpX"); impact.textContent = formatImpact(q.impact);
-    if (q.exactOut) {
-      val(3).textContent = fmtTokens(q.maxIn, inT()) + " " + inT().symbol;
-      const label = rows[3]?.querySelector(":scope > div:first-child div, :scope > div:first-child");
-      if (label && label.firstChild?.nodeType === 3) label.firstChild.nodeValue = tr("最多卖出", "Maximum sold");
-    } else val(3).textContent = fmtTokens(minOut(q), outT()) + " " + outT().symbol;
+    val(3).textContent = fmtTokens(minOut(q), outT()) + " " + outT().symbol;
     val(4).textContent = (settings.slippageBps / 100).toFixed(2) + "%";
     return el;
   }
@@ -387,7 +387,7 @@ export async function mountSwapView(root) {
   }
   function inputError() {
     if (!inT() || !outT()) return T("选择代币");
-    const typed = state.independent === "out" ? state.amountOut : state.amount;
+    const typed = state.amount;
     if (!typed || !(Number(typed) > 0)) return T("输入数额");
     if (state.quoteError === SWAP_V10_MISSING.code) return tr(SWAP_V10_MISSING.zh, SWAP_V10_MISSING.en);
     if (state.quoteError === "NO_ROUTE") return settings.singleHop ? tr("没有符合要求的直达池，可关闭禁用多跳", "No eligible direct pool; enable multihop") : tr("没有符合流动性要求的交易路线", "No route meets the liquidity requirements");
@@ -478,8 +478,7 @@ export async function mountSwapView(root) {
   }
   function flip() {
     [page.inKey, page.outKey] = [page.outKey, page.inKey];
-    if (state.independent === "out") { state.amount = state.amountOut; state.amountOut = ""; state.independent = "in"; }
-    else state.amount = state.quote ? formatAmountInput(state.quote.out, (inT() || TOKENS.bnb).decimals) : limitAmountDecimals(state.amount);
+    state.amount = state.quote ? formatAmountInput(state.quote.out, (inT() || TOKENS.bnb).decimals) : limitAmountDecimals(state.amount);
     state.quote = null; state.allowance = null; render(); refreshBalances(); scheduleQuote(0);
   }
 
@@ -544,25 +543,16 @@ export async function mountSwapView(root) {
   function onAmountInput(e) {
     const v = limitAmountDecimals(e.target.value.replace(/,/g, "."));
     if (v !== "" && !/^\d*\.?\d*$/.test(v)) { e.target.value = state.amount; return; }
-    e.target.value = v; state.amount = v; state.independent = "in"; state.amountOut = ""; state.quote = null; state.quoteError = ""; state.refocus = true;
+    e.target.value = v; state.amount = v;  state.quote = null; state.quoteError = ""; state.refocus = true;
     renderTrade(); renderBottom();
     const out = main.querySelector("#swap-currency-output input"); if (out) out.value = "";
-    scheduleQuote();
-  }
-  // 精确输出：在输出框输入（官方 Field.OUTPUT）。仅 v10 支持；未部署时提示「聚合合约未部署」。
-  function onAmountOutInput(e) {
-    const v = limitAmountDecimals(e.target.value.replace(/,/g, "."));
-    if (v !== "" && !/^\d*\.?\d*$/.test(v)) { e.target.value = state.amountOut; return; }
-    e.target.value = v; state.amountOut = v; state.independent = "out"; state.quote = null; state.quoteError = ""; state.refocus = true;
-    renderTrade(); renderBottom();
-    const inp = main.querySelector("#swap-currency-input input"); if (inp) inp.value = "";
     scheduleQuote();
   }
   function setMax() {
     const bal = state.balances[page.inKey]; if (bal == null || !inT()) return;
     const MIN_BNB = 10n ** 16n; // 官方 maxAmountSpend：原生币预留 0.01
     const max = inT().key === "bnb" ? (bal > MIN_BNB ? bal - MIN_BNB : 0n) : bal;
-    state.amount = swapFormatUnits(max, inT().decimals); state.independent = "in"; state.amountOut = ""; state.quote = null; render(); scheduleQuote(0);
+    state.amount = swapFormatUnits(max, inT().decimals);  state.quote = null; render(); scheduleQuote(0);
   }
   const missing = () => Object.assign(new Error(SWAP_V10_MISSING.zh), { code: SWAP_V10_MISSING.code });
   // FstSwap 报价：v10 经聚合路由 getAmountsOutVia(FstSwap 适配器)；不直连 FstSwap 路由器
@@ -586,47 +576,25 @@ export async function mountSwapView(root) {
   }
   const impactOf = (amountIn, out, tiny, ref) => Math.max(0, 1 - (Number(out) / Number(amountIn)) / (Number(ref) / Number(tiny)));
   const feeBpsNow = () => state.config?.platformFeeBps ?? 30;
-  // 精确输入与精确输出使用同一份已启用 DEX / 中间币候选。
-  function exactOutCandidates(ti, to) {
-    return v10RouteCandidates(ti.address, to.address, { singleHop: settings.singleHop, config: state.config });
-  }
+  // 根据支付数量比较已启用 DEX 和中间币候选。
   async function refreshQuote() {
     const seq = ++state.seq;
     const ti = inT(), to = outT();
-    const exactOut = state.independent === "out";
-    const typed = exactOut ? state.amountOut : state.amount;
+    const typed = state.amount;
     if (!ti || !to || !typed || !(Number(typed) > 0)) { state.quote = null; render(); return; }
     state.quoteError = ""; state.quoteErrorReason = "";
-    let amount; try { amount = swapUnits(typed, (exactOut ? to : ti).decimals); } catch { state.quote = null; state.quoteError = "AMOUNT_PRECISION"; render(); return; }
+    let amount; try { amount = swapUnits(typed, ti.decimals); } catch { state.quote = null; state.quoteError = "AMOUNT_PRECISION"; render(); return; }
     renderBottom();
     try {
       let q;
       if (swapV10Ready()) state.config = await readSwapConfig(request);
-      const poolPolicy = await readPoolPolicy(request, { tokenIn: ti.address, tokenOut: to.address, config: state.config });
+      const poolPolicy = state.config?.version === "2.0.0" ? null : await readPoolPolicy(request, { tokenIn: ti.address, tokenOut: to.address, config: state.config });
       const feeBps = feeBpsNow();
       const policy = swapFeePolicy(ti.address, to.address, state.config?.defaultFeeToken);
       const feeAsset = Object.values(TOKENS).find(t => (t.address || ZERO).toLowerCase() === policy.token.toLowerCase()) || TOKENS.usdt;
-      if (exactOut) {
-        // —— 精确输出：quoteExactOutput（与成交同算法），maxIn = amountIn ×（1 + 滑点） ——
-        if (!swapV10Ready()) throw missing();
-        const mode = ti.key === "bnb" ? 0 : to.key === "bnb" ? 1 : 2;
-        const quotes = await Promise.all(exactOutCandidates(ti, to).filter(c => poolPolicy.allows(c.first, c.second)).map(async (c) => {
-          try {
-            let plan = null;
-            if (policy.mode === "convert") {
-              const budget = await v10AmountsIn(request, c.first, c.second ? await v10AmountsIn(request, c.second, amount) : amount);
-              const total = (budget * BPS + BPS - BigInt(feeBps) - 1n) / (BPS - BigInt(feeBps));
-              plan = await v10PlanFeeConversion(request, { input: ti.address, feeBudget: total * BigInt(feeBps) / BPS, config: state.config, slippageBps: settings.slippageBps, mainLegs: [c.first, c.second].filter(Boolean) });
-            }
-            return { ...c, conversion: plan?.conversion, ...(await v10QuoteExactOutput(request, { first: c.first, second: c.second, amountOut: amount, mode, conversion: plan?.conversion })) };
-          } catch { return null; }
-        }));
-        const best = quotes.filter(Boolean).sort((a, b) => (a.amountIn < b.amountIn ? -1 : a.amountIn > b.amountIn ? 1 : 0))[0];
-        if (!best || best.amountIn <= 0n) throw Object.assign(new Error("no route"), { code: "NO_ROUTE" });
-        const maxIn = best.amountIn * (BPS + BigInt(settings.slippageBps)) / BPS;
-        q = { kind: "v10exact", exactOut: true, mode, first: best.first, second: best.second, adapterKey: best.key, amountIn: best.amountIn, maxIn, out: amount,
-          lpFee: best.fee, feeAsset, conversion: best.conversion, impact: null };
-        q.impact = await v10RouteImpact(request, [best.first, best.second].filter(Boolean), best.amountIn, amount);
+      if (state.config?.version === "2.0.0") {
+        q = await quoteFstSwap(request, { tokenIn: ti.address, tokenOut: to.address, amountIn: amount, config: state.config, slippageBps: settings.slippageBps, singleHop: settings.singleHop });
+        q.feeAsset = Object.values(TOKENS).find(t => (t.address || ZERO).toLowerCase() === q.feeToken) || { address: q.feeToken, symbol: "Fee", decimals: 18 };
       } else if (isAggPair()) {
         const amountIn = amount;
         const route = await quoteSwap(request, { side: side(), amountIn, feeBps, poolPolicy, singleHop: settings.singleHop });
@@ -671,9 +639,9 @@ export async function mountSwapView(root) {
         }
       }
       assertQuoteSafety({ tokenIn: ti.address, tokenOut: to.address, amountIn: q.maxIn || q.amountIn,
-        amountOut: q.exactOut ? q.out : minOut(q), impact: q.impact, quotedAmountIn: q.amountIn, quotedAmountOut: q.out });
-      q.poolCheckedAt = poolPolicy.checkedAt;
-      poolPolicy.assertValue(q.maxIn || q.amountIn, q.exactOut ? q.out : minOut(q));
+        amountOut: minOut(q), impact: q.impact, quotedAmountIn: q.amountIn, quotedAmountOut: q.out });
+      q.poolCheckedAt = poolPolicy?.checkedAt ?? Date.now();
+      poolPolicy?.assertValue(q.maxIn || q.amountIn, minOut(q));
       if (seq !== state.seq) return;
       state.quote = q; state.quoteError = "";
       await refreshAllowance();
@@ -795,21 +763,29 @@ export async function mountSwapView(root) {
     closeModal();renderBottom();return true;
   }
   async function executeSwap(q) {
+    if (q.exactOut || q.kind === "v10exact") { state.quote = null; closeModal(); renderBottom(); scheduleQuote(0); return; }
     const [ain, sin, aout, sout] = swapSummary(q);
+    const [a3, , b3] = swapSummary(q, 3);
     pendingModal(tr("将 " + ain + " " + sin + " 兑换为 " + aout + " " + sout, "Swapping " + ain + " " + sin + " for " + aout + " " + sout));
     const deadline = Math.floor(Date.now() / 1000) + settings.deadlineMinutes * 60;
     const min = minOut(q);
     const submittedAccount = wallet.account;
     const submittedTokens = { tokenIn: inT().address, tokenOut: outT().address };
+    const submittedSlippage = settings.slippageBps, submittedDeadline = settings.deadlineMinutes;
     let expectedRequest;
     try {
-      assertQuoteSafety({ ...submittedTokens, amountIn: q.maxIn || q.amountIn, amountOut: q.exactOut ? q.out : min, impact: q.impact, quotedAmountIn: q.amountIn, quotedAmountOut: q.out });
+      assertQuoteSafety({ ...submittedTokens, amountIn: q.maxIn || q.amountIn, amountOut: min, impact: q.impact, quotedAmountIn: q.amountIn, quotedAmountOut: q.out });
       if(await showApprovalIfNeeded(q))return;
       if(inT()?.key!=="bnb"&&state.allowance==null)throw new Error(tr("暂时无法读取授权额度，请稍后重试", "Cannot read approval; please try again"));
-      const freshPolicy = await readPoolPolicy(request, { ...submittedTokens, config: await readSwapConfig(request) });
+      const currentConfig = await readSwapConfig(request);
+      const freshPolicy = q.kind === "fstswap" ? await recheckFstQuote(request, q, currentConfig) : await readPoolPolicy(request, { ...submittedTokens, config: currentConfig });
+      const beforeSubmit = () => {
+        if (!main.isConnected || state.quote !== q || wallet.account !== submittedAccount || inT()?.address !== submittedTokens.tokenIn || outT()?.address !== submittedTokens.tokenOut || settings.slippageBps !== submittedSlippage || settings.deadlineMinutes !== submittedDeadline) return false;
+        freshPolicy.assertFresh(); return true;
+      };
       const quotedRoute = q.route || q;
       freshPolicy.assert(quotedRoute.first, quotedRoute.second);
-      freshPolicy.assertValue(q.maxIn || q.amountIn, q.exactOut ? q.out : min);
+      freshPolicy.assertValue(q.maxIn || q.amountIn, min);
       if (state.quote !== q || wallet.account !== submittedAccount) { closeModal(); return; }
       let hash, preflight = null;
       if (q.kind === "agg") {
@@ -817,41 +793,37 @@ export async function mountSwapView(root) {
         if (preflight.needsApproval) { closeModal(); renderBottom(); return; }
         if (swapV10Ready() && preflight.simulated === null) throw new Error(tr("链上仿真失败，请刷新报价", "Simulation failed; refresh the quote"));
         if (preflight.simulated !== null && preflight.simulated < min) throw new Error(tr("链上仿真低于最少到账，请刷新报价后重试", "Simulation below minimum received; refresh and retry"));
-        const sent = await sendTx(preflight.transaction, preflight.gasLimit, preflight.gasPrice, () => freshPolicy.assertFresh());
+        const sent = await sendTx(preflight.transaction, preflight.gasLimit, preflight.gasPrice, beforeSubmit);
         hash = sent.hash; expectedRequest = sent.transaction;
       } else {
         // v10 聚合路由（不直连 FstSwap 路由器）；未部署时 v10Request 抛「聚合合约未部署」
         let tx;
-        if (q.kind === "v10exact") {
-          const method = q.conversion ? "swapTokenForExactTokenWithFee" : ["swapBnbForExactToken", "swapTokenForExactBnb", "swapTokenForExactToken"][q.mode];
-          const args = q.mode === 0 ? [q.first, q.second || NO_LEG, q.out, deadline, wallet.account] : [q.first, q.second || NO_LEG, q.out, q.maxIn, deadline, wallet.account];
-          if (q.conversion) args.push(q.conversion);
-          tx = v10Request(ethers.Interface, { account: wallet.account, method, args, value: q.mode === 0 ? q.maxIn : 0n });
+        if (q.kind === "fstswap") {
+          tx = fstRequest(ethers.Interface, { router: swapActiveRouter(), account: wallet.account, quote: q, deadline });
         } else if (q.kind === "v10") {
           const args = q.method === "swapBnbToToken" ? [q.first, q.second || NO_LEG, min, deadline, wallet.account] : [q.first, q.second || NO_LEG, q.amountIn, min, deadline, wallet.account];
           if (q.conversion) args.push(q.conversion);
           tx = v10Request(ethers.Interface, { account: wallet.account, method: q.method, args, value: q.method === "swapBnbToToken" ? q.amountIn : 0n });
         } else throw missing();
         const simulated = await wallet.provider.request({ method: "eth_call", params: [tx, "latest"] });
-        const simulationInterface = new ethers.Interface(SWAP_ABI);
+        const simulationInterface = new ethers.Interface(q.kind === "fstswap" ? FST_ABI : SWAP_ABI);
         const simulatedMethod = simulationInterface.parseTransaction({ data: tx.data }).name;
         const simulatedAmount = simulationInterface.decodeFunctionResult(simulatedMethod, simulated)[0];
-        if (q.exactOut ? simulatedAmount > q.maxIn : simulatedAmount < min) throw new Error(tr("链上仿真未满足报价约束", "Simulation violates quote limits"));
+        if (simulatedAmount < min) throw new Error(tr("链上仿真未满足报价约束", "Simulation violates quote limits"));
         expectedRequest = tx;
         const light = swapPublicRpc(globalThis.fetch, undefined, { attempts: 2, timeoutMs: 8000 });
         const [est, price] = await Promise.allSettled([light({ method: "eth_estimateGas", params: [tx] }), light({ method: "eth_gasPrice" })]);
-        const sent = await sendTx(tx, est.status === "fulfilled" ? BigInt(est.value) * 13n / 10n : 900000n, price.status === "fulfilled" ? BigInt(price.value) : 3000000000n, () => freshPolicy.assertFresh());
+        const sent = await sendTx(tx, est.status === "fulfilled" ? BigInt(est.value) * 13n / 10n : 900000n, price.status === "fulfilled" ? BigInt(price.value) : 3000000000n, beforeSubmit);
         hash = sent.hash; expectedRequest = sent.transaction;
       }
-      const [a3, , b3] = swapSummary(q, 3);
       const summary = "Swap " + a3 + " " + sin + " for " + b3 + " " + sout;
       submittedModal(hash); popup({ summary, hash });
       saveHistory({ hash, summary, time: Date.now() });
-      state.amount = ""; state.amountOut = ""; state.independent = "in"; state.quote = null; render();
+      state.amount = "";  state.quote = null; render();
       waitReceipt(hash, submittedAccount).then(async () => {
         if (swapV10Ready()) {
           await readV10Receipt(request, hash, { account: submittedAccount, expectedRequest, ...submittedTokens,
-            minOut: q.exactOut ? q.out : min, maxIn: q.maxIn || q.amountIn, feeToken: q.feeAsset.address || ZERO, expectedFee: q.lpFee, minFeeOut: q.conversion && q.lpFee > 0n ? q.conversion.minOut : 0n });
+            minOut: min, maxIn: q.maxIn || q.amountIn, feeToken: q.feeAsset.address || ZERO, expectedFee: q.lpFee, minFeeOut: q.conversion && q.lpFee > 0n ? q.conversion.minOut : 0n });
         } else if (q.kind === "agg") {
           await readSwapReceipt(request, hash, { account: submittedAccount, route: q.route, minOut: min, expectedRequest });
         }

@@ -1,0 +1,12 @@
+{
+  "chainId": 56,
+  "owner": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+  "deployer": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+  "feeReceiver": "0x66f2B90E9fAEf07E5931A3483882804B78f92Ae9",
+  "platformFeeBps": 30,
+  "defaultFeeToken": "0x55d398326f99059fF775485246999027B3197955",
+  "status": "awaiting-deployment",
+  "name": "FstSwap",
+  "version": "2.0.0",
+  "userConfirmed": "2026-11-10"
+}

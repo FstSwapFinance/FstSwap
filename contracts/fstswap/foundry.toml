@@ -1,0 +1,12 @@
+[profile.default]
+src = "src"
+test = "test"
+out = "out"
+cache_path = "cache"
+libs = ["../v10/lib"]
+remappings = ["@openzeppelin/=../v10/lib/openzeppelin-contracts/", "forge-std/=../v10/lib/forge-std/src/"]
+solc_version = "0.8.26"
+optimizer = true
+optimizer_runs = 100
+via_ir = true
+evm_version = "paris"
