@@ -14,32 +14,60 @@ export function walletShort(account) {
     ? account.slice(0, 6) + "…" + account.slice(-4) : "";
 }
 
-function injectedProviders() {
-  const list = [];
-  for (const key of ["ethereum", "okxwallet", "binance"]) {
-    const provider = globalThis[key];
-    if (provider && typeof provider.request === "function" && !list.some((p) => p === provider)) list.push(provider);
-  }
-  // 多钱包注入时（MetaMask 等）ethereum.providers 数组取第一个支持 eth_accounts 的
-  if (!list.length && Array.isArray(globalThis.ethereum?.providers)) {
-    for (const provider of globalThis.ethereum.providers) {
-      if (provider && typeof provider.request === "function") { list.push(provider); break; }
-    }
-  }
-  return list;
+const announced = [];
+const RDNS = { metamask: ['io.metamask'], okx: ['com.okex.wallet', 'com.okx.wallet'],
+  binance: ['com.binance.wallet'], tokenpocket: ['pro.tokenpocket'], coinbase: ['com.coinbase.wallet'] };
+globalThis.addEventListener?.('eip6963:announceProvider', ({ detail }) => {
+  if (typeof detail?.provider?.request === 'function' && !announced.some(p => p.provider === detail.provider)) announced.push(detail);
+});
+export function discoverWallets() {
+  if (globalThis.dispatchEvent && globalThis.Event) globalThis.dispatchEvent(new Event('eip6963:requestProvider'));
+}
+discoverWallets();
+
+// A named button must select that wallet even when several extensions coexist.
+export function injectedProvider(brand = 'injected', scope = globalThis, discovered = announced) {
+  const direct = { okx: scope.okxwallet?.ethereum || scope.okxwallet,
+    binance: scope.binancew3w?.ethereum || scope.binancew3w || scope.binancew3?.ethereum || scope.binance,
+    coinbase: scope.coinbaseWalletExtension, tokenpocket: scope.tokenpocket?.ethereum };
+  const valid = p => typeof p?.request === 'function';
+  if (valid(direct[brand])) return direct[brand];
+  const match = discovered.find(p => RDNS[brand]?.includes(p.info?.rdns) && valid(p.provider));
+  if (match) return match.provider;
+  const candidates = [...(scope.ethereum?.providers || []), scope.ethereum, ...Object.values(direct), ...discovered.map(p => p.provider)].filter(valid);
+  const flags = { okx: p => p.isOkxWallet || p.isOKExWallet, binance: p => p.isBinance,
+    tokenpocket: p => p.isTokenPocket, coinbase: p => p.isCoinbaseWallet,
+    metamask: p => p.isMetaMask && !p.isTokenPocket && !p.isOkxWallet && !p.isOKExWallet && !p.isBinance && !p.isCoinbaseWallet };
+  return brand === 'injected' ? candidates[0] : candidates.find(flags[brand] || (() => false));
 }
 
-/// 连接注入式钱包并确保 BSC 主网。
-export async function connectInjected() {
-  const provider = injectedProviders()[0];
-  if (!provider) {
-    throw Object.assign(new Error("未检测到浏览器钱包（可安装 MetaMask / OKX / TokenPocket）"), { code: "NO_WALLET" });
-  }
-  const accounts = await provider.request({ method: "eth_requestAccounts" });
-  if (!accounts?.length) throw Object.assign(new Error("钱包未返回账户"), { code: "NO_ACCOUNT" });
-  const switched = await ensureMainnet(provider);
-  if (!switched) throw Object.assign(new Error("请手动切换到 BSC 主网（chainId 56）"), { code: "WRONG_CHAIN" });
-  return { provider, account: accounts[0], kind: "injected" };
+export async function connectInjected(brand = 'injected') {
+  discoverWallets();
+  const provider = injectedProvider(brand);
+  if (!provider) throw Object.assign(new Error('未检测到所选钱包'), { code: 'NO_WALLET' });
+  const accounts = await provider.request({ method: 'eth_requestAccounts' });
+  if (!accounts?.length) throw Object.assign(new Error('钱包未返回账户'), { code: 'NO_ACCOUNT' });
+  if (!await ensureMainnet(provider)) throw Object.assign(new Error('请切换到 BSC 主网'), { code: 'WRONG_CHAIN' });
+  return { provider, account: accounts[0], kind: 'injected', brand };
+}
+
+// Silent restoration never requests permissions, switches networks or signs.
+export async function restoreInjected(brand = 'injected') {
+  discoverWallets();
+  const provider = injectedProvider(brand);
+  if (!provider) return null;
+  try {
+    const [accounts, chain] = await Promise.all([provider.request({method:'eth_accounts'}), provider.request({method:'eth_chainId'})]);
+    return accounts?.[0] && Number(chain) === 56 ? {provider, account:accounts[0], kind:'injected', brand} : null;
+  } catch { return null; }
+}
+
+export function walletAppLink(brand, uri) {
+  if (typeof uri !== 'string' || !uri.startsWith('wc:')) return null;
+  const encoded = encodeURIComponent(uri);
+  return ({binance: 'bnc://app.binance.com/cedefi/wc?uri=', okx: 'okex://main/wc?uri=',
+    tokenpocket: 'tpoutside://wc?uri=', metamask: 'https://metamask.app.link/wc?uri=',
+    coinbase: 'https://go.cb-w.com/wc?uri='})[brand]?.concat(encoded) || null;
 }
 
 /// 切换到 BSC 主网；失败时尝试 addEthereumChain 后再切。
@@ -49,6 +77,7 @@ export async function ensureMainnet(provider) {
     if (chainId === SWAP_CHAIN.hex) return true;
     await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: SWAP_CHAIN.hex }] });
   } catch (switchError) {
+    if (Number(switchError?.code) !== 4902) return false;
     try {
       await provider.request({ method: "wallet_addEthereumChain", params: [{
         chainId: SWAP_CHAIN.hex, chainName: SWAP_CHAIN.name,

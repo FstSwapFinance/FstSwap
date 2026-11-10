@@ -1,9 +1,9 @@
 // 共用外壳：按官方 fstswap.github.io 运行时 DOM 渲染（Header/HeaderLinks/Polling/Popups/SwitchLocaleLink/Modal），
 // 模板来自 swap-official-tpl.mjs（官方 DOM 快照），样式来自 swap-official.css（官方运行时样式）。
-// 钱包连接逻辑沿用（注入式 / WalletConnect / Coinbase→injected→WC / Fortmatic·Portis 已停服回退）。
-import { SWAP_CHAIN, connectInjected, walletConnectAccount,
-  walletShort, loadSwapWalletConnect, disconnectWalletConnect } from "./swap-wallet.mjs?v=review-20261110-3";
-import { swapPublicRpc, loadSwapLibrary } from "./swap-aggregator.mjs?v=mainnet-20261110-18";
+// 钱包按品牌选择注入 provider；未安装时通过 WalletConnect 扫码连接。
+import { SWAP_CHAIN, connectInjected, injectedProvider, restoreInjected, walletAppLink, walletConnectAccount,
+  walletShort, loadSwapWalletConnect, disconnectWalletConnect } from "./swap-wallet.mjs?v=mainnet-20261110-19";
+import { swapPublicRpc, loadSwapLibrary } from "./swap-aggregator.mjs?v=mainnet-20261110-19";
 import { TPL, EN } from "./swap-official-tpl.mjs?v=official-20261109";
 import { jazziconHtml } from "./swap-jazzicon.mjs?v=official-20261109";
 import "./swap-ui.mjs?v=review-20261110-3";
@@ -208,7 +208,9 @@ function startPolling() {
 export async function refreshNativeBalance() {
   if (!walletState.wallet) return;
   try {
-    const raw = await walletState.wallet.provider.request({ method: "eth_getBalance", params: [walletState.account, "latest"] });
+    const account = walletState.account, provider = walletState.provider;
+    const raw = await swapPublicRpc()({ method: "eth_getBalance", params: [account, "latest"] });
+    if (walletState.account !== account || walletState.provider !== provider) return;
     const next = BigInt(raw); if (next !== walletState.bnb) { walletState.bnb = next; renderHeader(); }
   } catch {}
 }
@@ -247,84 +249,154 @@ let portal = null;
 export function openModal(overlayEl, { onClose } = {}) {
   closeModal();
   portal = document.createElement("reach-portal");
+  portal._onClose = onClose;
   const lock = html('<div data-focus-lock-disabled="false"><div></div></div>');
   lock.firstElementChild.append(overlayEl); portal.append(lock); document.body.append(portal);
   document.body.classList.add("agg-scroll-lock");
-  overlayEl.addEventListener("mousedown", (e) => { if (e.target === overlayEl) { closeModal(); onClose?.(); } });
-  const esc = (e) => { if (e.key === "Escape") { closeModal(); onClose?.(); } };
+  overlayEl.addEventListener("mousedown", (e) => { if (e.target === overlayEl) { closeModal(); } });
+  const esc = (e) => { if (e.key === "Escape") { closeModal(); } };
   document.addEventListener("keydown", esc); portal._esc = esc;
   return overlayEl;
 }
 export function closeModal() {
   if (!portal) return;
-  document.removeEventListener("keydown", portal._esc); portal.remove(); portal = null;
+  const closing = portal; portal = null;
+  document.removeEventListener("keydown", closing._esc); closing.remove();
   document.body.classList.remove("agg-scroll-lock");
+  closing._onClose?.();
 }
 export function modalOpen() { return Boolean(portal); }
 
 // —— 钱包连接 ——
 export function walletChrome() { walletState.subscribe(() => renderHeader()); }
-export async function connectWallet() {
-  const wallet = await connectInjected();
-  walletState.wallet = wallet; walletState.bnb = null;
-  try { await loadSwapLibrary(); } catch {}
-  walletState.notify(); renderHeader(); refreshNativeBalance();
-  wallet.provider.on?.("accountsChanged", (accounts) => {
+const WALLET_CHOICE = 'fstswap_wallet_choice';
+let walletEpoch = 0, detachWallet = () => {}, connectionPending = null;
+const rememberWallet = choice => { try { localStorage.setItem(WALLET_CHOICE, choice); } catch {} };
+function activateWallet(wallet) {
+  detachWallet();
+  walletState.wallet = wallet; walletState.wcProvider = wallet.kind === 'walletconnect' ? wallet.provider : null;
+  walletState.bnb = null;
+  rememberWallet(wallet.kind === 'walletconnect' ? 'walletconnect' : wallet.brand || 'injected');
+  const current = () => walletState.provider === wallet.provider;
+  const accountsChanged = accounts => {
+    if (!current()) return;
     if (!accounts?.length) { disconnectWallet(); return; }
-    walletState.wallet = { ...walletState.wallet, account: accounts[0] }; walletState.bnb = null; walletState.notify(); renderHeader(); refreshNativeBalance();
-  });
-  wallet.provider.on?.("chainChanged", () => { walletState.bnb = null; walletState.notify(); renderHeader(); });
+    walletState.wallet = {...walletState.wallet, account:accounts[0]}; walletState.bnb = null;
+    walletState.notify(); renderHeader(); refreshNativeBalance();
+  };
+  const chainChanged = () => { if (current()) { walletState.bnb = null; walletState.notify(); renderHeader(); } };
+  wallet.provider.on?.('accountsChanged', accountsChanged); wallet.provider.on?.('chainChanged', chainChanged);
+  detachWallet = () => { wallet.provider.removeListener?.('accountsChanged', accountsChanged); wallet.provider.removeListener?.('chainChanged', chainChanged); };
+  // Publish the connection immediately; dependency and balance reads stay in the background.
+  walletState.notify(); renderHeader();
+  loadSwapLibrary().then(() => { if (current()) refreshNativeBalance(); }).catch(() => {});
   return wallet;
 }
-export async function connectWalletScan(qrHost) {
-  let provider = await loadSwapWalletConnect();
-  const done = async (account) => { provider.on?.("chainChanged", () => { walletState.bnb = null; walletState.notify(); renderHeader(); }); provider.on?.("accountsChanged", (accounts) => { if (!accounts?.length) { disconnectWallet(); return; } walletState.wallet = { ...walletState.wallet, account: accounts[0] }; walletState.bnb = null; walletState.notify(); renderHeader(); }); walletState.wallet = { provider, account, kind: "walletconnect" }; walletState.wcProvider = provider; walletState.bnb = null; walletState.notify(); renderHeader(); refreshNativeBalance(); return walletState.wallet; };
-  const existing = await walletConnectAccount(provider); if (existing) return done(existing);
-  await disconnectWalletConnect(provider); provider = await loadSwapWalletConnect();
-  if (qrHost) {
-    const { toCanvas } = await import("../assets/vendor/walletconnect/qrcode-1.5.4.js");
-    provider.on("display_uri", (event) => {
-      const uri = typeof event === "string" ? event : event?.uri;
-      if (!uri || !qrHost.isConnected) return;
-      const c = document.createElement("canvas"); qrHost.replaceChildren(c);
-      toCanvas(c, uri, { width: 240, margin: 1 }).catch(() => { qrHost.textContent = tr("二维码加载失败，请重试", "QR code failed to load; please retry"); });
-    });
-  }
-  await provider.connect({ optionalNamespaces: { eip155: { chains: [`eip155:${SWAP_CHAIN.chainId}`],
-    methods: ["eth_sendTransaction", "personal_sign"], events: ["accountsChanged", "chainChanged"] } } });
-  const account = await walletConnectAccount(provider);
-  if (!account) throw Object.assign(new Error(tr("配对未完成", "Pairing incomplete")), { code: "WC_PENDING" });
-  return done(account);
-}
-export async function disconnectWallet() {
-  if (walletState.wcProvider) await disconnectWalletConnect(walletState.wcProvider);
-  walletState.wallet = null; walletState.wcProvider = null; walletState.bnb = null;
-  walletState.notify(); renderHeader();
+export async function connectWallet(brand = 'injected') {
+  const epoch = ++walletEpoch;
+  const wallet = await connectInjected(brand);
+  if (epoch !== walletEpoch) return null;
+  return activateWallet(wallet);
 }
 
-/// 官方 WalletModal（选项列表）；无注入钱包时 MetaMask 项显示 Install Metamask（与官方一致）。
+export async function restoreWallet() {
+  const epoch = walletEpoch;
+  let choice; try { choice = localStorage.getItem(WALLET_CHOICE); } catch {}
+  if (choice === 'disconnected' || walletState.wallet) return;
+  let wallet;
+  if (choice === 'walletconnect') {
+    try { const provider = await loadSwapWalletConnect(); const account = await walletConnectAccount(provider);
+      if (account) wallet = {provider, account, kind:'walletconnect'};
+    } catch {}
+  } else wallet = await restoreInjected(choice || 'injected');
+  if (wallet && epoch === walletEpoch && !walletState.wallet) activateWallet(wallet);
+}
+
+export async function connectWalletScan(qrHost, {brand, isActive = () => true} = {}) {
+  const epoch = ++walletEpoch;
+  const alive = () => isActive() && epoch === walletEpoch;
+  const provider = await loadSwapWalletConnect();
+  if (!alive()) return null;
+  const existing = await walletConnectAccount(provider);
+  if (!alive()) return null;
+  const done = account => isActive() && epoch === walletEpoch ? activateWallet({provider, account, kind:'walletconnect'}) : null;
+  if (existing && !brand) return done(existing);
+  await disconnectWalletConnect(provider);
+  if (!alive()) return null;
+  const {toCanvas} = await import('../assets/vendor/walletconnect/qrcode-1.5.4.js');
+  if (!alive()) return null;
+  const display = event => {
+    const uri = typeof event === 'string' ? event : event?.uri;
+    if (!uri || !qrHost?.isConnected || !isActive()) return;
+    const canvas = document.createElement('canvas'); qrHost.replaceChildren(canvas);
+    toCanvas(canvas, uri, {width:240, margin:1}).catch(() => { qrHost.textContent = tr('二维码加载失败，请重试', 'QR code failed to load'); });
+    const href = walletAppLink(brand, uri);
+    if (href) { const link = document.createElement('a'); link.href = href; link.className = 'fst-wallet-open-app';
+      link.textContent = tr('打开钱包 App', 'Open wallet app'); qrHost.append(link); }
+  };
+  provider.on('display_uri', display);
+  try {
+    if (!alive()) return null;
+    await provider.connect({optionalNamespaces:{eip155:{chains:[`eip155:${SWAP_CHAIN.chainId}`],
+      methods:['eth_sendTransaction','personal_sign'], events:['accountsChanged','chainChanged']}}});
+    const account = await walletConnectAccount(provider);
+    if (!account) throw new Error(tr('配对未完成', 'Pairing incomplete'));
+    return done(account);
+  } finally { provider.removeListener?.('display_uri', display); }
+}
+export async function disconnectWallet() {
+  ++walletEpoch; detachWallet(); detachWallet = () => {};
+  const wc = walletState.wcProvider;
+  walletState.wallet = null; walletState.wcProvider = null; walletState.bnb = null;
+  rememberWallet('disconnected'); walletState.notify(); renderHeader();
+  if (wc) await disconnectWalletConnect(wc);
+}
+
 export function openWalletModal() {
-  const overlay = tpl("wallet_modal");
-  const hasInjected = Boolean(globalThis.ethereum || globalThis.okxwallet || globalThis.binance);
-  const mm = overlay.querySelector("#connect-METAMASK");
-  if (!hasInjected && mm) mm.querySelector(".gpyNbR").textContent = "Install Metamask";
-  openModal(overlay);
-  overlay.querySelector(".hIWQgn")?.addEventListener("click", closeModal);
-  const run = (fn) => { closeModal(); fn().catch((err) => popup({ summary: err?.message || tr("连接失败", "Connection failed"), success: false })); };
-  mm?.addEventListener("click", () => {
-    if (!hasInjected) { window.open("https://metamask.io/", "_blank", "noopener"); return; }
-    run(() => connectWallet());
-  });
-  overlay.querySelector("#connect-WALLET_CONNECT")?.addEventListener("click", () => {
-    // 官方 PendingView 位置展示二维码
-    const opts = overlay.querySelector(".fvKtIt"); const qr = html('<div style="display:flex;justify-content:center;padding:1rem;background:#fff;border-radius:12px;min-height:240px;align-items:center;color:#000;">…</div>');
-    opts.replaceChildren(qr);
-    connectWalletScan(qr).then(() => closeModal()).catch((err) => { closeModal(); popup({ summary: err?.message || "WalletConnect", success: false }); });
-  });
-  overlay.querySelector("#connect-WALLET_LINK")?.addEventListener("click", () => run(() => connectWallet().catch(() => connectWalletScan())));
-  const retired = (name) => run(async () => { popup({ summary: name + tr(" 已停止服务，改用浏览器钱包 / WalletConnect", " is retired; using browser wallet / WalletConnect instead"), success: false, ms: 6000 }); return connectWallet().catch(() => connectWalletScan()); });
-  overlay.querySelector("#connect-FORTMATIC")?.addEventListener("click", () => retired("Fortmatic"));
-  overlay.querySelector("#connect-Portis")?.addEventListener("click", () => retired("Portis"));
+  const overlay = tpl('wallet_modal');
+  overlay.querySelector('[data-reach-dialog-content]')?.classList.add('fst-wallet-dialog');
+  const opts = overlay.querySelector('.fvKtIt');
+  const replacements = [
+    ['#connect-FORTMATIC', 'BINANCE', 'binance', tr('币安 Web3 钱包', 'Binance Web3 Wallet')],
+    ['#connect-Portis', 'OKX', 'okx', tr('OKX Web3 钱包', 'OKX Web3 Wallet')],
+    [null, 'TOKENPOCKET', 'tokenpocket', tr('TP 钱包', 'TokenPocket')],
+  ];
+  for (const [selector,id,brand,label] of replacements) {
+    const button = selector ? overlay.querySelector(selector) : opts.firstElementChild.cloneNode(true);
+    button.id = 'connect-' + id; button.querySelector('.gpyNbR').textContent = label;
+    const img = button.querySelector('img'); if (img) { img.src = 'assets/wallets/' + brand + '.svg'; img.alt = ''; }
+    if (!selector) opts.append(button);
+  }
+  const status = document.createElement('p'); status.className = 'fst-wallet-status'; status.setAttribute('role','status'); opts.after(status);
+  let active = true, modalJob;
+  openModal(overlay, {onClose:() => { active = false; if (connectionPending === modalJob) { ++walletEpoch; connectionPending = null; } }});
+  const close = overlay.querySelector('.hIWQgn');
+  close?.setAttribute('role','button'); close?.setAttribute('tabindex','0'); close?.setAttribute('aria-label',tr('关闭','Close'));
+  close?.addEventListener('click', closeModal);
+  close?.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') {e.preventDefault();closeModal();} });
+  const connect = async (brand, label) => {
+    if (connectionPending) return;
+    const job = {}; modalJob = job; connectionPending = job;
+    opts.querySelectorAll('button').forEach(b => b.disabled = true);
+    status.textContent = tr('请在钱包中完成连接', 'Complete the connection in your wallet');
+    try {
+      if (brand && injectedProvider(brand)) await connectWallet(brand);
+      else {
+        const qr = html('<div class="fst-wallet-qr" aria-live="polite">…</div>'); opts.hidden = true; opts.after(qr);
+        status.textContent = tr('使用钱包扫描二维码连接', 'Scan with your wallet to connect') + (label ? ' · ' + label : '');
+        await connectWalletScan(qr, {brand, isActive:() => active});
+      }
+      if (active) closeModal();
+    } catch (err) {
+      if (active) {
+        overlay.querySelector('.fst-wallet-qr')?.remove(); opts.hidden = false;
+        status.textContent = Number(err?.code) === 4001 ? tr('已取消连接，可重新选择钱包', 'Connection cancelled. Choose a wallet to try again.') : err?.message || tr('连接失败，请重试', 'Connection failed. Please retry.');
+      }
+    } finally { if (connectionPending === job) connectionPending = null; opts.querySelectorAll('button').forEach(b => b.disabled = false); }
+  };
+  const bindings = [['METAMASK','metamask','MetaMask'],['WALLET_CONNECT',null,'WalletConnect'],['WALLET_LINK','coinbase','Coinbase Wallet'],...replacements.map(([,id,brand,label])=>[id,brand,label])];
+  for (const [id,brand,label] of bindings) overlay.querySelector('#connect-'+id)?.addEventListener('click',()=>connect(brand,label));
+  if (connectionPending) status.textContent = tr('请先完成钱包中的连接请求', 'Complete the pending wallet connection first');
 }
 
 /// 官方 AccountDetails（账户弹窗）。

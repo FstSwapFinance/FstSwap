@@ -1,5 +1,5 @@
-import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261110-18";
-import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261110-18";
+import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261110-19";
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261110-19";
 // 聚合路由 Swap 引擎（BSC 主网 56，FstSi aggregator-live v9「multi-pool」，合约 VERSION 1.01）。
 // 与 market-trade.mjs 相同的约束风格：全部函数只通过注入的 JSON-RPC
 // request 访问链上，返回精确的十进制字符串/大整数，浏览器与 Node 均可运行。
@@ -440,7 +440,7 @@ export function v10RouteCandidates(tokenIn, tokenOut, options = {}) {
   const candidates = v10V2Candidates(tokenIn, tokenOut, options);
   if (options.singleHop) return candidates;
   const adapters = Object.values(SWAP_ADAPTERS).filter(a => !a.v3 && !options.config?.adaptersOff?.includes(a.key));
-  const mids = [SWAP_TOKENS.usdt.address, '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', '0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c', '0x2170ed0880ac9a755fd29b2688956bd959f933f8', ...new Set(adapters.map(a => a.weth))];
+  const mids = [SWAP_TOKENS.fist.address, SWAP_TOKENS.usdt.address, '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', '0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c', '0x2170ed0880ac9a755fd29b2688956bd959f933f8', ...new Set(adapters.map(a => a.weth))];
   for (const a of adapters) for (const b of adapters) {
     if (a.key === b.key) continue;
     const input = !tokenIn || lower(tokenIn) === ZERO_ADDRESS ? a.weth : tokenIn;
@@ -448,6 +448,19 @@ export function v10RouteCandidates(tokenIn, tokenOut, options = {}) {
     for (const mid of mids) {
       if (new Set([input, mid, output].map(lower)).size !== 3) continue;
       candidates.push({ key: a.key, first: { adapter: a.adapter, path: [input, mid] }, second: { adapter: b.adapter, path: [mid, output] } });
+    }
+  }
+  // The deployed router accepts up to three edges in each leg and two DEX
+  // legs. Include main-pool bridges such as FIST -> USDT -> WBNB -> alt.
+  for (const a of adapters) for (const b of adapters) {
+    const input = !tokenIn || lower(tokenIn) === ZERO_ADDRESS ? a.weth : tokenIn;
+    const output = !tokenOut || lower(tokenOut) === ZERO_ADDRESS ? b.weth : tokenOut;
+    for (const mid1 of mids) for (const mid2 of mids) {
+      const path = [input, mid1, mid2, output];
+      if (new Set(path.map(lower)).size !== 4) continue;
+      if (a.key === b.key) candidates.push({key:a.key, first:{adapter:a.adapter,path}});
+      else for (const split of [1,2]) candidates.push({key:a.key,
+        first:{adapter:a.adapter,path:path.slice(0,split+1)}, second:{adapter:b.adapter,path:path.slice(split)}});
     }
   }
   return candidates;
@@ -459,13 +472,21 @@ export async function v10BestAmountsOut(request, { tokenIn, tokenOut, amountIn, 
   if (typeof amountIn !== 'bigint' || amountIn <= 0n) throw invalid();
   const iface = swapInterface(globalThis.ethers?.Interface);
   const candidates = (poolPolicy ? v10RouteCandidates : v10V2Candidates)(tokenIn, tokenOut, { singleHop, config }).filter(c => !poolPolicy || poolPolicy.allows(c.first, c.second));
-  const entries = await multicallTryAggregate(request, candidates.map(({ first }) => ({ target: swapActiveRouter(),
-    data: iface.encodeFunctionData('getAmountsOutVia', [first.adapter, amountIn, first.path]) })));
+  // Several cross-DEX routes share a first leg: read it once, then reuse its
+  // exact output as input to each second leg. Never cache an executable quote.
+  const calls = [], firstIndexes = [], firstCalls = new Map();
+  for (const {first} of candidates) {
+    const data = iface.encodeFunctionData('getAmountsOutVia', [first.adapter, amountIn, first.path]);
+    if (!firstCalls.has(data)) { firstCalls.set(data, calls.length); calls.push({target:swapActiveRouter(),data}); }
+    firstIndexes.push(firstCalls.get(data));
+  }
+  const entries = await multicallTryAggregate(request, calls);
   const quotes = [], partials = [];
   candidates.forEach((candidate, index) => {
-    if (!entries[index]?.success) return;
+    const entry = entries[firstIndexes[index]];
+    if (!entry?.success) return;
     try {
-      const amounts = Array.from(iface.decodeFunctionResult('getAmountsOutVia', entries[index].returnData)[0]);
+      const amounts = Array.from(iface.decodeFunctionResult('getAmountsOutVia', entry.returnData)[0]);
       const out = amounts.at(-1);
       if (amounts.length !== candidate.first.path.length || amounts[0] !== amountIn || out <= 0n) return;
       (candidate.second ? partials : quotes).push({ ...candidate, out, amounts });
@@ -921,9 +942,11 @@ export function swapFormatUnits(value, decimals) {
   try { return ethers.formatUnits(value, decimals); } catch { return String(value); }
 }
 
+let swapLibraryPromise;
 export function loadSwapLibrary() {
   if (globalThis.ethers?.Interface && typeof globalThis.ethers.parseUnits === "function") return Promise.resolve();
-  return new Promise((resolve, reject) => {
+  if (swapLibraryPromise) return swapLibraryPromise;
+  swapLibraryPromise = new Promise((resolve, reject) => {
     if (!globalThis.document?.head) { reject(error("SWAP_DEPENDENCY", "交易依赖未加载")); return; }
     const script = document.createElement("script");
     const timer = setTimeout(() => complete(false), 8000);
@@ -938,7 +961,8 @@ export function loadSwapLibrary() {
     script.onerror = () => complete(false);
     script.src = new URL("../assets/vendor/ethers.umd.min.js", import.meta.url).href;
     document.head.append(script);
-  });
+  }).catch(err => { swapLibraryPromise = null; throw err; });
+  return swapLibraryPromise;
 }
 
 /// 公共 RPC 封装：端点亲和（复用成功端点热连接）+ 跨端点故障转移 + 失败冷却。

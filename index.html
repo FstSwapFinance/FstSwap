@@ -23,15 +23,30 @@
   <link rel="apple-touch-icon" sizes="192x192" href="assets/official/images/192x192_App_Icon.png" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#f3b71e" />
+  <link rel="preload" as="script" href="assets/vendor/ethers.umd.min.js" />
   <link rel="stylesheet" href="src/swap-official.css?v=review-20261110-3" />
   <link rel="stylesheet" href="src/swap-manage.css?v=manage-20261110-1" />
-  <link rel="stylesheet" href="src/swap-ui.css?v=picker-analysis-20261110-17" />
+  <link rel="stylesheet" href="src/swap-ui.css?v=mainnet-20261110-19" />
   <link rel="preconnect" href="https://api.geckoterminal.com" crossorigin />
+  <style>
+    .fst-boot{color:#f7f8fa;font-family:Inter,Arial,sans-serif;min-height:100vh;background:#22252a;padding:24px;box-sizing:border-box}
+    .fst-boot header{display:flex;align-items:center;justify-content:space-between}.fst-boot img{width:40px;height:40px;border-radius:10px}.fst-boot strong{color:#f3b71e}
+    .fst-boot main{max-width:480px;margin:140px auto 0;background:#191b1f;padding:24px;border-radius:20px}.fst-boot h1{font-size:18px;margin:0 0 24px}
+    .fst-boot-placeholder{height:78px;margin:8px 0;background:#22252a;border:1px solid #30343c;border-radius:18px}
+    .fst-boot nav{display:flex;justify-content:center;gap:24px;margin-top:30px}.fst-boot a{color:#f3b71e;text-decoration:none}
+    html[data-theme=light] .fst-boot{color:#20232b;background:#f7f8fa}html[data-theme=light] .fst-boot main{background:#fff}html[data-theme=light] .fst-boot-placeholder{background:#f1f3f5;border-color:#e0e4ea}
+    @media(max-width:720px){.fst-boot{padding:20px 16px}.fst-boot main{margin-top:64px}.fst-boot nav{gap:20px}}
+  </style>
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('swap_theme')||'dark'}catch(e){}</script>
 </head>
 <body>
   <noscript>You need to enable JavaScript to run this app.</noscript>
-  <div id="root"><div style="visibility:hidden">X</div></div>
+  <div id="root"><div class="fst-boot">
+    <header><a href="#/swap" aria-label="FstSwap"><img src="assets/official/fstswap-pro-logo.png" alt="FstSwap" width="40" height="40" fetchpriority="high" /></a><strong>FstSwap</strong></header>
+    <main aria-busy="true" aria-label="FstSwap"><h1>FstSwap</h1><div class="fst-boot-placeholder" aria-hidden="true"></div><div class="fst-boot-placeholder" aria-hidden="true"></div></main>
+    <nav><a href="#/swap">兑换 / Swap</a><a href="#/pool">流动池 / Pool</a><a href="#/my">我的 / My</a></nav>
+  </div></div>
   <div id="background-radial-gradient" style="width: 200vw; height: 200vh; transform: translate(-50vw, -100vh);"></div>
-  <script type="module" src="src/app.js?v=mainnet-20261110-18"></script>
+  <script type="module" src="src/app.js?v=mainnet-20261110-19"></script>
 </body>
 </html>

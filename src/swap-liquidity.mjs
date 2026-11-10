@@ -1,5 +1,5 @@
 // Pool admission policy. All reserves and oracle rounds are read at one BSC block.
-import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter } from './swap-aggregator.mjs?v=mainnet-20261110-18';
+import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter } from './swap-aggregator.mjs?v=mainnet-20261110-19';
 const ZERO='0x'+'00'.repeat(20),MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
 const lower=x=>String(x||ZERO).toLowerCase();
 const USDT=lower(SWAP_TOKENS.usdt.address),USDC='0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d';
@@ -8,6 +8,7 @@ const WRAPPED=[...new Set(Object.values(SWAP_ADAPTERS).map(x=>lower(x.weth)))];
 export const MAINSTREAM_TOKENS=new Set([ZERO,...WRAPPED,USDT,USDC,BTCB,ETH]);
 export const MIN_POOL_USD=100000n;
 const SCALE=10n**18n;
+const FIST=lower(SWAP_TOKENS.fist.address);
 // Chainlink BSC directory, verified 2026-11-10; prices are validated on chain, never inferred from the candidate pool.
 const FEEDS=[
  {tokens:WRAPPED,address:'0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE',maxAge:180},
@@ -25,21 +26,36 @@ export function poolLiquidityUsd(pool,prices){
  // Two-sided depth is capped by the smaller independently valued reserve; an unknown altcoin is valued from the known side only.
  return 2n*known.reduce((a,b)=>a<b?a:b);
 }
+function fistReferencePrice(pools,prices,tokenIn,tokenOut){
+ if(![lower(tokenIn),lower(tokenOut)].some(t=>t!==FIST&&!MAINSTREAM_TOKENS.has(t)))return null;
+ const reference=pools.get(key(SWAP_ADAPTERS.fst.adapter,FIST,USDT));
+ if(!reference||poolLiquidityUsd(reference,prices)<=MIN_POOL_USD*SCALE)return null;
+ const fistIndex=reference.token0===FIST?0:1,usdIndex=1-fistIndex,p=prices.get(USDT);
+ if(!p||reference.reserves[fistIndex]<=0n)return null;
+ const price=reference.reserves[usdIndex]*p/reference.reserves[fistIndex];
+ return price>0n?price:null;
+}
 export function createPoolPolicy(pools,prices,tokenIn,tokenOut){
- const endpoints=[lower(tokenIn),lower(tokenOut)],alts=endpoints.filter(t=>!MAINSTREAM_TOKENS.has(t));
+ const endpoints=[lower(tokenIn),lower(tokenOut)];
+ const references=new Set(MAINSTREAM_TOKENS);
+ // Only a separate canonical FstSwap FIST/USDT pool above $100k may value
+ // FIST-quoted alts. Never derive this reference recursively from candidate alts.
+ const reference=fistReferencePrice(pools,prices,tokenIn,tokenOut);
+ if(reference){prices=new Map(prices);prices.set(FIST,reference);references.add(FIST);}
+ const alts=endpoints.filter(t=>!references.has(t));
  const main=new Map();
  for(const pool of pools.values()){
   pool.usd=poolLiquidityUsd(pool,prices);
   const p0=prices.get(pool.token0),p1=prices.get(pool.token1);
-  pool.priceAligned=!(MAINSTREAM_TOKENS.has(pool.token0)&&!p0||MAINSTREAM_TOKENS.has(pool.token1)&&!p1);
-  if(MAINSTREAM_TOKENS.has(pool.token0)&&MAINSTREAM_TOKENS.has(pool.token1)&&p0&&p1){
+  pool.priceAligned=!(references.has(pool.token0)&&!p0||references.has(pool.token1)&&!p1);
+  if(references.has(pool.token0)&&references.has(pool.token1)&&p0&&p1){
    const a=pool.kind==='v3'?2n**192n*p0:pool.reserves[0]*p0;
    const b=pool.kind==='v3'?pool.sqrt*pool.sqrt*p1:pool.reserves[1]*p1;
    pool.priceAligned=!!p0&&!!p1&&a>0n&&b*100n>=a*98n&&b*100n<=a*102n;
   }
   for(const alt of alts)if([pool.token0,pool.token1].includes(alt)&&pool.usd>0n){
    const other=pool.token0===alt?pool.token1:pool.token0;
-   if(MAINSTREAM_TOKENS.has(other)&&(!main.has(alt)||pool.usd>main.get(alt).usd))main.set(alt,pool);
+   if(references.has(other)&&(!main.has(alt)||pool.usd>main.get(alt).usd))main.set(alt,pool);
   }
  }
  const edges=leg=>{
@@ -54,7 +70,7 @@ export function createPoolPolicy(pools,prices,tokenIn,tokenOut){
  const allowsRoute=legs=>{
   const route=legs.flatMap(edges);if(!route.length||route.some(p=>!p||p.usd<=0n||!p.priceAligned||p.depthVerified===false))return false;
   for(const pool of route){
-   const a=[pool.token0,pool.token1].filter(t=>!MAINSTREAM_TOKENS.has(t));
+   const a=[pool.token0,pool.token1].filter(t=>!references.has(t));
    if(a.length){if(a.some(t=>!alts.includes(t)||main.get(t)?.id!==pool.id))return false;}
    else if(pool.usd<=MIN_POOL_USD*SCALE)return false;
   }
@@ -92,7 +108,8 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
   });
  };
  const call=(target,method,args=[],abi=iface)=>({target,method,iface:abi,data:abi.encodeFunctionData(method,args)});
- const anchors=[USDT,USDC,...WRAPPED,BTCB,ETH],tokens=[...new Set([lower(tokenIn),lower(tokenOut),...extraTokens.map(lower),...anchors].filter(t=>t!==ZERO))];
+ const needsFistReference=[lower(tokenIn),lower(tokenOut)].some(t=>t!==FIST&&!MAINSTREAM_TOKENS.has(t));
+ const anchors=[USDT,USDC,...WRAPPED,BTCB,ETH,...(needsFistReference?[FIST]:[])],tokens=[...new Set([lower(tokenIn),lower(tokenOut),...extraTokens.map(lower),...anchors].filter(t=>t!==ZERO))];
  // The v10 UI executes generic pairs through V2 and only quotes direct BNB/FIST
  // on V3. Still discover every competing V3 main pool for either altcoin.
  const v3Alts=v3Mode==='legacy'?[lower(tokenIn),lower(tokenOut)].filter(t=>!MAINSTREAM_TOKENS.has(t)):null;
@@ -139,6 +156,9 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
   if(![lower(r[1]),lower(r[2])].includes(p.a)||![lower(r[1]),lower(r[2])].includes(p.b))return;
   pools.set(p.id,{...p,address:lower(r[0]),token0:lower(r[1]),token1:lower(r[2]),reserves:[r[3],r[4]],kind:'v2'});
  });
+ // V3 depth probes need the same external FIST reference as main-pool ranking.
+ const fistPrice=fistReferencePrice(pools,prices,tokenIn,tokenOut);
+ if(fistPrice)prices.set(FIST,fistPrice);
  // V3 main pools are discovered as well; never silently choose a thin V2 pool when a stronger V3 pool exists.
  if(includeV3){
   const {existing,states}=v3State;

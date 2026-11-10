@@ -97,3 +97,23 @@
   .jkedYv { padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px)); }
   .fIPKBG { margin-top: calc(7rem + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* Wallet choices remain scrollable at short heights. */
+.fst-wallet-dialog[data-reach-dialog-content]{max-height:calc(100dvh - 24px);overflow-y:auto}
+.fst-wallet-dialog .fvKtIt[hidden]{display:none}
+.fst-wallet-dialog button{min-height:56px}
+.fst-wallet-status{margin:10px 0 0;font-size:13px;line-height:1.5;color:var(--ui-subtle)}
+.fst-wallet-status:empty{display:none}
+.fst-wallet-qr{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:12px;background:#fff;border-radius:12px;min-height:240px;color:#111}
+.fst-wallet-qr canvas{max-width:100%;height:auto!important}
+.fst-wallet-open-app{color:#725000;text-decoration:underline}
+/* Use the visible viewport above a software keyboard, rather than layout vh. */
+.fst-token-dialog.fst-keyboard-open[data-reach-dialog-content]{height:calc(var(--fst-visible-height) - 16px);max-height:calc(var(--fst-visible-height) - 16px);margin:0}
+.fst-token-dialog.fst-keyboard-open .kcbEdf{padding:10px 14px;gap:8px}
+.fst-token-dialog.fst-keyboard-open .jmNfaf{display:none}
+.fst-token-dialog.fst-keyboard-open .fst-common-tokens{display:none}
+.fst-token-dialog.fst-keyboard-open #token-search-input{padding:10px 12px;font-size:16px}
+.fst-token-dialog.fst-keyboard-open .fst-token-results [role=button]{min-height:48px;padding-top:4px;padding-bottom:4px}
+.fst-token-dialog.fst-keyboard-open .eDdLkf{padding:8px 14px}
+.fst-token-dialog.fst-keyboard-open .fst-keyboard-dismiss{display:block}
+.fst-keyboard-dismiss{display:none;border:0;background:none;color:var(--ui-accent);padding:4px 8px;cursor:pointer;font:inherit}

@@ -27,3 +27,29 @@ export async function readTokenBalances(request,account,tokens) {
  }
  return{balances,failed};
 }
+
+// Short display cache shared by page transitions and the token picker. Transaction
+// refreshes use fresh:true; account/chain changes invalidate all in-flight writes.
+const balanceSnapshots=new Map();
+export function invalidateWalletBalances(){balanceSnapshots.clear();}
+export async function readWalletBalances(request,account,tokens,{fresh=false,clock=Date.now}={}){
+ const wanted=tokens.filter(Boolean),owner=String(account).toLowerCase();
+ const identity=t=>`${t.key}:${String(t.address||'native').toLowerCase()}`;
+ const keys=wanted.map(identity);
+ if(!fresh){
+  for(const entry of balanceSnapshots.values()){
+   if(entry.owner!==owner||!keys.every(k=>entry.keys.includes(k)))continue;
+   if(entry.pending||clock()-entry.completedAt<3000){
+    const result=await entry.promise;
+    // An invalidated read may finish for its original caller, but must never
+    // clear or replace the new account/transaction cache. Callers guard identity.
+    return{balances:Object.fromEntries(wanted.filter(t=>result.balances[t.key]!=null).map(t=>[t.key,result.balances[t.key]])),failed:wanted.filter(t=>result.failed.includes(t.key)).map(t=>t.key)};
+   }
+  }
+ }
+ if(fresh){balanceSnapshots.clear();}
+ const key=owner+':'+keys.join(','),entry={owner,keys,pending:true};
+ entry.promise=readTokenBalances(request,account,wanted).then(result=>{entry.completedAt=clock();return result;}).finally(()=>{entry.pending=false;});
+ balanceSnapshots.set(key,entry);if(balanceSnapshots.size>6)balanceSnapshots.delete(balanceSnapshots.keys().next().value);
+ return entry.promise;
+}

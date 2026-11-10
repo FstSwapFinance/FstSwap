@@ -1,11 +1,11 @@
-import { readTokenBalances } from './swap-balances.mjs?v=mainnet-20261110-18';
-import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261110-18";
+import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261110-19';
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261110-19";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-18";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-19";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
@@ -13,18 +13,26 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261110-18";
+} from "./swap-aggregator.mjs?v=mainnet-20261110-19";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-18";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-19";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-18";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-19";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261110-18";
-import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261110-18";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261110-19";
+import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261110-19";
 
 const approvals = createApprovalTracker();
+const warmRequest = swapPublicRpc();
+const sharedQuoteContext = createQuoteContext(warmRequest);
+export async function warmSwapData(account) {
+  await loadSwapLibrary();
+  const jobs = [sharedQuoteContext.get(TOKENS.usdt.address, TOKENS.fist.address)];
+  if (account) jobs.push(readWalletBalances(warmRequest, account, ORDER.map(k => TOKENS[k])));
+  await Promise.allSettled(jobs);
+}
 const BPS = 10000n;
 const HISTORY_KEY = "swap_history_v1";
 const SETTINGS_KEY = "swap_settings_v2";
@@ -130,12 +138,32 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
   const readRpc = swapPublicRpc();
   const dialog = overlay.querySelector("[data-reach-dialog-content]");
   dialog.classList.add("fst-token-dialog");
-  const searchCls = dialog.className, searchNodes = [...dialog.childNodes];
+  const searchCls = dialog.className;
+  let searchNodes;
   let manager = null, searchSeq = 0;
   let unsubscribe = () => {}, stopWallet = () => {};
-  const cleanup = () => { unsubscribe(); stopWallet(); manager?.dispose(); };
-  const closePicker = () => { cleanup(); closeModal(); };
-  const backToSearch = () => { manager?.dispose(); searchSeq++; dialog.className = searchCls; dialog.replaceChildren(...searchNodes); search.value = ""; draw(); search.focus(); }; // 官方：CurrencySearch 重新挂载，搜索词清空
+  const viewport = globalThis.visualViewport;
+  const dismissKeyboard = html('<button type="button" class="fst-keyboard-dismiss"></button>');
+  dismissKeyboard.textContent = tr('收起键盘', 'Hide keyboard');
+  dismissKeyboard.addEventListener('click', () => search.blur()); search.parentElement.after(dismissKeyboard);
+  searchNodes = [...dialog.childNodes];
+  let baselineHeight = viewport?.height || globalThis.innerHeight || 0;
+  const fitViewport = () => {
+    const height = viewport?.height || globalThis.innerHeight || 0;
+    const focused = document.activeElement === search;
+    if (!focused) baselineHeight = Math.max(baselineHeight, height);
+    const compact = focused && (baselineHeight - height > 120 || height < 540);
+    dialog.classList.toggle('fst-keyboard-open', compact);
+    dialog.style.setProperty('--fst-visible-height', height + 'px');
+    if (compact) { overlay.style.height = height + 'px'; overlay.style.top = (viewport?.offsetTop || 0) + 'px'; }
+    else { overlay.style.removeProperty('height'); overlay.style.removeProperty('top'); }
+  };
+  viewport?.addEventListener('resize', fitViewport); viewport?.addEventListener('scroll', fitViewport);
+  globalThis.addEventListener?.('resize', fitViewport);
+  search.addEventListener('focus', fitViewport); search.addEventListener('blur', fitViewport);
+  const cleanup = () => { unsubscribe(); stopWallet(); manager?.dispose(); viewport?.removeEventListener('resize', fitViewport); viewport?.removeEventListener('scroll', fitViewport); globalThis.removeEventListener?.('resize', fitViewport); };
+  const closePicker = () => closeModal();
+  const backToSearch = () => { manager?.dispose(); searchSeq++; dialog.className = searchCls; dialog.replaceChildren(...searchNodes); search.value = ""; draw(); search.blur(); fitViewport(); }; // 官方：CurrencySearch 重新挂载，搜索词清空
   const pickImported = (t) => { syncTokenRegistry(); const k = ORDER.find((x) => TOKENS[x].address && TOKENS[x].address.toLowerCase() === t.address.toLowerCase()); closePicker(); if (k) onPick(k); };
   const manage = (opts = {}) => { searchSeq++; manager?.dispose(); manager = openManageView({ content: dialog, onBack: backToSearch, onClose: closePicker, onSelectToken: pickImported, request: readRpc, ...opts }); };
   // 「管理代币列表」：原先未绑定任何事件（按钮点不开的原因），现在切到官方 Manage 视图
@@ -192,12 +220,12 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
   search.addEventListener("input", draw);
   overlay.querySelector(".jmNfaf > svg")?.addEventListener("click", closePicker);
   openModal(overlay, { onClose: cleanup });
-  draw(); search.focus();
+  draw(); fitViewport();
   const refreshBalances = async () => {
     if (loadBalances) return loadBalances();
     const account = wallet.account;
     if (!account) return;
-    const result = await readTokenBalances(readRpc, account, ORDER.map(k => TOKENS[k]));
+    const result = await readWalletBalances(readRpc, account, ORDER.map(k => TOKENS[k]));
     if (wallet.account !== account || !overlay.isConnected) return;
     Object.assign(balances, result.balances);
     for (const k of result.failed) delete balances[k];
@@ -218,7 +246,7 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
 export async function mountSwapView(root) {
   const wallet = useWallet();
   const request = swapPublicRpc();
-  const quoteContext = createQuoteContext(request);
+  const quoteContext = sharedQuoteContext;
   // Short, abortable reads for wallet actions; market/chart reads keep their own retry policy.
   const transactionRead = payload => swapPublicRpc(globalThis.fetch, AbortSignal.timeout(6000), { attempts: 2, timeoutMs: 2000 })(payload);
   const settings = readSettings();
@@ -226,13 +254,15 @@ export async function mountSwapView(root) {
     amount: "", quote: null, quoteError: "", quoteErrorReason: "", balances: {}, balanceErrors: {}, balanceEpoch: 0, allowance: null, config: null,
     showInverted: false, settingsOpen: false, seq: 0,
   };
-  try { await loadSwapLibrary(); } catch {}
-  const ethers = globalThis.ethers;
-
   // —— 骨架：官方 main（AppBody）+ SwapHeader + #swap-page ——
   const main = tpl("swap_empty");
   main.classList.add("fst-swap-card");
   mountFrame(root, "swap", main);
+  main.inert = true;
+  await loadSwapLibrary();
+  if (!main.isConnected) return;
+  main.inert = false;
+  const ethers = globalThis.ethers;
   const $ = (s) => main.querySelector(s);
   const settingsWrap = $(".eWRqBu");
   const swapPage = $("#swap-page");
@@ -352,8 +382,7 @@ export async function mountSwapView(root) {
     const el = part("swap_quoted", "#swap-page .cKJcLm");
     const rows = el.querySelectorAll(":scope > div");
     const val = (i) => rows[i]?.querySelector(":scope > .css-16sxy43");
-    rows[0].firstElementChild.textContent = tr("平台手续费", "Platform fee");
-    val(0).textContent = sigDown(q.lpFee, (q.feeAsset || inT()).decimals, 4) + " " + (q.feeAsset || inT()).symbol;
+    rows[0].remove();
     // 途径：官方 SwapRoute（代币 › 代币）；聚合器的实际 DEX 路线放到 title
     const routeBox = val(1).querySelector(".css-q0g5a7");
     const tokenTpl = routeBox.querySelector(".css-1rojlue"), chevron = routeBox.querySelector("svg");
@@ -511,14 +540,14 @@ export async function mountSwapView(root) {
   const walletCall = (method, params) => wallet.provider.request({ method, params });
   let balanceRequestId = 0;
   const balanceRequests = new Map();
-  async function loadBalances(keys) {
+  async function loadBalances(keys, fresh = false) {
     const account = wallet.account, epoch = state.balanceEpoch;
     if (!account) return;
     const wanted = [...new Set(keys)].filter(k => TOKENS[k]);
     const id = ++balanceRequestId;
     wanted.forEach(k => balanceRequests.set(k, id));
     let result;
-    try { result = await readTokenBalances(request, account, wanted.map(k => TOKENS[k])); }
+    try { result = await readWalletBalances(request, account, wanted.map(k => TOKENS[k]), {fresh}); }
     catch { result = {balances:{}, failed:wanted}; }
     if (wallet.account !== account || state.balanceEpoch !== epoch) return;
     for (const k of wanted) {
@@ -530,10 +559,10 @@ export async function mountSwapView(root) {
   async function loadAllBalances() {
     await loadBalances(ORDER);
   }
-  async function refreshBalances() {
+  async function refreshBalances(fresh = true) {
     if (!wallet.account) return;
     const keys = [page.inKey, page.outKey].filter(Boolean);
-    await loadBalances(keys);
+    await loadBalances(keys, fresh);
     if (!main.isConnected) return;
     renderPanels(); renderBottom();
     await refreshAllowance();
@@ -557,9 +586,12 @@ export async function mountSwapView(root) {
     } catch { /* Unknown allowance is not the same as insufficient allowance. */ }
   }
 
+  function prewarmQuote() {
+    if (main.isConnected && inT() && outT()) quoteContext.get(inT().address, outT().address).catch(() => {});
+  }
   // —— 报价 ——
   let quoteTimer = null;
-  function scheduleQuote(ms = 300) {
+  function scheduleQuote(ms = 180) {
     clearTimeout(quoteTimer); ++state.seq;
     if (main.isConnected) quoteTimer = setTimeout(() => { if (main.isConnected) refreshQuote(); }, ms);
   }
@@ -568,6 +600,7 @@ export async function mountSwapView(root) {
     if (v !== "" && !/^\d*\.?\d*$/.test(v)) { e.target.value = state.amount; return; }
     e.target.value = v; state.amount = v;  state.quote = null; state.quoteError = ""; state.refocus = true;
     renderTrade(); renderBottom();
+    prewarmQuote();
     const out = main.querySelector("#swap-currency-output input"); if (out) out.value = "";
     scheduleQuote();
   }
@@ -884,14 +917,16 @@ export async function mountSwapView(root) {
   wallet.subscribe(() => {
     if (!main.isConnected) return;
     if (wallet.account && !page.connectedDefaults) applyDefaults();
-    state.quote = null; ++state.seq; ++state.balanceEpoch; closeModal(); state.balances = {}; state.balanceErrors = {}; render(); refreshBalances(); restoreSubmittedTransaction(); scheduleQuote(0);
+    invalidateWalletBalances(); warmSwapData(wallet.account);
+    state.quote = null; ++state.seq; ++state.balanceEpoch; closeModal(); state.balances = {}; state.balanceErrors = {}; render(); refreshBalances(false); restoreSubmittedTransaction(); scheduleQuote(0);
   });
 
   onTokensChanged(() => { if (main.isConnected) { state.quote=null; state.allowance=null; render(); scheduleQuote(0); } });
   approvals.subscribe(()=>{if(!main.isConnected)return false;renderBottom();});
   renderSettings(); render();
   refreshDefaultList();
-  if (wallet.account) { refreshBalances(); restoreSubmittedTransaction(); }
+  if (wallet.account) { warmSwapData(wallet.account); refreshBalances(false); restoreSubmittedTransaction(); }
+  prewarmQuote();
   try { state.config = await quoteContext.config(); } catch { state.config = null; }
   if (state.amount) scheduleQuote(0);
 }
