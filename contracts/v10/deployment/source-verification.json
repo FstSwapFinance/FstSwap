@@ -1,0 +1,144 @@
+{
+  "chainId": 56,
+  "checkedAt": "2026-11-10T03:00:13.922747+00:00",
+  "compilerVersion": "0.8.26+commit.8a97fa7a",
+  "settings": {
+    "remappings": [
+      "@openzeppelin/=lib/openzeppelin-contracts/",
+      "forge-std/=lib/forge-std/src/",
+      "openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/"
+    ],
+    "optimizer": {
+      "enabled": true,
+      "runs": 1
+    },
+    "metadata": {
+      "bytecodeHash": "ipfs"
+    },
+    "evmVersion": "paris",
+    "libraries": {},
+    "viaIR": true
+  },
+  "contracts": [
+    {
+      "name": "AggregatedRouterV10",
+      "address": "0x6b149377b0d68c7cF09DDa6B6467861D997C9646",
+      "contractIdentifier": "src/AggregatedRouterV10.sol:AggregatedRouterV10",
+      "creationTransactionHash": "0x48055c8eb85a73bd8734a35ce2db2915b3ced73a3c5d984840b2146988275907",
+      "sourcify": {
+        "url": "https://repo.sourcify.dev/56/0x6b149377b0d68c7cF09DDa6B6467861D997C9646",
+        "api": "https://sourcify.dev/server/v2/contract/56/0x6b149377b0d68c7cF09DDa6B6467861D997C9646?fields=all",
+        "match": "match",
+        "creationMatch": "match",
+        "runtimeMatch": "match",
+        "verifiedAt": "2026-11-10T02:33:33Z",
+        "metadataExactMatch": false
+      },
+      "bscscan": {
+        "url": "https://bscscan.com/address/0x6b149377b0d68c7cF09DDa6B6467861D997C9646#code",
+        "status": "submission_limit_reached",
+        "detail": "Daily limit of 500 source code submissions reached"
+      }
+    },
+    {
+      "name": "FstSwapAdapter56",
+      "address": "0xB3F425939E0bef2E1312376dF2288CF8a39A63E5",
+      "contractIdentifier": "src/FstSwapAdapter56.sol:FstSwapAdapter56",
+      "creationTransactionHash": "0x62f15a8ff73a97e21477043c34e78aac37598248549c7ffc9cc5fcf5d0a57b8d",
+      "sourcify": {
+        "url": "https://repo.sourcify.dev/56/0xB3F425939E0bef2E1312376dF2288CF8a39A63E5",
+        "api": "https://sourcify.dev/server/v2/contract/56/0xB3F425939E0bef2E1312376dF2288CF8a39A63E5?fields=all",
+        "match": "match",
+        "creationMatch": "match",
+        "runtimeMatch": "match",
+        "verifiedAt": "2026-11-10T02:33:23Z",
+        "metadataExactMatch": false
+      },
+      "bscscan": {
+        "url": "https://bscscan.com/address/0xB3F425939E0bef2E1312376dF2288CF8a39A63E5#code",
+        "status": "submitted_result_unconfirmed",
+        "detail": "Forwarded by Sourcify; final BscScan result not confirmed."
+      }
+    },
+    {
+      "name": "PancakeAdapter56",
+      "address": "0xe3f83002413c029BA7F194a878b8C36B03d3d8a0",
+      "contractIdentifier": "src/PancakeAdapter56.sol:PancakeAdapter56",
+      "creationTransactionHash": "0x9f151e96484a58e1b87b7b03df88c66358ac26b6e1b7aba2757abc20eedf122a",
+      "sourcify": {
+        "url": "https://repo.sourcify.dev/56/0xe3f83002413c029BA7F194a878b8C36B03d3d8a0",
+        "api": "https://sourcify.dev/server/v2/contract/56/0xe3f83002413c029BA7F194a878b8C36B03d3d8a0?fields=all",
+        "match": "match",
+        "creationMatch": "match",
+        "runtimeMatch": "match",
+        "verifiedAt": "2026-11-10T02:33:27Z",
+        "metadataExactMatch": false
+      },
+      "bscscan": {
+        "url": "https://bscscan.com/address/0xe3f83002413c029BA7F194a878b8C36B03d3d8a0#code",
+        "status": "submission_limit_reached",
+        "detail": "Daily limit of 500 source code submissions reached"
+      }
+    },
+    {
+      "name": "BiSwapAdapter56",
+      "address": "0xA2Be5520ef3FE334fCB68E649787636b3ff84A65",
+      "contractIdentifier": "src/BiSwapAdapter56.sol:BiSwapAdapter56",
+      "creationTransactionHash": "0x63d245988af4eb80bf9d016d2eb0f92932378a678fe81ccb4a13785c85e3827c",
+      "sourcify": {
+        "url": "https://repo.sourcify.dev/56/0xA2Be5520ef3FE334fCB68E649787636b3ff84A65",
+        "api": "https://sourcify.dev/server/v2/contract/56/0xA2Be5520ef3FE334fCB68E649787636b3ff84A65?fields=all",
+        "match": "match",
+        "creationMatch": "match",
+        "runtimeMatch": "match",
+        "verifiedAt": "2026-11-10T02:33:30Z",
+        "metadataExactMatch": false
+      },
+      "bscscan": {
+        "url": "https://bscscan.com/address/0xA2Be5520ef3FE334fCB68E649787636b3ff84A65#code",
+        "status": "submission_limit_reached",
+        "detail": "Daily limit of 500 source code submissions reached"
+      }
+    },
+    {
+      "name": "PancakeV3Adapter",
+      "address": "0x43B2Ede2217ACd3de6542F7C4baFEb488cbbC7a2",
+      "contractIdentifier": "src/PancakeV3Adapter.sol:PancakeV3Adapter",
+      "creationTransactionHash": "0x8b403f3b5790875534300ec8b65c44ba23f3476985a9bfb61caa7322e4e6e53a",
+      "sourcify": {
+        "url": "https://repo.sourcify.dev/56/0x43B2Ede2217ACd3de6542F7C4baFEb488cbbC7a2",
+        "api": "https://sourcify.dev/server/v2/contract/56/0x43B2Ede2217ACd3de6542F7C4baFEb488cbbC7a2?fields=all",
+        "match": "match",
+        "creationMatch": "match",
+        "runtimeMatch": "match",
+        "verifiedAt": "2026-11-10T02:33:37Z",
+        "metadataExactMatch": false
+      },
+      "bscscan": {
+        "url": "https://bscscan.com/address/0x43B2Ede2217ACd3de6542F7C4baFEb488cbbC7a2#code",
+        "status": "submission_limit_reached",
+        "detail": "Daily limit of 500 source code submissions reached"
+      }
+    },
+    {
+      "name": "V10RouteEngine",
+      "address": "0x94792e859ffeDbAa0b789E438Ed27FF1b92601A2",
+      "contractIdentifier": "src/AggregatedRouterV10.sol:V10RouteEngine",
+      "creationTransactionHash": "0x48055c8eb85a73bd8734a35ce2db2915b3ced73a3c5d984840b2146988275907",
+      "sourcify": {
+        "url": "https://repo.sourcify.dev/56/0x94792e859ffeDbAa0b789E438Ed27FF1b92601A2",
+        "api": "https://sourcify.dev/server/v2/contract/56/0x94792e859ffeDbAa0b789E438Ed27FF1b92601A2?fields=all",
+        "match": "match",
+        "creationMatch": "match",
+        "runtimeMatch": "match",
+        "verifiedAt": "2026-11-10T02:33:48Z",
+        "metadataExactMatch": false
+      },
+      "bscscan": {
+        "url": "https://bscscan.com/address/0x94792e859ffeDbAa0b789E438Ed27FF1b92601A2#code",
+        "status": "submission_limit_reached",
+        "detail": "Daily limit of 500 source code submissions reached"
+      }
+    }
+  ]
+}

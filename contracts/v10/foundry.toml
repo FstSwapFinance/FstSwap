@@ -3,7 +3,7 @@ src = "src"
 out = "out"
 cache_path = "cache"
 libs = ["lib"]
-remappings = ["@openzeppelin/=lib/openzeppelin-contracts/"]
+remappings = ["@openzeppelin/=lib/openzeppelin-contracts/", "forge-std/=lib/forge-std/src/", "openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/"]
 solc_version = "0.8.26"
 optimizer = true
 optimizer_runs = 1
