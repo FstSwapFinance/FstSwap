@@ -1,10 +1,11 @@
-import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261110-17";
+import { readTokenBalances } from './swap-balances.mjs?v=mainnet-20261110-18';
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261110-18";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-17";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261110-18";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
@@ -12,15 +13,16 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261110-17";
+} from "./swap-aggregator.mjs?v=mainnet-20261110-18";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-17";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261110-18";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-17";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261110-18";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261110-17";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261110-18";
+import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261110-18";
 
 const approvals = createApprovalTracker();
 const BPS = 10000n;
@@ -111,7 +113,7 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
     const t = TOKENS[k]; const r = (rowTpl[k] || genericTpl).cloneNode(true);
     if (!rowTpl[k]) { r.className = r.className.replace(/token-item-\S+/, t.item); const sym = r.querySelector(".css-8mokm4"); sym.textContent = t.symbol; sym.title = t.name; }
     const nm = r.querySelector(".css-165qfk5"); if (nm && t.address) nm.textContent = t.name + (t.userAdded ? tr(" • 由用户添加", " • Added by user") : "");
-    applyTokenLogo(r.querySelector(":scope > svg, :scope > img"), t);
+    applyTokenLogo(r.querySelector(":scope > svg, :scope > img"), t, {loading: 'lazy'});
     return r;
   };
   // 官方 useTokenComparator：BNB 置顶，其余按余额（原始数量）降序，再按符号字母序；未连接钱包保持列表顺序
@@ -195,15 +197,10 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
     if (loadBalances) return loadBalances();
     const account = wallet.account;
     if (!account) return;
-    const codec = new globalThis.ethers.Interface(ERC20_ABI);
-    await Promise.all(ORDER.map(async k => {
-      try {
-        const value = k === "bnb"
-          ? BigInt(await readRpc({ method: "eth_getBalance", params: [account, "latest"] }))
-          : codec.decodeFunctionResult("balanceOf", await readRpc({ method: "eth_call", params: [{to: TOKENS[k].address, data: codec.encodeFunctionData("balanceOf", [account])}, "latest"] }))[0];
-        if (wallet.account === account && overlay.isConnected) balances[k] = value;
-      } catch {}
-    }));
+    const result = await readTokenBalances(readRpc, account, ORDER.map(k => TOKENS[k]));
+    if (wallet.account !== account || !overlay.isConnected) return;
+    Object.assign(balances, result.balances);
+    for (const k of result.failed) delete balances[k];
   };
   refreshBalances().then(() => { if (overlay.isConnected) draw(); }).catch(() => {});
   unsubscribe = onTokensChanged(() => {
@@ -221,6 +218,7 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
 export async function mountSwapView(root) {
   const wallet = useWallet();
   const request = swapPublicRpc();
+  const quoteContext = createQuoteContext(request);
   // Short, abortable reads for wallet actions; market/chart reads keep their own retry policy.
   const transactionRead = payload => swapPublicRpc(globalThis.fetch, AbortSignal.timeout(6000), { attempts: 2, timeoutMs: 2000 })(payload);
   const settings = readSettings();
@@ -511,25 +509,23 @@ export async function mountSwapView(root) {
 
   // —— 余额（BSC 公共只读 RPC）/ 授权（钱包 provider） ——
   const walletCall = (method, params) => wallet.provider.request({ method, params });
-  async function balanceOf(k, account) {
-    const t = TOKENS[k];
-    if (!t.address) return BigInt(await request({ method: "eth_getBalance", params: [account, "latest"] }));
-    const data = new ethers.Interface(ERC20_ABI).encodeFunctionData("balanceOf", [account]);
-    return BigInt(await request({ method: "eth_call", params: [{ to: t.address, data }, "latest"] }));
-  }
+  let balanceRequestId = 0;
+  const balanceRequests = new Map();
   async function loadBalances(keys) {
     const account = wallet.account, epoch = state.balanceEpoch;
     if (!account) return;
-    await Promise.all([...new Set(keys)].map(async (k) => {
-      try {
-        const bal = await balanceOf(k, account);
-        if (wallet.account !== account || state.balanceEpoch !== epoch) return;
-        state.balances[k] = bal; delete state.balanceErrors[k];
-      } catch {
-        if (wallet.account !== account || state.balanceEpoch !== epoch) return;
-        delete state.balances[k]; state.balanceErrors[k] = true;
-      }
-    }));
+    const wanted = [...new Set(keys)].filter(k => TOKENS[k]);
+    const id = ++balanceRequestId;
+    wanted.forEach(k => balanceRequests.set(k, id));
+    let result;
+    try { result = await readTokenBalances(request, account, wanted.map(k => TOKENS[k])); }
+    catch { result = {balances:{}, failed:wanted}; }
+    if (wallet.account !== account || state.balanceEpoch !== epoch) return;
+    for (const k of wanted) {
+      if (balanceRequests.get(k) !== id) continue;
+      if (result.balances[k] != null) { state.balances[k] = result.balances[k]; delete state.balanceErrors[k]; }
+      else { delete state.balances[k]; state.balanceErrors[k] = true; }
+    }
   }
   async function loadAllBalances() {
     await loadBalances(ORDER);
@@ -614,8 +610,10 @@ export async function mountSwapView(root) {
     renderBottom();
     try {
       let q;
-      if (swapV10Ready()) state.config = await readSwapConfig(request);
-      const poolPolicy = state.config?.version === "2.0.0" ? null : await readPoolPolicy(request, { tokenIn: ti.address, tokenOut: to.address, config: state.config });
+      const context = await quoteContext.get(ti.address, to.address);
+      if (seq !== state.seq || !main.isConnected) return;
+      state.config = context.config;
+      const poolPolicy = context.poolPolicy;
       const feeBps = feeBpsNow();
       const policy = swapFeePolicy(ti.address, to.address, state.config?.defaultFeeToken);
       const feeAsset = Object.values(TOKENS).find(t => (t.address || ZERO).toLowerCase() === policy.token.toLowerCase()) || TOKENS.usdt;
@@ -668,9 +666,12 @@ export async function mountSwapView(root) {
       assertQuoteSafety({ tokenIn: ti.address, tokenOut: to.address, amountIn: q.maxIn || q.amountIn,
         amountOut: minOut(q), impact: q.impact, quotedAmountIn: q.amountIn, quotedAmountOut: q.out });
       q.poolCheckedAt = poolPolicy?.checkedAt ?? Date.now();
+      poolPolicy?.assertFresh();
       poolPolicy?.assertValue(q.maxIn || q.amountIn, minOut(q));
-      if (seq !== state.seq) return;
+      if (seq !== state.seq || !main.isConnected) return;
       state.quote = q; state.quoteError = "";
+      // Render the read-only quote immediately; allowance only controls wallet actions.
+      state.allowance = null; render();
       await refreshAllowance();
       if (seq !== state.seq) return;
       render();
@@ -886,12 +887,12 @@ export async function mountSwapView(root) {
     state.quote = null; ++state.seq; ++state.balanceEpoch; closeModal(); state.balances = {}; state.balanceErrors = {}; render(); refreshBalances(); restoreSubmittedTransaction(); scheduleQuote(0);
   });
 
-  onTokensChanged(() => { if (main.isConnected) { state.quote=null; ++state.seq; render(); } });
+  onTokensChanged(() => { if (main.isConnected) { state.quote=null; state.allowance=null; render(); scheduleQuote(0); } });
   approvals.subscribe(()=>{if(!main.isConnected)return false;renderBottom();});
   renderSettings(); render();
   refreshDefaultList();
   if (wallet.account) { refreshBalances(); restoreSubmittedTransaction(); }
-  try { state.config = await readSwapConfig(request); } catch { state.config = null; }
+  try { state.config = await quoteContext.config(); } catch { state.config = null; }
   if (state.amount) scheduleQuote(0);
 }
 

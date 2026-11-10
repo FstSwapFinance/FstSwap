@@ -1,5 +1,5 @@
 // Pool admission policy. All reserves and oracle rounds are read at one BSC block.
-import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter } from './swap-aggregator.mjs?v=mainnet-20261110-17';
+import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter } from './swap-aggregator.mjs?v=mainnet-20261110-18';
 const ZERO='0x'+'00'.repeat(20),MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
 const lower=x=>String(x||ZERO).toLowerCase();
 const USDT=lower(SWAP_TOKENS.usdt.address),USDC='0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d';
@@ -70,7 +70,7 @@ export function createPoolPolicy(pools,prices,tokenIn,tokenOut){
  return{pools,prices,main,allows,allowsRoute,assertRoute(legs){if(!allowsRoute(legs))throw fail('池子流动性不足或不是主池，请刷新报价');},assertValue,assert(first,second){if(!allows(first,second))throw fail('池子流动性不足或不是主池，请刷新报价');}};
 }
 
-export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens=[],clock=Date.now}){
+export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens=[],v3Mode='all',clock=Date.now}){
  const now=clock();
  const E=globalThis.ethers,router=new E.Interface(SWAP_ABI);
  const iface=new E.Interface(['function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])',
@@ -92,7 +92,37 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
   });
  };
  const call=(target,method,args=[],abi=iface)=>({target,method,iface:abi,data:abi.encodeFunctionData(method,args)});
- const oracle=await batch(FEEDS.flatMap(f=>[call(f.address,'latestRoundData'),call(f.address,'decimals')]));
+ const anchors=[USDT,USDC,...WRAPPED,BTCB,ETH],tokens=[...new Set([lower(tokenIn),lower(tokenOut),...extraTokens.map(lower),...anchors].filter(t=>t!==ZERO))];
+ // The v10 UI executes generic pairs through V2 and only quotes direct BNB/FIST
+ // on V3. Still discover every competing V3 main pool for either altcoin.
+ const v3Alts=v3Mode==='legacy'?[lower(tokenIn),lower(tokenOut)].filter(t=>!MAINSTREAM_TOKENS.has(t)):null;
+ const v3=SWAP_ADAPTERS.v3,includeV3=v3&&!config?.adaptersOff?.includes('v3')&&(!v3Alts||v3Alts.length>0);
+ const specs=[],seen=new Set();
+ for(const item of Object.values(SWAP_ADAPTERS)){
+  if(item.v3||config?.adaptersOff?.includes(item.key))continue;
+  for(const a of tokens)for(const b of tokens){if(a===b)continue;const id=key(item.adapter,a,b);if(seen.has(id))continue;seen.add(id);specs.push({id,adapter:item.adapter,a,b});}
+ }
+ // V3 discovery depends on its factory, not on V2 reserves or oracle responses.
+ const readV3State=async()=>{
+  const [factoryResult]=await batch([call('0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997','factory')]);
+  if(!factoryResult||lower(factoryResult[0])===ZERO)throw fail('无法读取 V3 池列表','data',true);
+  const v3Specs=[];
+  for(let n=0;n<tokens.length;n++)for(let j=n+1;j<tokens.length;j++)for(const fee of[100,500,2500,10000]){
+   const a=tokens[n],b=tokens[j];if(v3Alts&&!v3Alts.includes(a)&&!v3Alts.includes(b))continue;
+   v3Specs.push({id:key(v3.adapter,a,b,fee),adapter:v3.adapter,a,b,fee});
+  }
+  const addresses=await batch(v3Specs.map(p=>call(factoryResult[0],'getPool',[p.a,p.b,p.fee])));
+  if(addresses.some(r=>!r))throw fail('V3 池发现不完整','data',true);
+  const existing=addresses.flatMap((r,n)=>r&&lower(r[0])!==ZERO?[{...v3Specs[n],address:lower(r[0])}]:[]);
+  const states=await batch(existing.flatMap(p=>[call(p.address,'slot0'),call(p.address,'liquidity'),call(p.address,'token0'),call(p.address,'token1'),call(p.a,'balanceOf',[p.address]),call(p.b,'balanceOf',[p.address])]));
+  if(states.some(r=>!r))throw fail('部分 V3 池读取失败，无法确定主池','data',true);
+  return{existing,states};
+ };
+ const [oracle,results,v3State]=await Promise.all([
+  batch(FEEDS.flatMap(f=>[call(f.address,'latestRoundData'),call(f.address,'decimals')])),
+  batch(specs.map(p=>call(swapActiveRouter(),'getPairInfo',[p.adapter,p.a,p.b,ZERO],router))),
+  includeV3?readV3State():null,
+ ]);
  const prices=new Map(),expiry=[];
  FEEDS.forEach((f,n)=>{
   const round=oracle[n*2],decimals=oracle[n*2+1]?.[0];if(!round||decimals==null)return;
@@ -103,13 +133,6 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
  });
  // Require independent prices for the liquid anchors used to compare main pools.
  if([...MAINSTREAM_TOKENS].filter(t=>t!==ZERO).some(t=>!prices.has(t)))throw fail('价格数据过期或不可用，暂停报价','oracle',true);
- const anchors=[USDT,USDC,...WRAPPED,BTCB,ETH],tokens=[...new Set([lower(tokenIn),lower(tokenOut),...extraTokens.map(lower),...anchors].filter(t=>t!==ZERO))];
- const specs=[],seen=new Set();
- for(const item of Object.values(SWAP_ADAPTERS)){
-  if(item.v3||config?.adaptersOff?.includes(item.key))continue;
-  for(const a of tokens)for(const b of tokens){if(a===b)continue;const id=key(item.adapter,a,b);if(seen.has(id))continue;seen.add(id);specs.push({id,adapter:item.adapter,a,b});}
- }
- const results=await batch(specs.map(p=>call(swapActiveRouter(),'getPairInfo',[p.adapter,p.a,p.b,ZERO],router)));
  if(results.some(r=>!r))throw fail('部分池子读取失败，无法确定主池','data',true);
  const pools=new Map();results.forEach((r,n)=>{
   const p=specs[n];if(!r||lower(r[0])===ZERO||r[3]<=0n||r[4]<=0n)return;
@@ -117,19 +140,8 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
   pools.set(p.id,{...p,address:lower(r[0]),token0:lower(r[1]),token1:lower(r[2]),reserves:[r[3],r[4]],kind:'v2'});
  });
  // V3 main pools are discovered as well; never silently choose a thin V2 pool when a stronger V3 pool exists.
- const v3=SWAP_ADAPTERS.v3;
- if(v3&&!config?.adaptersOff?.includes('v3')){
-  const [factoryResult]=await batch([call('0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997','factory')]);
-  if(!factoryResult||lower(factoryResult[0])===ZERO)throw fail('无法读取 V3 池列表','data',true);
-  const v3Specs=[];
-  for(let n=0;n<tokens.length;n++)for(let j=n+1;j<tokens.length;j++)for(const fee of[100,500,2500,10000]){
-   const a=tokens[n],b=tokens[j];v3Specs.push({id:key(v3.adapter,a,b,fee),adapter:v3.adapter,a,b,fee});
-  }
-  const addresses=await batch(v3Specs.map(p=>call(factoryResult[0],'getPool',[p.a,p.b,p.fee])));
-  if(addresses.some(r=>!r))throw fail('V3 池发现不完整','data',true);
-  const existing=addresses.flatMap((r,n)=>r&&lower(r[0])!==ZERO?[{...v3Specs[n],address:lower(r[0])}]:[]);
-  const states=await batch(existing.flatMap(p=>[call(p.address,'slot0'),call(p.address,'liquidity'),call(p.address,'token0'),call(p.address,'token1'),call(p.a,'balanceOf',[p.address]),call(p.b,'balanceOf',[p.address])]));
-  if(states.some(r=>!r))throw fail('部分 V3 池读取失败，无法确定主池','data',true);
+ if(includeV3){
+  const {existing,states}=v3State;
   existing.forEach((p,n)=>{
    const [s,l,t0,t1,ba,bb]=states.slice(n*6,n*6+6);if(!s||!l||!t0||!t1||!ba||!bb||s[0]<=0n||l[0]<=0n)return;
    const token0=lower(t0[0]),token1=lower(t1[0]);if(![token0,token1].includes(p.a)||![token0,token1].includes(p.b))return;
