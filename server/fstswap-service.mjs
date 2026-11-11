@@ -3,8 +3,8 @@ import {pathToFileURL} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {isIP} from 'node:net';
 import {ethers} from 'ethers';
-import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261111-24';
-import {readPoolPolicy} from '../src/swap-liquidity.mjs?v=mainnet-20261111-24';
+import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261111-25';
+import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261111-25';
 import {readTokenBalances} from '../src/swap-balances.mjs';
 import {createReadPool} from './swap-read-pool.mjs';
 export {createReadPool};
@@ -34,8 +34,14 @@ function pinned(request,block){return p=>{
  if(p.method==='eth_getBlockByNumber'&&p.params[0]==='latest')return Promise.resolve({...block});
  return request({...p,params:p.method==='eth_call'?[p.params[0],block.number]:p.method==='eth_getBalance'?[p.params[0],block.number]:p.params});
 };}
-export async function computeQuote(request,input,config,poolPolicy){
+export async function computeQuote(request,input,config,poolPolicy,{nodeId}={}){
  const {tokenIn,tokenOut,slippageBps,singleHop}=input,amountIn=BigInt(input.amountIn),feeBps=config.platformFeeBps;
+ if(config.version==='2.0.0'){
+  const q=await quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,slippageBps,singleHop,preparedPolicy:poolPolicy,contextNodeId:nodeId});
+  assertQuoteSafety({tokenIn,tokenOut,amountIn,amountOut:q.minimum,impact:q.impact,quotedAmountIn:q.amountIn,quotedAmountOut:q.out});
+  poolPolicy.assertFresh();poolPolicy.assertValue(amountIn,q.minimum);
+  return fstServiceQuote(q,{slippageBps,poolCheckedAt:poolPolicy.checkedAt});
+ }
  if(config.version!=='1.11')throw fail('UNSUPPORTED_VERSION');
  const policy=swapFeePolicy(tokenIn,tokenOut,config.defaultFeeToken);
  const agg=(tokenIn===ZERO&&tokenOut===FIST)||(tokenIn===FIST&&tokenOut===ZERO);
@@ -97,7 +103,7 @@ function sharedRead(start,{timeoutMs,onSettled,onAbandoned}={}){
  };
  return entry;
 }
-export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=readSwapConfig,readPolicy=readPoolPolicy,calculate=computeQuote,readBalances=readTokenBalances,warmup={}}={}){
+export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=readSwapConfig,readPolicy=readFstPoolPolicy,calculate=computeQuote,readBalances=readTokenBalances,warmup={}}={}){
  const contexts=new Map(),inflight=new Map(),recentPairs=new Map();
  const warmOptions={enabled:true,intervalMs:6000,activeTtlMs:60000,maxPairs:4,...warmup};
  warmOptions.intervalMs=Math.max(1000,Number(warmOptions.intervalMs)||6000);
@@ -134,7 +140,7 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
   entry=sharedRead(signal=>pool.run(async request=>{
    const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertRunning(signal);assertBlock(block,clock);
    const read=pinned(request,block),config=await readConfig(read,{block});assertRunning(signal);
-   const policy=await readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:'legacy',clock,deferCanonical:true});assertRunning(signal);policy.assertFresh();
+   const policy=await readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:config.version==='2.0.0'?'all':'legacy',extraTokens:config.version==='2.0.0'?[config.defaultFeeToken]:[],block,nodeId,clock,deferCanonical:true});assertRunning(signal);policy.assertFresh();
    if(warm){const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(signal);if(canonical?.hash!==block.hash)throw fail('STALE_BLOCK');policy.assertFresh();if(clock()>=policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');}
    entry.completedAt=clock();entry.warmed=warm;return{block,config,policy};
   },signal,{operation:warm?'warm':'config',nodeId}),{timeoutMs:18000,
@@ -154,7 +160,7 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
     const activeSignal=attemptSignal||sharedSignal;
     if(warming&&warming.nodeId!==(node?.id||'primary'))warming.controller.abort();
     const {block,config,policy}=await context(input,activeSignal,{node});assertRunning(activeSignal);policy.assertFresh();
-    const q=await untilAborted(calculate(pinned(request,block),input,config,policy,{signal:activeSignal}),activeSignal);assertRunning(activeSignal);
+    const q=await untilAborted(calculate(pinned(request,block),input,config,policy,{signal:activeSignal,nodeId:node?.id||'primary',block}),activeSignal);assertRunning(activeSignal);
     const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(activeSignal);
     if(canonical?.hash!==block.hash)throw fail('STALE_BLOCK');policy.assertFresh();
     const expiresAt=policy.checkedAt+15000;if(clock()>=expiresAt)throw fail('QUOTE_EXPIRED');

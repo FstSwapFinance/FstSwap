@@ -1,0 +1,129 @@
+{
+  "schema": 1,
+  "status": "verified-mainnet",
+  "chainId": 56,
+  "name": "FstSwap",
+  "version": "2.0.0",
+  "release": "FstSwap-2.0.0",
+  "manifestDigest": "0x05bd22a13d26254915c45730d482d90fcae80c6f651015e0718b16475cc8e1ab",
+  "verifiedAt": "2026-11-11T05:35:06.353Z",
+  "verificationBlock": {
+    "number": "0x7ec1819",
+    "hash": "0x023c6a923f84976a36138009ea639f29cf502a235e7e43ad6134f6780a8d4baf"
+  },
+  "owner": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+  "feeReceiver": "0x66f2B90E9fAEf07E5931A3483882804B78f92Ae9",
+  "platformFeeBps": 30,
+  "defaultFeeToken": "0x55d398326f99059fF775485246999027B3197955",
+  "feeConfigVersion": "5",
+  "config": {
+    "router": "0x44101D7Ac0B9Ae7c2ac2C40cB6dE68BCC95268c9",
+    "adapters": {
+      "fst": "0x3053F1C2E69DDA1bf67d7b8586F6BCc1375651EC",
+      "pancake": "0xC3E03597BE39b5a534665210DcEAB7F31BE1F15D",
+      "biswap": "0x1dc32617309A00b292dD517ff57ce09a3F7ddC50",
+      "v3": "0x3726A0724633a10AE6590A2662e34Ba5c1b25FB8"
+    }
+  },
+  "records": [
+    {
+      "step": "router",
+      "hash": "0xb2e627eba8a5677487a0c3cb754809c4f1cd10a5e5f9b155b437f9de5a111386",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x2b",
+      "contractAddress": "0x44101D7Ac0B9Ae7c2ac2C40cB6dE68BCC95268c9",
+      "blockNumber": "0x7ec1742",
+      "blockHash": "0xf7541eb9c5187b606492c8fda7e2c2b80999f44cee141510ce4d19f3592e9a5c",
+      "gasUsed": "0x2c1fa9",
+      "verified": true
+    },
+    {
+      "step": "fst",
+      "hash": "0xa1c39a2039d8ea4b939e5bfaeeb9929fdaefdebf2165aa23f9f9dad0a07221a4",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x2c",
+      "contractAddress": "0x3053F1C2E69DDA1bf67d7b8586F6BCc1375651EC",
+      "blockNumber": "0x7ec175e",
+      "blockHash": "0x2e54e3a4ddda266429d71a7c027b2eda70fca87208447e353c7402a0903474a0",
+      "gasUsed": "0xdf58d",
+      "verified": true
+    },
+    {
+      "step": "pancake",
+      "hash": "0x2007477113fa226ccd45fa2054b9983c6f8d95157ac6b67e1ff61866812c01fc",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x2d",
+      "contractAddress": "0xC3E03597BE39b5a534665210DcEAB7F31BE1F15D",
+      "blockNumber": "0x7ec1775",
+      "blockHash": "0x962da66edfeded19ee2a5f55cdf42d0001c838b86478e6eb4ab347a8aca77503",
+      "gasUsed": "0xdf58d",
+      "verified": true
+    },
+    {
+      "step": "biswap",
+      "hash": "0x4580aeffdc40d416a0777f72044322d9847a8ce068156c414c99b267560de53b",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x2e",
+      "contractAddress": "0x1dc32617309A00b292dD517ff57ce09a3F7ddC50",
+      "blockNumber": "0x7ec1789",
+      "blockHash": "0xa312c53524a1f8b192044768c6c06ebe121037fadb0a6bd337fe57424fb449d3",
+      "gasUsed": "0xdf569",
+      "verified": true
+    },
+    {
+      "step": "v3",
+      "hash": "0x8bac13bb15bed646402d1c7cf5a95b0fb1cffaf683a6fb4d30d97d11bb96a052",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x2f",
+      "contractAddress": "0x3726A0724633a10AE6590A2662e34Ba5c1b25FB8",
+      "blockNumber": "0x7ec17a2",
+      "blockHash": "0xffa98815a32806a713e6bd05cddafc0dfd8df84c910e843388ed4207b8602749",
+      "gasUsed": "0x10775b",
+      "verified": true
+    },
+    {
+      "step": "register-fst",
+      "hash": "0x16d4af57239a837475449f61ba9b40fdb876294baa727b796b0fffe70964ecec",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x30",
+      "contractAddress": null,
+      "blockNumber": "0x7ec17bc",
+      "blockHash": "0x4a0051aed64cf1cb17511fc3c725c2551b1eec77e9ace96bcd53cbcab61b1b01",
+      "gasUsed": "0x16b4e",
+      "verified": true
+    },
+    {
+      "step": "register-pancake",
+      "hash": "0xc9a7cc2f6fe58b8ce1ee6eb3b8fa3f45793495c5c4e245f7861ab065b2398490",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x31",
+      "contractAddress": null,
+      "blockNumber": "0x7ec17d3",
+      "blockHash": "0x54634f94602fdd1435314661e3fb1b40c9234000d2692f3a8366e8da8533b50e",
+      "gasUsed": "0x16b64",
+      "verified": true
+    },
+    {
+      "step": "register-biswap",
+      "hash": "0x2297e9dd4ae1ccf9fa25d225af9edf26d712fe672167f5a69bce908b3f7a3a05",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x32",
+      "contractAddress": null,
+      "blockNumber": "0x7ec17ea",
+      "blockHash": "0xe2b03419fabac5e8359106cf958016c85cd0bcb9e802b7dcec74931059c66e52",
+      "gasUsed": "0x16b6e",
+      "verified": true
+    },
+    {
+      "step": "register-v3",
+      "hash": "0xe388bf6de84efc87142d9ecfd8202e79e3d7b634641a8c5ef9df7a9b9eee5542",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x33",
+      "contractAddress": null,
+      "blockNumber": "0x7ec17ff",
+      "blockHash": "0x6ec28a8dcdf47c9b8bccb1911a64ab6428a55e0ab25bdd67033c6ee017f0471a",
+      "gasUsed": "0x18ae9",
+      "verified": true
+    }
+  ]
+}

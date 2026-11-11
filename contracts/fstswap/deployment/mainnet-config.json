@@ -5,8 +5,19 @@
   "feeReceiver": "0x66f2B90E9fAEf07E5931A3483882804B78f92Ae9",
   "platformFeeBps": 30,
   "defaultFeeToken": "0x55d398326f99059fF775485246999027B3197955",
-  "status": "awaiting-deployment",
+  "status": "deployed",
   "name": "FstSwap",
   "version": "2.0.0",
-  "userConfirmed": "2026-11-10"
+  "userConfirmed": "2026-11-10",
+  "deployedConfig": {
+    "router": "0x44101D7Ac0B9Ae7c2ac2C40cB6dE68BCC95268c9",
+    "adapters": {
+      "fst": "0x3053F1C2E69DDA1bf67d7b8586F6BCc1375651EC",
+      "pancake": "0xC3E03597BE39b5a534665210DcEAB7F31BE1F15D",
+      "biswap": "0x1dc32617309A00b292dD517ff57ce09a3F7ddC50",
+      "v3": "0x3726A0724633a10AE6590A2662e34Ba5c1b25FB8"
+    }
+  },
+  "deployedAt": "2026-11-11T05:35:14.939Z",
+  "creationTransaction": "0xb2e627eba8a5677487a0c3cb754809c4f1cd10a5e5f9b155b437f9de5a111386"
 }

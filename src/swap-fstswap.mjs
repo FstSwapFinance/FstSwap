@@ -1,6 +1,6 @@
 // FstSwap 2.0.0: exact-input only, one fee on the real main route.
-import {SWAP_ADAPTERS,SWAP_ABI,swapActiveRouter} from './swap-aggregator.mjs?v=mainnet-20261111-24';
-import {readPoolPolicy,createPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261111-24';
+import {SWAP_ADAPTERS,SWAP_ABI,swapActiveRouter} from './swap-aggregator.mjs?v=mainnet-20261111-25';
+import {readPoolPolicy,createPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261111-25';
 const ZERO='0x'+'00'.repeat(20),BPS=10000n;
 const lower=x=>String(x||ZERO).toLowerCase();
 export const FST_FEE_ASSETS=Object.freeze({BNB:ZERO,USDT:'0x55d398326f99059ff775485246999027b3197955',FIST:'0xc9882def23bc42d53895b8361d0b1edc7570bc6a',WBNB:'0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',ETH:'0x2170ed0880ac9a755fd29b2688956bd959f933f8',USDC:'0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d'});
@@ -18,17 +18,53 @@ export function fstFeePolicy(tokenIn,tokenOut,defaultFeeToken=FST_FEE_ASSETS.USD
 }
 const isWrap=(a,b)=>[lower(a),lower(b)].sort().join(':')===[ZERO,FST_FEE_ASSETS.WBNB].sort().join(':');
 const minimum=(value,bps)=>value*(BPS-BigInt(bps))/BPS;
-function stagesFor(segment,from,to,slippage){
- if(segment.legs[0]?.kind==='wrap')return[{tokenIn:from,tokenOut:to,minOut:segment.out,branches:[{adapter:ZERO,kind:2,weightBps:10000,path:[],v3Path:'0x'}]}];
- const stages=segment.routeStages||segment.legs.map((leg,n)=>{
+const preparedPolicies=new WeakMap();
+const unsafePrepared=()=>Object.assign(Error('FstSwap 池快照与报价上下文不符'),{code:'UNSAFE_QUOTE'});
+const configStamp=c=>JSON.stringify([c.version,c.platformFeeBps,lower(c.feeReceiver),lower(c.wbnb),lower(c.defaultFeeToken),String(c.feeConfigVersion),[...(c.adaptersOff||[])].sort()]);
+const validHeader=b=>/^0x[0-9a-f]+$/i.test(b?.number||'')&&/^0x[0-9a-f]{64}$/i.test(b?.hash||'')&&/^0x[0-9a-f]+$/i.test(b?.timestamp||'');
+// Only this reader can brand a prepared snapshot; JSON response fields cannot.
+// Node identity plus the pinned header binds reuse across separate quote attempts.
+export async function readFstPoolPolicy(request,options){
+ const {config,block,nodeId,clock=Date.now}=options;
+ if(config?.version!=='2.0.0')return readPoolPolicy(request,options);
+ if(!validHeader(block)||typeof nodeId!=='string')throw unsafePrepared();
+ let policy;
+ if(isWrap(options.tokenIn,options.tokenOut)){
+  const checkedAt=clock(),timestamp=Number(BigInt(block.timestamp));
+  const assertFresh=()=>{if(clock()-checkedAt>20000||Math.abs(clock()/1000-timestamp)>120)throw Object.assign(Error('流动性检查已过期，请刷新报价'),{code:'POOL_LIQUIDITY',reason:'stale',retryable:true});return true;};
+  assertFresh();
+  if(options.deferCanonical!==true){const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});if(!validHeader(canonical)||canonical.hash.toLowerCase()!==block.hash.toLowerCase())throw unsafePrepared();}
+  policy={checkedAt,blockNumber:block.number,pools:new Map(),prices:new Map(),assertFresh,assertValue(){}};
+ }else{
+  policy=await readPoolPolicy(request,{...options,v3Mode:'all',extraTokens:[...new Set([...(options.extraTokens||[]),config.defaultFeeToken])]});
+ }
+ if(String(policy.blockNumber).toLowerCase()!==block.number.toLowerCase())throw unsafePrepared();
+ preparedPolicies.set(policy,{config,stamp:configStamp(config),nodeId,number:block.number.toLowerCase(),hash:block.hash.toLowerCase(),tokenIn:lower(options.tokenIn),tokenOut:lower(options.tokenOut)});
+ return policy;
+}
+async function usePreparedPolicy(request,policy,{tokenIn,tokenOut,config,contextNodeId}){
+ const proof=preparedPolicies.get(policy);
+ if(!proof||proof.config!==config||proof.stamp!==configStamp(config)||proof.nodeId!==contextNodeId||proof.tokenIn!==lower(tokenIn)||proof.tokenOut!==lower(tokenOut))throw unsafePrepared();
+ const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});
+ if(!validHeader(block)||proof.number!==block.number.toLowerCase()||proof.hash!==block.hash.toLowerCase())throw unsafePrepared();
+ policy.assertFresh();return policy;
+}
+function routeStagesFor(segment,from,to){
+ if(segment.legs[0]?.kind==='wrap')return[{tokenIn:from,tokenOut:to,out:segment.out,legs:[segment.legs[0]]}];
+ return segment.routeStages||segment.legs.map((leg,n)=>{
   const v3=leg.kind==='v3',path=leg.path;
   return{tokenIn:n===0?from:(v3?path.slice(0,42):path[0]),tokenOut:n+1===segment.legs.length?to:(v3?'0x'+path.slice(48):path.at(-1)),out:leg.out,legs:[{...leg,weightBps:10000}]};
  });
+}
+function stagesFor(segment,from,to,slippage){
+ if(segment.legs[0]?.kind==='wrap')return[{tokenIn:from,tokenOut:to,minOut:segment.out,branches:[{adapter:ZERO,kind:2,weightBps:10000,path:[],v3Path:'0x'}]}];
+ const stages=routeStagesFor(segment,from,to);
  return stages.map(stage=>({tokenIn:stage.tokenIn,tokenOut:stage.tokenOut,minOut:minimum(stage.out,slippage)||1n,
   branches:stage.legs.map(leg=>({adapter:leg.adapter,kind:leg.kind==='v3'?1:0,weightBps:leg.weightBps||10000,path:leg.kind==='v3'?[]:leg.path,v3Path:leg.kind==='v3'?leg.path:'0x'}))}));
 }
 export async function buildFstQuote({tokenIn,tokenOut,amountIn,config,slippageBps,findRoute}){
  if(config?.version!=='2.0.0'||amountIn<=0n||slippageBps<0||slippageBps>=10000)throw Error('FstSwap 报价配置无效');
+ tokenIn=lower(tokenIn);tokenOut=lower(tokenOut);
  const bps=BigInt(config.platformFeeBps);if(bps<0n||bps>100n)throw Error('费率无效');
  const policy=fstFeePolicy(tokenIn,tokenOut,config.defaultFeeToken),segments=[];let fee=0n,stages=[],out;
  if(policy.mode==='intermediate'){
@@ -133,9 +169,9 @@ export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],sing
  const valid=candidates.filter(c=>c.out>0n&&Number.isFinite(c.impact)).sort((a,b)=>a.out>b.out?-1:a.out<b.out?1:a.legs.length-b.legs.length);
  if(!valid.length)throw noRoute();policy.assertFresh();return{...valid[0],candidates:valid};
 }
-export async function quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,slippageBps,singleHop=false}){
+export async function quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,slippageBps,singleHop=false,preparedPolicy,contextNodeId}){
  const wrap=isWrap(tokenIn,tokenOut);
- const whole=wrap?null:await readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens:[config.defaultFeeToken]});
+ const whole=preparedPolicy?await usePreparedPolicy(request,preparedPolicy,{tokenIn,tokenOut,config,contextNodeId}):wrap?null:await readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens:[config.defaultFeeToken]});
  const findRoute=async(from,to,amount,used)=>{
   if(isWrap(from,to))return{from,to,amountIn:amount,minimum:amount,out:amount,impact:0,legs:[{kind:'wrap',out:amount,amountIn:amount}],assertFresh(){}};
   const policy={...whole,...createPoolPolicy(whole.pools,whole.prices,from,to,{tradeTokenIn:tokenIn})};
@@ -144,7 +180,20 @@ export async function quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,sli
   if(!valid.length)throw noRoute();return{...valid[0],candidates:valid};
  };
  const q=await buildFstQuote({tokenIn,tokenOut,amountIn,config,slippageBps,findRoute});
- whole?.assertValue(q.amountIn,q.minimum);q.assertFresh();return q;
+ whole?.assertValue(q.amountIn,q.minimum);whole?.assertFresh();q.assertFresh();q.poolCheckedAt=whole?.checkedAt??Date.now();return q;
+}
+// Keep the public DTO bounded and unambiguous. Pool objects, candidate routes and
+// closure-based checks stay server-side; executable stages are cross-checked by
+// the client against the normalized route stages before any wallet action.
+export function fstServiceQuote(quote,{slippageBps,poolCheckedAt=quote.poolCheckedAt}={}){
+ const leg=(l,from,to)=>({adapter:l.kind==='wrap'?ZERO:lower(l.adapter),kind:l.kind,path:l.kind==='wrap'?[]:Array.isArray(l.path)?l.path.map(lower):l.path.toLowerCase(),
+  tokenIn:lower(l.tokenIn??from),tokenOut:lower(l.tokenOut??to),amountIn:l.amountIn,out:l.out,weightBps:l.weightBps||10000,poolIds:(l.poolIds||[]).map(lower)});
+ const segments=quote.segments.map(s=>{
+  const routeStages=routeStagesFor(s,s.from,s.to).map(stage=>({tokenIn:lower(stage.tokenIn),tokenOut:lower(stage.tokenOut),out:stage.out,legs:stage.legs.map(l=>leg(l,stage.tokenIn,stage.tokenOut))}));
+  return{from:lower(s.from),to:lower(s.to),amountIn:s.amountIn,out:s.out,minimum:s.legs[0]?.kind==='wrap'?s.out:minimum(s.out,slippageBps),impact:s.impact,legs:routeStages.flatMap(stage=>stage.legs),routeStages};
+ });
+ return{kind:'fstswap',tokenIn:lower(quote.tokenIn),tokenOut:lower(quote.tokenOut),amountIn:quote.amountIn,out:quote.out,minimum:quote.minimum,lpFee:quote.lpFee,feeToken:lower(quote.feeToken),feeMode:quote.feeMode,configVersion:quote.configVersion,impact:quote.impact,poolCheckedAt,
+  stages:quote.stages.map(s=>({tokenIn:lower(s.tokenIn),tokenOut:lower(s.tokenOut),minOut:s.minOut,branches:s.branches.map(b=>({adapter:lower(b.adapter),kind:b.kind,weightBps:b.weightBps,path:b.path.map(lower),v3Path:b.v3Path.toLowerCase()}))})),segments};
 }
 export function validateFstQuote(quote,config,policy){
  if(config.version!=='2.0.0'||BigInt(config.feeConfigVersion)!==BigInt(quote.configVersion))throw Error('收费配置已变化，请刷新报价');

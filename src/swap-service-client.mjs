@@ -1,4 +1,4 @@
-import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261111-24';
+import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261111-25';
 // Read-only API acceleration. Wallet requests and final transaction preflight stay local.
 const ZERO='0x'+'00'.repeat(20),ADDRESS=/^0x[0-9a-f]{40}$/i,HASH=/^0x[0-9a-f]{64}$/i;
 const businessErrors=new Set(['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY']);
@@ -13,16 +13,99 @@ async function waitForSignal(promise,signal){
  try{return await Promise.race([canceled,promise]);}
  finally{signal.removeEventListener('abort',onAbort);}
 }
+// The staged 2.0 wire format binds every executable branch to its quoted amount
+// graph. UI-only annotations are ignored; alternate executable forms are not.
+function validateFstServiceQuote(q,c,input,adapters){
+ const BPS=10000n,MAX=(1n<<256n)-1n,WBNB='0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c';
+ const feeAssets=new Set([ZERO,WBNB,'0x55d398326f99059ff775485246999027b3197955','0xc9882def23bc42d53895b8361d0b1edc7570bc6a','0x2170ed0880ac9a755fd29b2688956bd959f933f8','0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d']);
+ const fields=(o,allowed)=>check(o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).every(k=>allowed.includes(k)));
+ const uint=(v,positive=false)=>check(typeof v==='bigint'&&v>=(positive?1n:0n)&&v<=MAX);
+ const same=(a,b)=>addr(a)&&addr(b)&&lower(a)===lower(b);
+ const impact=v=>check(Number.isFinite(v)&&v>=0&&v<=1);
+ check(addr(input.tokenIn)&&addr(input.tokenOut)&&!same(input.tokenIn,input.tokenOut)&&Number.isInteger(input.slippageBps)&&input.slippageBps>=0&&input.slippageBps<=5000&&typeof input.singleHop==='boolean');
+ fields(q,['kind','tokenIn','tokenOut','amountIn','out','minimum','lpFee','feeToken','feeMode','configVersion','impact','poolCheckedAt','stages','segments','serviceMeta','serviceExpiresAt','feeAsset']);
+ check(q.kind==='fstswap'&&same(q.tokenIn,input.tokenIn)&&same(q.tokenOut,input.tokenOut)&&Number.isSafeInteger(q.poolCheckedAt)&&q.poolCheckedAt>=0);
+ fields(c,['version','platformFeeBps','feeReceiver','wbnb','defaultFeeToken','feeConfigVersion','adaptersOff','v3Factory']);
+ check(feeAssets.has(lower(c.defaultFeeToken))&&same(c.wbnb,WBNB));
+ uint(c.feeConfigVersion,true);uint(q.configVersion,true);check(q.configVersion===c.feeConfigVersion);
+ uint(q.amountIn,true);uint(q.out,true);uint(q.minimum,true);uint(q.lpFee);impact(q.impact);
+ const minimum=v=>v*(BPS-BigInt(input.slippageBps))/BPS;
+ check(q.minimum===minimum(q.out));
+ const from=lower(input.tokenIn),to=lower(input.tokenOut),mode=feeAssets.has(from)?'input':feeAssets.has(to)?'output':'intermediate',fee=mode==='input'?from:mode==='output'?to:lower(c.defaultFeeToken);
+ check(q.feeMode===mode&&lower(q.feeToken)===fee);
+ check(Array.isArray(q.segments)&&q.segments.length===(mode==='intermediate'?2:1)&&Array.isArray(q.stages)&&q.stages.length>0&&q.stages.length<=6);
+ const dexes=Object.entries(adapters),pools=new Set(),expectedStages=[];
+ const wrapPair=(a,b)=>[lower(a),lower(b)].sort().join(':')===[ZERO,WBNB].sort().join(':');
+ const signature=l=>JSON.stringify([lower(l.adapter),l.kind,Array.isArray(l.path)?l.path.map(lower):String(l.path).toLowerCase(),lower(l.tokenIn),lower(l.tokenOut),String(l.amountIn),String(l.out),l.weightBps,l.poolIds.map(lower)]);
+ function checkLeg(l){
+  fields(l,['adapter','kind','path','tokenIn','tokenOut','amountIn','out','weightBps','poolIds']);
+  check(addr(l.adapter)&&addr(l.tokenIn)&&addr(l.tokenOut)&&!same(l.tokenIn,l.tokenOut));uint(l.amountIn,true);uint(l.out,true);
+  check(Number.isInteger(l.weightBps)&&l.weightBps>0&&l.weightBps<=10000&&Array.isArray(l.poolIds));
+  if(l.kind==='wrap'){
+   check(wrapPair(l.tokenIn,l.tokenOut)&&wrapPair(from,to)&&q.segments.length===1&&q.stages.length===1&&lower(l.adapter)===ZERO&&Array.isArray(l.path)&&l.path.length===0&&l.poolIds.length===0&&l.weightBps===10000&&l.amountIn===l.out);
+  }else{
+   const entry=dexes.find(([,a])=>same(a.adapter,l.adapter));check(entry&&!c.adaptersOff.includes(entry[0])&&addr(entry[1].weth));
+   check(l.poolIds.length===1&&addr(l.poolIds[0])&&lower(l.poolIds[0])!==ZERO);
+   let path;
+   if(l.kind==='v3'){
+    check(entry[0]==='v3'&&typeof l.path==='string'&&/^0x[0-9a-f]{86}$/i.test(l.path)&&[100,500,2500,10000].includes(parseInt(l.path.slice(42,48),16)));
+    path=[l.path.slice(0,42),'0x'+l.path.slice(48)];
+   }else{check(l.kind==='v2'&&entry[0]!=='v3'&&Array.isArray(l.path)&&l.path.length===2&&l.path.every(t=>addr(t)&&lower(t)!==ZERO));path=l.path;}
+   check(!same(path[0],path[1])&&same(path[0],lower(l.tokenIn)===ZERO?entry[1].weth:l.tokenIn)&&same(path[1],lower(l.tokenOut)===ZERO?entry[1].weth:l.tokenOut));
+  }
+ }
+ for(let index=0;index<q.segments.length;index++){
+  const s=q.segments[index];fields(s,['from','to','amountIn','out','minimum','impact','legs','routeStages']);
+  check(addr(s.from)&&addr(s.to)&&!same(s.from,s.to));uint(s.amountIn,true);uint(s.out,true);uint(s.minimum);impact(s.impact);
+  check(same(s.from,index===0?from:fee)&&same(s.to,index+1===q.segments.length?to:fee));
+  check(Array.isArray(s.legs)&&s.legs.length>0&&s.legs.length<=9&&Array.isArray(s.routeStages)&&s.routeStages.length>0&&s.routeStages.length<=3&&(!input.singleHop||s.routeStages.length===1));
+  s.legs.forEach(checkLeg);
+  const flat=s.routeStages.flatMap(stage=>{check(Array.isArray(stage?.legs));return stage.legs;});flat.forEach(checkLeg);
+  check(flat.length===s.legs.length&&flat.every((l,n)=>signature(l)===signature(s.legs[n])));
+  const wrapped=s.legs[0].kind==='wrap';check(s.minimum===(wrapped?s.out:minimum(s.out))&&(!wrapped||s.impact===0));
+  let budget=s.amountIn,token=s.from;const seenTokens=new Set([lower(token)]);
+  for(const stage of s.routeStages){
+   fields(stage,['tokenIn','tokenOut','out','legs']);check(same(stage.tokenIn,token)&&addr(stage.tokenOut)&&!seenTokens.has(lower(stage.tokenOut)));seenTokens.add(lower(stage.tokenOut));uint(stage.out,true);
+   check(stage.legs.length>0&&stage.legs.length<=3&&stage.legs.reduce((n,l)=>n+l.weightBps,0)===10000);
+   let allocated=0n,total=0n;
+   for(let n=0;n<stage.legs.length;n++){
+    const l=stage.legs[n],part=n+1===stage.legs.length?budget-allocated:budget*BigInt(l.weightBps)/BPS;allocated+=part;
+    check(same(l.tokenIn,stage.tokenIn)&&same(l.tokenOut,stage.tokenOut)&&l.amountIn===part);total+=l.out;
+    for(const pool of l.poolIds){check(!pools.has(lower(pool)));pools.add(lower(pool));}
+   }
+   check(total===stage.out);
+   expectedStages.push({tokenIn:stage.tokenIn,tokenOut:stage.tokenOut,minOut:wrapped?stage.out:minimum(stage.out)||1n,branches:stage.legs.map(l=>({adapter:l.adapter,kind:l.kind==='wrap'?2:l.kind==='v3'?1:0,weightBps:l.weightBps,path:l.kind==='v2'?l.path:[],v3Path:l.kind==='v3'?l.path:'0x'}))});
+   budget=stage.out;token=stage.tokenOut;
+  }
+  check(same(token,s.to)&&budget===s.out);
+ }
+ check(q.stages.length===expectedStages.length);
+ for(let i=0;i<q.stages.length;i++){
+  const stage=q.stages[i],expected=expectedStages[i];fields(stage,['tokenIn','tokenOut','minOut','branches']);
+  check(same(stage.tokenIn,expected.tokenIn)&&same(stage.tokenOut,expected.tokenOut)&&stage.minOut===expected.minOut&&Array.isArray(stage.branches)&&stage.branches.length===expected.branches.length);
+  for(let n=0;n<stage.branches.length;n++){
+   const branch=stage.branches[n],want=expected.branches[n];fields(branch,['adapter','kind','weightBps','path','v3Path']);
+   check(same(branch.adapter,want.adapter)&&branch.kind===want.kind&&branch.weightBps===want.weightBps&&Array.isArray(branch.path)&&branch.path.length===want.path.length&&branch.path.every((a,k)=>same(a,want.path[k]))&&typeof branch.v3Path==='string'&&branch.v3Path.toLowerCase()===want.v3Path.toLowerCase());
+  }
+ }
+ const rate=BigInt(c.platformFeeBps),first=q.segments[0],last=q.segments.at(-1),base=mode==='input'?q.amountIn:first.out;
+ check(q.lpFee===base*rate/BPS);
+ check(first.amountIn===(mode==='input'?q.amountIn-q.lpFee:q.amountIn));
+ if(mode==='intermediate')check(last.amountIn===first.out-q.lpFee);
+ check(q.out===(mode==='output'?last.out-q.lpFee:last.out));
+ check(Math.abs(q.impact-(1-q.segments.reduce((v,s)=>v*(1-s.impact),1)))<=1e-12);
+}
 export function validateServiceQuote(data,input,{router,adapters,clock=Date.now}={}){
  check(data?.schema===1&&data.chainId===56&&lower(data.router)===lower(router));
  check(addr(data.router)&&HASH.test(data.blockHash)&&/^0x[0-9a-f]+$/i.test(data.blockNumber));
  check(data.input&&Object.keys(input).every(k=>data.input[k]===input[k]));
  const q=data.quote,c=data.config,now=clock();
  check(Number.isFinite(data.quotedAt)&&Number.isFinite(data.expiresAt)&&data.quotedAt<=now+2000&&data.expiresAt>now&&data.expiresAt-data.quotedAt<=15000);
- check(c?.version==='1.11'&&Number.isInteger(c.platformFeeBps)&&c.platformFeeBps>=0&&c.platformFeeBps<=100&&addr(c.feeReceiver)&&addr(c.wbnb)&&addr(c.defaultFeeToken)&&typeof c.feeConfigVersion==='bigint'&&Array.isArray(c.adaptersOff));
+ check(['1.11','2.0.0'].includes(c?.version)&&Number.isInteger(c.platformFeeBps)&&c.platformFeeBps>=0&&c.platformFeeBps<=100&&addr(c.feeReceiver)&&addr(c.wbnb)&&addr(c.defaultFeeToken)&&typeof c.feeConfigVersion==='bigint'&&Array.isArray(c.adaptersOff));
  check(q&&typeof q.amountIn==='bigint'&&q.amountIn===BigInt(input.amountIn)&&typeof q.out==='bigint'&&q.out>0n&&typeof q.lpFee==='bigint'&&q.lpFee>=0n&&addr(q.feeToken)&&Number.isFinite(q.impact)&&q.impact>=0);
  check(q.poolCheckedAt+15000===data.expiresAt);
  check(q.maxIn==null&&!q.exactOut);
+ if(c.version==='2.0.0'){check(data.quotedAt<data.expiresAt);validateFstServiceQuote(q,c,input,adapters);return data;}
  const entries=Object.entries(adapters),empty=l=>l&&lower(l.adapter)===ZERO&&Array.isArray(l.path)&&l.path.length===0;
  const leg=l=>{
   const entry=entries.find(([,a])=>lower(a.adapter)===lower(l?.adapter));check(entry&&!c.adaptersOff.includes(entry[0]));

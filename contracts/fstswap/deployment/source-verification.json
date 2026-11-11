@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "chainId": 56,
+  "version": "2.0.0",
+  "verifiedAt": "2026-11-11T05:35:14.939Z",
+  "provider": "sourcify",
+  "contracts": [
+    {
+      "provider": "sourcify",
+      "step": "router",
+      "contract": "FstSwap",
+      "address": "0x44101D7Ac0B9Ae7c2ac2C40cB6dE68BCC95268c9",
+      "status": "verified",
+      "match": "exact_match",
+      "creationMatch": "exact_match",
+      "runtimeMatch": "exact_match",
+      "explorerUrl": "https://sourcify.dev/#/lookup/56/0x44101D7Ac0B9Ae7c2ac2C40cB6dE68BCC95268c9"
+    },
+    {
+      "provider": "sourcify",
+      "step": "fst",
+      "contract": "FstSwapAdapter56",
+      "address": "0x3053F1C2E69DDA1bf67d7b8586F6BCc1375651EC",
+      "status": "verified",
+      "match": "exact_match",
+      "creationMatch": "exact_match",
+      "runtimeMatch": "exact_match",
+      "explorerUrl": "https://sourcify.dev/#/lookup/56/0x3053F1C2E69DDA1bf67d7b8586F6BCc1375651EC"
+    },
+    {
+      "provider": "sourcify",
+      "step": "pancake",
+      "contract": "PancakeAdapter56",
+      "address": "0xC3E03597BE39b5a534665210DcEAB7F31BE1F15D",
+      "status": "verified",
+      "match": "exact_match",
+      "creationMatch": "exact_match",
+      "runtimeMatch": "exact_match",
+      "explorerUrl": "https://sourcify.dev/#/lookup/56/0xC3E03597BE39b5a534665210DcEAB7F31BE1F15D"
+    },
+    {
+      "provider": "sourcify",
+      "step": "biswap",
+      "contract": "BiSwapAdapter56",
+      "address": "0x1dc32617309A00b292dD517ff57ce09a3F7ddC50",
+      "status": "verified",
+      "match": "exact_match",
+      "creationMatch": "exact_match",
+      "runtimeMatch": "exact_match",
+      "explorerUrl": "https://sourcify.dev/#/lookup/56/0x1dc32617309A00b292dD517ff57ce09a3F7ddC50"
+    },
+    {
+      "provider": "sourcify",
+      "step": "v3",
+      "contract": "PancakeV3Adapter",
+      "address": "0x3726A0724633a10AE6590A2662e34Ba5c1b25FB8",
+      "status": "verified",
+      "match": "exact_match",
+      "creationMatch": "exact_match",
+      "runtimeMatch": "exact_match",
+      "explorerUrl": "https://sourcify.dev/#/lookup/56/0x3726A0724633a10AE6590A2662e34Ba5c1b25FB8"
+    }
+  ]
+}

@@ -1,14 +1,15 @@
-import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261111-24';
-import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261111-24';
-import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261111-24';
-import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261111-24';
-import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261111-24";
+import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261111-25';
+import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261111-25';
+import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261111-25';
+import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261111-25';
+import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261111-25';
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261111-25";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261111-24";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261111-25";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
@@ -16,16 +17,16 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261111-24";
+} from "./swap-aggregator.mjs?v=mainnet-20261111-25";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261111-24";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261111-25";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261111-24";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261111-25";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261111-24";
-import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261111-24";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261111-25";
+import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261111-25";
 
 const approvals = createApprovalTracker();
 const warmRequest = swapPublicRpc();
@@ -670,7 +671,7 @@ export async function mountSwapView(root) {
       if (remote) {
         state.config = remote.config; q = remote.quote;
         q.serviceMeta = {...remote}; delete q.serviceMeta.quote; q.serviceExpiresAt = remote.expiresAt;
-        q.feeAsset = Object.values(TOKENS).find(t => (t.address || ZERO).toLowerCase() === q.feeToken.toLowerCase()) || TOKENS.usdt;
+        q.feeAsset = resolveFeeAsset(q.feeToken,TOKENS);
       } else {
       const context = await quoteContext.get(ti.address, to.address);
       if (seq !== state.seq || !main.isConnected) return;
@@ -681,7 +682,7 @@ export async function mountSwapView(root) {
       const feeAsset = Object.values(TOKENS).find(t => (t.address || ZERO).toLowerCase() === policy.token.toLowerCase()) || TOKENS.usdt;
       if (state.config?.version === "2.0.0") {
         q = await quoteFstSwap(request, { tokenIn: ti.address, tokenOut: to.address, amountIn: amount, config: state.config, slippageBps: settings.slippageBps, singleHop: settings.singleHop });
-        q.feeAsset = Object.values(TOKENS).find(t => (t.address || ZERO).toLowerCase() === q.feeToken) || { address: q.feeToken, symbol: "Fee", decimals: 18 };
+        q.feeAsset = resolveFeeAsset(q.feeToken,TOKENS);
       } else if (isAggPair()) {
         const amountIn = amount;
         const route = await quoteSwap(request, { side: side(), amountIn, feeBps, poolPolicy, singleHop: settings.singleHop });
@@ -941,7 +942,7 @@ export async function mountSwapView(root) {
       waitReceipt(hash, submittedAccount).then(async () => {
         if (swapV10Ready()) {
           await readV10Receipt(request, hash, { account: submittedAccount, expectedRequest, ...submittedTokens,
-            minOut: min, maxIn: q.maxIn || q.amountIn, feeToken: q.feeAsset.address || ZERO, expectedFee: q.lpFee, minFeeOut: q.conversion && q.lpFee > 0n ? q.conversion.minOut : 0n });
+            minOut: min, maxIn: q.maxIn || q.amountIn, feeToken: q.feeToken ?? q.feeAsset.address ?? ZERO, expectedFee: q.lpFee, minFeeOut: q.conversion && q.lpFee > 0n ? q.conversion.minOut : 0n });
         } else if (q.kind === "agg") {
           await readSwapReceipt(request, hash, { account: submittedAccount, route: q.route, minOut: min, expectedRequest });
         }
