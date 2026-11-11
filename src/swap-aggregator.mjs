@@ -1,5 +1,6 @@
-import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261111-29";
-import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261111-29";
+import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261111-30";
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261111-30";
+import { swapRpcWork } from "./swap-rpc-work.mjs?v=mainnet-20261111-30";
 // 聚合路由 Swap 引擎（BSC 主网 56，FstSi aggregator-live v9「multi-pool」，合约 VERSION 1.01）。
 // 与 market-trade.mjs 相同的约束风格：全部函数只通过注入的 JSON-RPC
 // request 访问链上，返回精确的十进制字符串/大整数，浏览器与 Node 均可运行。
@@ -840,7 +841,7 @@ export async function preflightSwap(request, { account, route, amountIn, minOut,
   const transaction = swapTradeRequest(globalThis.ethers.Interface, { account, route, amountIn, minOut, deadline });
   const needsApproval = route.side === "sell" && allowance !== null && allowance < amountIn;
   // 轻量公共 RPC：estimateGas/gasPrice 快速失败（2 端点 × 8s），失败走 fallback
-  const lightRpc = swapPublicRpc(globalThis.fetch, undefined, { attempts: 2, timeoutMs: 8000 });
+  const lightRpc = swapPublicRpc(globalThis.fetch, undefined, { priority: "foreground", attempts: 2, timeoutMs: 8000 });
   const decodeSim = (result) => {
     const method = swapRouteMethod(route);
     const [received] = iface.decodeFunctionResult(method, result);
@@ -976,20 +977,33 @@ const RPC_COOLDOWN_MS = 60_000;
 /// 仅本地 fork 验证：globalThis.FST_RPC_OVERRIDE = ["http://127.0.0.1:8545"]（生产不注入，SWAP_RPC_ENDPOINTS 不变）。
 const rpcList = lane => (Array.isArray(globalThis.FST_RPC_OVERRIDE) && globalThis.FST_RPC_OVERRIDE.length ? globalThis.FST_RPC_OVERRIDE : lane === "balance" ? SWAP_BALANCE_RPC_ENDPOINTS : SWAP_RPC_ENDPOINTS);
 
-export function swapPublicRpc(fetchImpl = globalThis.fetch, signal, { lane = "trade", attempts = RPC_ATTEMPTS, timeoutMs = 15000 } = {}) {
+async function rpcUntilAborted(work, signal) {
+  let onAbort;
+  const canceled = new Promise((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, {once:true});
+    if (signal.aborted) onAbort();
+  });
+  try { return await Promise.race([canceled, work]); }
+  finally { signal.removeEventListener("abort", onAbort); }
+}
+
+export function swapPublicRpc(fetchImpl = globalThis.fetch, signal, { lane = "trade", priority = "background", attempts = RPC_ATTEMPTS, timeoutMs = 15000 } = {}) {
   lane = lane === "balance" ? "balance" : "trade";
   const state = rpcLanes[lane];
   let nextId = 0;
-  const once = async (endpoint, { method, params = [], id }) => {
+  const once = (endpoint, { method, params = [], id }) => swapRpcWork.run(async ({signal:scheduledSignal}) => {
     const timeout = AbortSignal.timeout(timeoutMs);
-    const active = signal ? AbortSignal.any([signal, timeout]) : timeout;
-    const response = await fetchImpl(endpoint, { method: "POST", signal: active,
-      headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }) });
+    const active = AbortSignal.any([scheduledSignal, timeout]);
+    const response = await rpcUntilAborted(fetchImpl(endpoint, { method: "POST", signal: active,
+      headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }) }), active);
     let body;
-    try { body = await response.json(); } catch { throw rpcError(); }
+    try { body = await rpcUntilAborted(response.json(), active); }
+    catch (error) { if (active.aborted) throw active.reason; throw rpcError(); }
+    if (active.aborted) throw active.reason;
     if (!response.ok || body?.id !== id || body.error || !Object.hasOwn(body, "result")) throw rpcError();
     return body.result;
-  };
+  }, {priority, signal});
   return async (payload) => {
     const id = ++nextId;
     // 候选顺序：上一个成功端点优先（复用热连接），随后按轮换取号分散并发
@@ -1015,7 +1029,7 @@ export function swapPublicRpc(fetchImpl = globalThis.fetch, signal, { lane = "tr
         return result;
       } catch (err) {
         lastError = err;
-        if (signal?.aborted) throw err; // 外部取消：不冷却、快速失败
+        if (signal?.aborted || err?.name === "AbortError") throw err; // 主动取消不冷却，也不启动故障转移。
         state.cooldown.set(endpoint, Date.now() + RPC_COOLDOWN_MS);
       }
     }
@@ -1024,7 +1038,7 @@ export function swapPublicRpc(fetchImpl = globalThis.fetch, signal, { lane = "tr
     // It is a fallback, never promoted ahead of healthy public endpoints or local fork overrides.
     if (lane === "trade" && !globalThis.FST_RPC_OVERRIDE?.length && ["127.0.0.1", "localhost"].includes(globalThis.location?.hostname)) {
       try { return await once("http://127.0.0.1:8126/rpc", { ...payload, id }); }
-      catch (err) { lastError = err; if (signal?.aborted) throw err; }
+      catch (err) { lastError = err; if (signal?.aborted || err?.name === "AbortError") throw err; }
     }
     // 全池冷却/失败兜底：忽略冷却再试一轮，防止冷却死锁
     for (const endpoint of order) {
@@ -1032,7 +1046,7 @@ export function swapPublicRpc(fetchImpl = globalThis.fetch, signal, { lane = "tr
         const result = await once(endpoint, { ...payload, id });
         if (result === null && nullableTransaction) { sawMissingTransaction = true; continue; }
         return result;
-      } catch (err) { lastError = err; if (signal?.aborted) throw err; }
+      } catch (err) { lastError = err; if (signal?.aborted || err?.name === "AbortError") throw err; }
     }
     if (sawMissingTransaction) return null;
     throw lastError ?? rpcError();

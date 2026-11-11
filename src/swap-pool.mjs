@@ -2,12 +2,12 @@ import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 // 流动池（#/pool、#/pool/v2/find）、注入流动资金（#/add/v2/A/B）、去除流动资金（#/remove/v2/A/B）——
 // 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css）；
 // 链上逻辑：直接调用 FstSwap 路由器（Pancake V2 fork，同官方授权对象 0x1B6C…ABC2d），所有启用列表中的代币，按 FstSwap factory 查询所选币对。
-import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261111-29";
-import { tr, T, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal, popup, refreshNativeBalance, hashParts } from "./swap-shell.mjs?v=mainnet-20261111-29";
-import { TOKENS, sigDown, tokenKeys, openTokenPicker } from "./swap-view.mjs?v=mainnet-20261111-29";
+import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261111-30";
+import { tr, T, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal, popup, refreshNativeBalance, hashParts } from "./swap-shell.mjs?v=mainnet-20261111-30";
+import { TOKENS, sigDown, tokenKeys, openTokenPicker } from "./swap-view.mjs?v=mainnet-20261111-30";
 
 import { discoverPool, reservesByToken } from "./swap-pool-data.mjs";
-import { refreshDefaultList } from "./swap-manage.mjs?v=mainnet-20261111-29";
+import { refreshDefaultList } from "./swap-manage.mjs?v=mainnet-20261111-30";
 import { tokenLogo, applyTokenLogo } from "./swap-token-logo.mjs";
 
 const FST_ROUTER = "0x1B6C9c20693afDE803B27F8782156c0f892ABC2d";

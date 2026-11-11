@@ -25,7 +25,7 @@ export function createAllowanceReader(request,{clock=Date.now,ttlMs=3000}={}){
     if(ok)entry.delivered=true;
     entry.subscribers.delete(subscriber);signal?.removeEventListener('abort',onAbort);
     // Nobody still wants this request: its eventual response has no cache rights.
-    if(!entry.subscribers.size&&!entry.delivered)remove(entry);
+    if(!entry.subscribers.size&&!entry.delivered){remove(entry);entry.controller.abort();}
     if(ok)resolve(value);else reject(value);
    }};
    const onAbort=()=>subscriber.finish(false,abortError());
@@ -41,7 +41,7 @@ export function createAllowanceReader(request,{clock=Date.now,ttlMs=3000}={}){
  }
  async function run(entry,payload){
   try{
-   const raw=await request(payload);
+   const raw=await request(payload,{signal:entry.controller.signal,fresh:entry.fresh});
    if(typeof raw!=='string'||!/^0x[0-9a-f]{64}$/i.test(raw))throw new Error('Invalid allowance response');
    const value=BigInt(codec.decodeFunctionResult('allowance',raw)[0]);
    settle(entry,true,value);
@@ -61,7 +61,7 @@ export function createAllowanceReader(request,{clock=Date.now,ttlMs=3000}={}){
     const now=clock();checkSignal(signal);
     if(now>=entry.completedAt&&now-entry.completedAt<ttlMs){remember(entry);return entry.value;}
    }
-   entry={key,cacheable,pending:true,subscribers:new Set(),delivered:false};remember(entry);
+   entry={key,cacheable,pending:true,subscribers:new Set(),delivered:false,fresh,controller:new AbortController()};remember(entry);
    const result=subscribe(entry,signal);
    if(entry.subscribers.size)void run(entry,{method:'eth_call',params:[{to:token,data:codec.encodeFunctionData('allowance',[account,spender])},blockTag]});
    return result;

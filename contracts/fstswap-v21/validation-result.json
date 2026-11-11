@@ -1,0 +1,41 @@
+{
+  "version": "2.1.0",
+  "status": "candidate-awaiting-user-deployment",
+  "mainnetBroadcast": false,
+  "sourceSha256": "96e9f503245899a4307bf6dc574ab87713d8e66851f3389d9f453e5926bfdd95",
+  "compiler": "0.8.26",
+  "optimizerRuns": 100,
+  "viaIR": true,
+  "evmVersion": "paris",
+  "runtimeBytes": 17309,
+  "contractTests": {
+    "passed": 26,
+    "failed": 0,
+    "fuzzRuns": 256
+  },
+  "gasComparisons": {
+    "passed": 2,
+    "failed": 0,
+    "singleHopBefore": 314476,
+    "singleHopAfter": 310089,
+    "twoHopBefore": 402252,
+    "twoHopAfter": 394511,
+    "scope": "Local identical-state callee gas; not wallet latency or mainnet gas guarantee"
+  },
+  "forkTests": {
+    "passed": 3,
+    "failed": 0,
+    "chainId": 56,
+    "block": 132957135,
+    "broadcast": false
+  },
+  "localDeploymentRehearsal": {
+    "passed": true,
+    "receipts": 9,
+    "runtimeMatches": 5,
+    "scope": "LOCAL ANVIL FORK ONLY",
+    "sourceBlock": 132975560
+  },
+  "independentReview": "No new P1/P2 found in verified-hop reuse; not a formal audit",
+  "externalAbiChanged": false
+}
