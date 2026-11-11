@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "chainId": 56,
+  "status": "deployed",
+  "name": "FstSwap",
+  "version": "2.1.0",
+  "release": "FstSwap-2.1.0-three-dex",
+  "manifestDigest": "0x6a7a7ffd632fed5dba61a2cacba03c67d0e956285d91862b23da94b9e1130920",
+  "deployer": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+  "owner": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+  "feeReceiver": "0x66f2B90E9fAEf07E5931A3483882804B78f92Ae9",
+  "platformFeeBps": 30,
+  "defaultFeeToken": "0x55d398326f99059fF775485246999027B3197955",
+  "dependencies": {
+    "fstWbnb": "0x0efb5FD2402A0967B92551d6AF54De148504A115",
+    "wbnb": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+    "v3Quoter": "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997"
+  },
+  "compiler": "0.8.26",
+  "optimizerRuns": 100,
+  "viaIR": true,
+  "evmVersion": "paris",
+  "sources": {
+    "FstSwap.sol": "96e9f503245899a4307bf6dc574ab87713d8e66851f3389d9f453e5926bfdd95",
+    "FstSwapAdapter56.sol": "1839c3aa405197ccc31c4c94c51795acbcf9d252e71454a847b233c01b64fc02",
+    "PancakeAdapter56.sol": "77e61ec6c74e000834a205a1d020d0322fd705a058d034bdd98390d53e4eb665",
+    "PancakeV3Adapter.sol": "3fd7af5843b07f137bae47f1a2d55fdee32b37b1336b63464f7240d1a81880e2"
+  },
+  "contracts": {
+    "FstSwap": {
+      "bytecodeHash": "0x81578ab70d9a4452d9ba1aec486eab318000e47a0be0d944c4103a33688e8e0b",
+      "runtimeBytes": 17309
+    },
+    "FstSwapAdapter56": {
+      "bytecodeHash": "0xc4e661923f6908716dce13c21ff38dfcf14ffcd30f4fe5c9a0e152b1342d7997",
+      "runtimeBytes": 3983
+    },
+    "PancakeAdapter56": {
+      "bytecodeHash": "0x2ed40d836c6e9fb5f3638a2c033512be5b358388a912348c374b5866b9b74ebf",
+      "runtimeBytes": 3983
+    },
+    "PancakeV3Adapter": {
+      "bytecodeHash": "0xb2e99c314b180170c4bb846dd00a6c77aa30c37ce9ca0ccdd072545ee70df01e",
+      "runtimeBytes": 4726
+    }
+  }
+}

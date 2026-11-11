@@ -3,8 +3,8 @@ import {pathToFileURL} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {isIP} from 'node:net';
 import {ethers} from 'ethers';
-import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261111-32';
-import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261111-32';
+import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261111-34';
+import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261111-34';
 import {readTokenBalances} from '../src/swap-balances.mjs';
 import {createReadPool} from './swap-read-pool.mjs';
 export {createReadPool};
@@ -36,7 +36,7 @@ function pinned(request,block){return p=>{
 };}
 export async function computeQuote(request,input,config,poolPolicy,{nodeId}={}){
  const {tokenIn,tokenOut,slippageBps,singleHop}=input,amountIn=BigInt(input.amountIn),feeBps=config.platformFeeBps;
- if(config.version==='2.0.0'){
+ if(['2.0.0','2.1.0'].includes(config.version)){
   const q=await quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,slippageBps,singleHop,preparedPolicy:poolPolicy,contextNodeId:nodeId});
   assertQuoteSafety({tokenIn,tokenOut,amountIn,amountOut:q.minimum,impact:q.impact,quotedAmountIn:q.amountIn,quotedAmountOut:q.out});
   poolPolicy.assertFresh();poolPolicy.assertValue(amountIn,q.minimum);
@@ -140,7 +140,8 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
   entry=sharedRead(signal=>pool.run(async request=>{
    const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertRunning(signal);assertBlock(block,clock);
    const read=pinned(request,block),config=await readConfig(read,{block});assertRunning(signal);
-   const policy=await readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:config.version==='2.0.0'?'all':'legacy',extraTokens:config.version==='2.0.0'?[config.defaultFeeToken]:[],block,nodeId,clock,deferCanonical:true});assertRunning(signal);policy.assertFresh();
+   const staged=['2.0.0','2.1.0'].includes(config.version);
+   const policy=await readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:staged?'all':'legacy',extraTokens:staged?[config.defaultFeeToken]:[],block,nodeId,clock,deferCanonical:true});assertRunning(signal);policy.assertFresh();
    if(warm){const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(signal);if(canonical?.hash!==block.hash)throw fail('STALE_BLOCK');policy.assertFresh();if(clock()>=policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');}
    entry.completedAt=clock();entry.warmed=warm;return{block,config,policy};
   },signal,{operation:warm?'warm':'config',nodeId}),{timeoutMs:18000,

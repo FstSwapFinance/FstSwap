@@ -1,10 +1,20 @@
-// FstSwap 2.0.0: exact-input only, one fee on the real main route.
-import {SWAP_ADAPTERS,SWAP_ABI,swapActiveRouter} from './swap-aggregator.mjs?v=mainnet-20261111-32';
-import {readPoolPolicy,createPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261111-32';
+// FstSwap staged versions: exact-input only, one fee on the real main route.
+import {SWAP_ADAPTERS,SWAP_ABI,swapActiveRouter} from './swap-aggregator.mjs?v=mainnet-20261111-34';
+import {readPoolPolicy,createPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261111-34';
 const ZERO='0x'+'00'.repeat(20),BPS=10000n;
 const lower=x=>String(x||ZERO).toLowerCase();
 export const FST_FEE_ASSETS=Object.freeze({BNB:ZERO,USDT:'0x55d398326f99059ff775485246999027b3197955',FIST:'0xc9882def23bc42d53895b8361d0b1edc7570bc6a',WBNB:'0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',ETH:'0x2170ed0880ac9a755fd29b2688956bd959f933f8',USDC:'0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d'});
 const fees=new Set(Object.values(FST_FEE_ASSETS));
+export function fstRequiresLinearV2(version,tokens,adapters=SWAP_ADAPTERS,adaptersOff=[]) {
+ if(version!=='2.1.0')return false;
+ const known=new Set([...fees,...Object.entries(adapters).filter(([key])=>!adaptersOff.includes(key)).map(([,a])=>lower(a.weth))]);
+ return tokens.some(token=>!known.has(lower(token)));
+}
+const stageTokens=stages=>stages.flatMap(s=>[s.tokenIn,s.tokenOut,...s.branches.flatMap(b=>b.kind===1?[b.v3Path?.slice(0,42),'0x'+b.v3Path?.slice(48)]:b.path)]);
+function assertTopology(stages,config) {
+ if(fstRequiresLinearV2(config.version,stageTokens(stages),SWAP_ADAPTERS,config.adaptersOff)&&stages.some(s=>s.branches.length!==1||s.branches[0].kind!==0))
+  throw Object.assign(Error('此代币路线仅支持连续的 V2 单池兑换'),{code:'UNSAFE_QUOTE'});
+}
 export const FST_ABI=[
  'function swapExactInput((address tokenIn,address tokenOut,uint256 amountIn,uint256 minOut,address recipient,uint256 deadline,address feeToken,uint256 configVersion) params,(address tokenIn,address tokenOut,uint256 minOut,(address adapter,uint8 kind,uint16 weightBps,address[] path,bytes v3Path)[] branches)[] stages) payable returns(uint256 received)',
  'event FeeCharged(address indexed payer,address indexed token,uint256 baseAmount,uint256 amount,uint256 stage)',
@@ -26,7 +36,7 @@ const validHeader=b=>/^0x[0-9a-f]+$/i.test(b?.number||'')&&/^0x[0-9a-f]{64}$/i.t
 // Node identity plus the pinned header binds reuse across separate quote attempts.
 export async function readFstPoolPolicy(request,options){
  const {config,block,nodeId,clock=Date.now}=options;
- if(config?.version!=='2.0.0')return readPoolPolicy(request,options);
+ if(!['2.0.0','2.1.0'].includes(config?.version))return readPoolPolicy(request,options);
  if(!validHeader(block)||typeof nodeId!=='string')throw unsafePrepared();
  let policy;
  if(isWrap(options.tokenIn,options.tokenOut)){
@@ -63,19 +73,22 @@ function stagesFor(segment,from,to,slippage){
   branches:stage.legs.map(leg=>({adapter:leg.adapter,kind:leg.kind==='v3'?1:0,weightBps:leg.weightBps||10000,path:leg.kind==='v3'?[]:leg.path,v3Path:leg.kind==='v3'?leg.path:'0x'}))}));
 }
 export async function buildFstQuote({tokenIn,tokenOut,amountIn,config,slippageBps,findRoute}){
- if(config?.version!=='2.0.0'||amountIn<=0n||slippageBps<0||slippageBps>=10000)throw Error('FstSwap 报价配置无效');
+ if(!['2.0.0','2.1.0'].includes(config?.version)||amountIn<=0n||slippageBps<0||slippageBps>=10000)throw Error('FstSwap 报价配置无效');
  tokenIn=lower(tokenIn);tokenOut=lower(tokenOut);
  const bps=BigInt(config.platformFeeBps);if(bps<0n||bps>100n)throw Error('费率无效');
  const policy=fstFeePolicy(tokenIn,tokenOut,config.defaultFeeToken),segments=[];let fee=0n,stages=[],out;
+ // A trade containing an alt asset must use linear V2 on both sides of an
+ // intermediate fee. A segment cannot independently opt back into V3/splits.
+ const routeOptions={linearV2Only:fstRequiresLinearV2(config.version,[tokenIn,tokenOut],SWAP_ADAPTERS,config.adaptersOff)};
  if(policy.mode==='intermediate'){
-  const first=await findRoute(tokenIn,policy.token,amountIn,[]),complete=[];
+  const first=await findRoute(tokenIn,policy.token,amountIn,[],routeOptions),complete=[];
   // Bound network work so completed routes stay inside the 20-second pool snapshot.
   // A better output dominates another quote using the same set of pools.
   const seen=new Set(),choices=(first.candidates||[first]).filter(c=>{const key=c.legs.flatMap(l=>l.poolIds||[]).map(lower).sort().join(':');if(seen.has(key))return false;seen.add(key);return true;}).slice(0,12);
   let cursor=0;
   await Promise.all(Array.from({length:Math.min(3,choices.length)},async()=>{
    while(cursor<choices.length){const before=choices[cursor++],charged=before.out*bps/BPS;
-    try{const after=await findRoute(policy.token,tokenOut,before.out-charged,before.legs);complete.push({before,after,charged});}
+    try{const after=await findRoute(policy.token,tokenOut,before.out-charged,before.legs,routeOptions);complete.push({before,after,charged});}
     catch(e){if(e.code!=='NO_ROUTE')throw e;}
    }
   }));
@@ -85,11 +98,12 @@ export async function buildFstQuote({tokenIn,tokenOut,amountIn,config,slippageBp
   stages=[...stagesFor(before,tokenIn,policy.token,slippageBps),...stagesFor(after,policy.token,tokenOut,slippageBps)];out=after.out;
  }else{
   if(policy.mode==='input')fee=amountIn*bps/BPS;
-  const segment=await findRoute(tokenIn,tokenOut,amountIn-fee,[]);segments.push(segment);
+  const segment=await findRoute(tokenIn,tokenOut,amountIn-fee,[],routeOptions);segments.push(segment);
   if(policy.mode==='output')fee=segment.out*bps/BPS;
   out=segment.out-(policy.mode==='output'?fee:0n);stages=stagesFor(segment,tokenIn,tokenOut,slippageBps);
  }
  if(stages.length>6||!stages.length||out<=0n)throw Error('没有可执行的兑换路线');
+ assertTopology(stages,config);
  const impact=1-segments.reduce((v,s)=>v*(1-s.impact),1);
  if(!Number.isFinite(impact)||impact<0)throw Error('无法确认兑换价格影响');
  return{kind:'fstswap',tokenIn,tokenOut,amountIn,out,minimum:minimum(out,slippageBps),lpFee:fee,feeToken:policy.token,feeMode:policy.mode,configVersion:config.feeConfigVersion,
@@ -102,12 +116,12 @@ export function fstRequest(Interface,{router,account,quote,deadline}){
 
 const noRoute=()=>Object.assign(Error('没有符合流动性要求的完整兑换路线'),{code:'NO_ROUTE'});
 // Quote only pools admitted by the independent-price/depth policy. Every call uses its snapshot block.
-export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],singleHop=false}){
+export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],singleHop=false,configVersion='2.0.0',linearV2Only=false,adaptersOff=[]}){
  const input=lower(from),output=lower(to),taken=new Set(used.flatMap(l=>l.poolIds||[]).map(lower));
  const edges=[];
  for(const pool of policy.pools.values()){
   if(taken.has(lower(pool.address)))continue;
-  const dex=Object.values(SWAP_ADAPTERS).find(d=>lower(d.adapter)===lower(pool.adapter));if(!dex)continue;
+  const dex=Object.values(SWAP_ADAPTERS).find(d=>lower(d.adapter)===lower(pool.adapter));if(!dex||adaptersOff.includes(dex.key)||(linearV2Only&&pool.kind!=='v2'))continue;
   for(const [a,b] of [[pool.token0,pool.token1],[pool.token1,pool.token0]]){
    const tokenIn=input===ZERO&&lower(a)===lower(dex.weth)?ZERO:lower(a);
    const tokenOut=output===ZERO&&lower(b)===lower(dex.weth)?ZERO:lower(b);
@@ -121,7 +135,10 @@ export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],sing
   for(const edge of edges){
    if(edge.tokenIn!==token||seen.has(edge.tokenOut)||legs.some(l=>lower(l.poolIds[0])===lower(edge.poolIds[0])))continue;
    const next=[...legs,edge];
-   if(edge.tokenOut===output){if(policy.allowsRoute(next))routes.push(next);}
+   if(edge.tokenOut===output){
+    const linear=linearV2Only||fstRequiresLinearV2(configVersion,next.flatMap(l=>[l.tokenIn,l.tokenOut,...(l.kind==='v3'?[]:l.path)]),SWAP_ADAPTERS,adaptersOff);
+    if((!linear||next.every(l=>l.kind==='v2'))&&policy.allowsRoute(next))routes.push(next);
+   }
    else visit(edge.tokenOut,next,new Set([...seen,edge.tokenOut]));
   }
  }
@@ -148,7 +165,7 @@ export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],sing
  }
  const candidates=work.filter(r=>r.out>0n).map(r=>({out:r.out,legs:r.quoted,routeStages:r.quoted.map(l=>({tokenIn:l.tokenIn,tokenOut:l.tokenOut,out:l.out,legs:[l]}))}));
  // Parallel direct pools share the same stage; its final branch receives the exact remainder.
- const direct=routes.filter(r=>r.length===1).map(r=>r[0]),splits=[];
+ const direct=routes.filter(r=>r.length===1&&!linearV2Only&&!fstRequiresLinearV2(configVersion,[r[0].tokenIn,r[0].tokenOut,...(r[0].kind==='v3'?[]:r[0].path)],SWAP_ADAPTERS,adaptersOff)).map(r=>r[0]),splits=[];
  for(let i=0;i<direct.length;i++)for(let j=i+1;j<direct.length;j++)for(const weight of[2500,5000,7500]){
   const a=amount*BigInt(weight)/BPS,b=amount-a;if(a===0n||b===0n)continue;
   splits.push([{leg:direct[i],amount:a,weight},{leg:direct[j],amount:b,weight:10000-weight}]);
@@ -172,10 +189,10 @@ export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],sing
 export async function quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,slippageBps,singleHop=false,preparedPolicy,contextNodeId}){
  const wrap=isWrap(tokenIn,tokenOut);
  const whole=preparedPolicy?await usePreparedPolicy(request,preparedPolicy,{tokenIn,tokenOut,config,contextNodeId}):wrap?null:await readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens:[config.defaultFeeToken]});
- const findRoute=async(from,to,amount,used)=>{
+ const findRoute=async(from,to,amount,used,routeOptions)=>{
   if(isWrap(from,to))return{from,to,amountIn:amount,minimum:amount,out:amount,impact:0,legs:[{kind:'wrap',out:amount,amountIn:amount}],assertFresh(){}};
   const policy={...whole,...createPoolPolicy(whole.pools,whole.prices,from,to,{tradeTokenIn:tokenIn})};
-  const routes=await quoteFstRoutes(request,{from,to,amount,used,policy,singleHop});
+  const routes=await quoteFstRoutes(request,{from,to,amount,used,policy,singleHop,configVersion:config.version,adaptersOff:config.adaptersOff,...routeOptions});
   const valid=routes.candidates.filter(c=>{c.minimum=minimum(c.out,slippageBps);try{policy.assertValue(c.amountIn,c.minimum);return true;}catch{return false;}});
   if(!valid.length)throw noRoute();return{...valid[0],candidates:valid};
  };
@@ -196,9 +213,10 @@ export function fstServiceQuote(quote,{slippageBps,poolCheckedAt=quote.poolCheck
   stages:quote.stages.map(s=>({tokenIn:lower(s.tokenIn),tokenOut:lower(s.tokenOut),minOut:s.minOut,branches:s.branches.map(b=>({adapter:lower(b.adapter),kind:b.kind,weightBps:b.weightBps,path:b.path.map(lower),v3Path:b.v3Path.toLowerCase()}))})),segments};
 }
 export function validateFstQuote(quote,config,policy){
- if(config.version!=='2.0.0'||BigInt(config.feeConfigVersion)!==BigInt(quote.configVersion))throw Error('收费配置已变化，请刷新报价');
+ if(!['2.0.0','2.1.0'].includes(config.version)||BigInt(config.feeConfigVersion)!==BigInt(quote.configVersion))throw Error('收费配置已变化，请刷新报价');
  const fee=fstFeePolicy(quote.tokenIn,quote.tokenOut,config.defaultFeeToken);
  if(fee.token!==quote.feeToken||fee.mode!==quote.feeMode)throw Error('收费资产已变化，请刷新报价');
+ assertTopology(quote.stages,config);
  if(isWrap(quote.tokenIn,quote.tokenOut)&&quote.stages.length===1&&quote.stages[0].branches[0].kind===2)return{assert(){},assertValue(){},assertFresh(){}};
  for(const s of quote.segments){
   const part=createPoolPolicy(policy.pools,policy.prices,s.from,s.to,{tradeTokenIn:quote.tokenIn});part.assertRoute(s.legs);part.assertValue(s.amountIn,s.minimum);

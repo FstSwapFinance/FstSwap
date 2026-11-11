@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "chainId": 56,
+  "scope": "Read-only mainnet deployment and source verification; frontend/API activation is not asserted",
+  "verifiedAt": "2026-11-11T14:09:50.294Z",
+  "manifestDigest": "0x6a7a7ffd632fed5dba61a2cacba03c67d0e956285d91862b23da94b9e1130920",
+  "verificationBlock": {
+    "number": "0x7ed240f",
+    "hash": "0x0157ff6310b50f157e537cee7120436e03f79afc57ae0f3d9c0eebea1932d2fd"
+  },
+  "readOnlyVerification": true,
+  "verificationMethod": "verifyDeploymentSubmission",
+  "mainnetReceipts": 7,
+  "runtimeMatches": 4,
+  "requestCount": 61,
+  "methods": {
+    "eth_chainId": 1,
+    "eth_getTransactionByHash": 7,
+    "eth_getTransactionReceipt": 7,
+    "eth_getBlockByNumber": 16,
+    "eth_getCode": 4,
+    "eth_call": 26
+  },
+  "owner": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+  "feeReceiver": "0x66f2B90E9fAEf07E5931A3483882804B78f92Ae9",
+  "platformFeeBps": 30,
+  "feeConfigVersion": "4",
+  "config": {
+    "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+    "adapters": {
+      "fst": "0xdFabF87EE3A9A4cEdda43D3f8035C89E1C9438b7",
+      "pancake": "0x9De342bDFFB5da04D9865f4cd9846D22560D253a",
+      "v3": "0xE381c967c14b0c6ef82944E0e4b4272D24dd8957"
+    }
+  },
+  "sourceVerification": {
+    "provider": "sourcify",
+    "passed": 4,
+    "creationMatches": "exact_match",
+    "runtimeMatches": "exact_match",
+    "contracts": [
+      {
+        "step": "router",
+        "contract": "FstSwap",
+        "address": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+        "provider": "sourcify",
+        "url": "https://sourcify.dev/server/v2/contract/56/0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+        "chainId": "56",
+        "match": "exact_match",
+        "creationMatch": "exact_match",
+        "runtimeMatch": "exact_match",
+        "checkedAt": "2026-11-11T14:09:30.795Z"
+      },
+      {
+        "step": "fst",
+        "contract": "FstSwapAdapter56",
+        "address": "0xdFabF87EE3A9A4cEdda43D3f8035C89E1C9438b7",
+        "provider": "sourcify",
+        "url": "https://sourcify.dev/server/v2/contract/56/0xdFabF87EE3A9A4cEdda43D3f8035C89E1C9438b7",
+        "chainId": "56",
+        "match": "exact_match",
+        "creationMatch": "exact_match",
+        "runtimeMatch": "exact_match",
+        "checkedAt": "2026-11-11T14:09:30.327Z"
+      },
+      {
+        "step": "pancake",
+        "contract": "PancakeAdapter56",
+        "address": "0x9De342bDFFB5da04D9865f4cd9846D22560D253a",
+        "provider": "sourcify",
+        "url": "https://sourcify.dev/server/v2/contract/56/0x9De342bDFFB5da04D9865f4cd9846D22560D253a",
+        "chainId": "56",
+        "match": "exact_match",
+        "creationMatch": "exact_match",
+        "runtimeMatch": "exact_match",
+        "checkedAt": "2026-11-11T14:09:30.306Z"
+      },
+      {
+        "step": "v3",
+        "contract": "PancakeV3Adapter",
+        "address": "0xE381c967c14b0c6ef82944E0e4b4272D24dd8957",
+        "provider": "sourcify",
+        "url": "https://sourcify.dev/server/v2/contract/56/0xE381c967c14b0c6ef82944E0e4b4272D24dd8957",
+        "chainId": "56",
+        "match": "exact_match",
+        "creationMatch": "exact_match",
+        "runtimeMatch": "exact_match",
+        "checkedAt": "2026-11-11T14:09:31.087Z"
+      }
+    ]
+  },
+  "passed": true
+}

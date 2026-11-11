@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "chainId": 56,
+  "status": "deployed",
+  "name": "FstSwap",
+  "version": "2.1.0",
+  "release": "FstSwap-2.1.0-three-dex",
+  "deployer": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+  "owner": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+  "feeReceiver": "0x66f2B90E9fAEf07E5931A3483882804B78f92Ae9",
+  "platformFeeBps": 30,
+  "defaultFeeToken": "0x55d398326f99059fF775485246999027B3197955",
+  "feeConfigVersion": "4",
+  "manifestDigest": "0x6a7a7ffd632fed5dba61a2cacba03c67d0e956285d91862b23da94b9e1130920",
+  "readyForSigning": false,
+  "deployedConfig": {
+    "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+    "adapters": {
+      "fst": "0xdFabF87EE3A9A4cEdda43D3f8035C89E1C9438b7",
+      "pancake": "0x9De342bDFFB5da04D9865f4cd9846D22560D253a",
+      "v3": "0xE381c967c14b0c6ef82944E0e4b4272D24dd8957"
+    }
+  },
+  "deploymentVerifiedAt": "2026-11-11T14:09:50.294Z",
+  "verificationBlock": {
+    "number": "0x7ed240f",
+    "hash": "0x0157ff6310b50f157e537cee7120436e03f79afc57ae0f3d9c0eebea1932d2fd"
+  },
+  "creationTransaction": "0x4311b5bfa9f96ca093394a45948972a795939cc6bc9c7fc0cdd67da8360627fc",
+  "sourceVerificationStatus": "verified",
+  "sourceContracts": 4
+}

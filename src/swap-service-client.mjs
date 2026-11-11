@@ -1,4 +1,6 @@
-import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261111-32';
+import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261111-34';
+import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261111-34';
+import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261111-34';
 // Read-only API acceleration. Wallet requests and final transaction preflight stay local.
 const ZERO='0x'+'00'.repeat(20),ADDRESS=/^0x[0-9a-f]{40}$/i,HASH=/^0x[0-9a-f]{64}$/i;
 const businessErrors=new Set(['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY']);
@@ -88,6 +90,8 @@ function validateFstServiceQuote(q,c,input,adapters){
    check(same(branch.adapter,want.adapter)&&branch.kind===want.kind&&branch.weightBps===want.weightBps&&Array.isArray(branch.path)&&branch.path.length===want.path.length&&branch.path.every((a,k)=>same(a,want.path[k]))&&typeof branch.v3Path==='string'&&branch.v3Path.toLowerCase()===want.v3Path.toLowerCase());
   }
  }
+ const tokens=[q.tokenIn,q.tokenOut,...q.stages.flatMap(s=>[s.tokenIn,s.tokenOut,...s.branches.flatMap(b=>b.kind===1?[b.v3Path.slice(0,42),'0x'+b.v3Path.slice(48)]:b.path)])];
+ if(fstRequiresLinearV2(c.version,tokens,adapters,c.adaptersOff))check(q.stages.every(s=>s.branches.length===1&&s.branches[0].kind===0));
  const rate=BigInt(c.platformFeeBps),first=q.segments[0],last=q.segments.at(-1),base=mode==='input'?q.amountIn:first.out;
  check(q.lpFee===base*rate/BPS);
  check(first.amountIn===(mode==='input'?q.amountIn-q.lpFee:q.amountIn));
@@ -95,18 +99,19 @@ function validateFstServiceQuote(q,c,input,adapters){
  check(q.out===(mode==='output'?last.out-q.lpFee:last.out));
  check(Math.abs(q.impact-(1-q.segments.reduce((v,s)=>v*(1-s.impact),1)))<=1e-12);
 }
-export function validateServiceQuote(data,input,{router,adapters,clock=Date.now}={}){
+export function validateServiceQuote(data,input,{router,adapters,clock=Date.now,expectedVersion}={}){
  check(data?.schema===1&&data.chainId===56&&lower(data.router)===lower(router));
  check(addr(data.router)&&HASH.test(data.blockHash)&&/^0x[0-9a-f]+$/i.test(data.blockNumber));
  check(data.input&&Object.keys(input).every(k=>data.input[k]===input[k]));
  const q=data.quote,c=data.config,now=clock();
  check(Number.isFinite(data.quotedAt)&&Number.isFinite(data.expiresAt)&&data.quotedAt<=now+2000&&data.expiresAt>now&&data.expiresAt-data.quotedAt<=15000);
- check(['1.11','2.0.0'].includes(c?.version)&&Number.isInteger(c.platformFeeBps)&&c.platformFeeBps>=0&&c.platformFeeBps<=100&&addr(c.feeReceiver)&&addr(c.wbnb)&&addr(c.defaultFeeToken)&&typeof c.feeConfigVersion==='bigint'&&Array.isArray(c.adaptersOff));
+ check(['1.11','2.0.0','2.1.0'].includes(c?.version)&&Number.isInteger(c.platformFeeBps)&&c.platformFeeBps>=0&&c.platformFeeBps<=100&&addr(c.feeReceiver)&&addr(c.wbnb)&&addr(c.defaultFeeToken)&&typeof c.feeConfigVersion==='bigint'&&Array.isArray(c.adaptersOff));
+ if(expectedVersion!==undefined)check(c.version===expectedVersion);
  check(c.adaptersOff.every(key=>['fst','pancake','v3'].includes(key))&&new Set(c.adaptersOff).size===c.adaptersOff.length);
  check(q&&typeof q.amountIn==='bigint'&&q.amountIn===BigInt(input.amountIn)&&typeof q.out==='bigint'&&q.out>0n&&typeof q.lpFee==='bigint'&&q.lpFee>=0n&&addr(q.feeToken)&&Number.isFinite(q.impact)&&q.impact>=0);
  check(q.poolCheckedAt+15000===data.expiresAt);
  check(q.maxIn==null&&!q.exactOut);
- if(c.version==='2.0.0'){check(data.quotedAt<data.expiresAt);validateFstServiceQuote(q,c,input,adapters);return data;}
+ if(['2.0.0','2.1.0'].includes(c.version)){check(data.quotedAt<data.expiresAt);validateFstServiceQuote(q,c,input,adapters);return data;}
  const entries=Object.entries(adapters).filter(([key])=>['fst','pancake','v3'].includes(key)),empty=l=>l&&lower(l.adapter)===ZERO&&Array.isArray(l.path)&&l.path.length===0;
  const leg=l=>{
   const entry=entries.find(([,a])=>lower(a.adapter)===lower(l?.adapter));check(entry&&!c.adaptersOff.includes(entry[0]));
@@ -146,7 +151,7 @@ export function validateServiceQuote(data,input,{router,adapters,clock=Date.now}
 
  return data;
 }
-export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Date.now,quoteTimeout=6500,balanceTimeout=3500}={}){
+export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Date.now,quoteTimeout=6500,balanceTimeout=3500,expectedVersion}={}){
  const cooldown={quote:0,balances:0};
  async function post(action,input,timeout,signal){
   checkCallerSignal(signal);
@@ -166,7 +171,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
    checkCallerSignal(signal);
    const input={chainId:56,tokenIn:lower(tokenIn),tokenOut:lower(tokenOut),amountIn:amountIn.toString(),slippageBps,singleHop};
    const data=await post('quote',input,quoteTimeout,signal);checkCallerSignal(signal);if(!data)return null;
-   try{const result=validateServiceQuote(data,input,{router,adapters,clock});checkCallerSignal(signal);return result;}catch{checkCallerSignal(signal);cooldown.quote=clock()+30000;return null;}
+   try{const result=validateServiceQuote(data,input,{router,adapters,clock,expectedVersion});checkCallerSignal(signal);return result;}catch{checkCallerSignal(signal);cooldown.quote=clock()+30000;return null;}
   },
   async balances(account,tokens,{signal}={}){
    checkCallerSignal(signal);
@@ -188,4 +193,4 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
 }
 const host=globalThis.location?.hostname,local=['127.0.0.1','localhost'].includes(host);
 const enabled=!globalThis.FST_RPC_OVERRIDE&&!globalThis.FST_V10_CONFIG&&(local||host==='fstswap.pro'||host==='www.fstswap.pro'||/^fstswap-live(?:-[a-z0-9-]+)?\.vercel\.app$/.test(host||''));
-export const swapService=createServiceClient({base:enabled?'https://logo-api.fstswap.si/api/swap':''});
+export const swapService=createServiceClient({base:enabled?'https://logo-api.fstswap.si/api/swap':'',expectedVersion:FSTSWAP_CONFIG.version});

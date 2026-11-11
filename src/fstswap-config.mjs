@@ -1,16 +1,18 @@
-// BSC mainnet deployment verified from nine successful receipts.
+// BSC mainnet deployment verified from seven successful receipts; three adapters.
 export const FSTSWAP_CONFIG = Object.freeze({
-  name: 'FstSwap', version: '2.0.0', chainId: 56,
-  status: 'verified-mainnet',
-  router: '0x44101D7Ac0B9Ae7c2ac2C40cB6dE68BCC95268c9',
-  adapters: Object.freeze({
-    "fst": "0x3053F1C2E69DDA1bf67d7b8586F6BCc1375651EC",
-    "pancake": "0xC3E03597BE39b5a534665210DcEAB7F31BE1F15D",
-    "v3": "0x3726A0724633a10AE6590A2662e34Ba5c1b25FB8"
-}),
+  "name": "FstSwap",
+  "version": "2.1.0",
+  "chainId": 56,
+  "status": "verified-mainnet",
+  "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+  "adapters": Object.freeze({
+    "fst": "0xdFabF87EE3A9A4cEdda43D3f8035C89E1C9438b7",
+    "pancake": "0x9De342bDFFB5da04D9865f4cd9846D22560D253a",
+    "v3": "0xE381c967c14b0c6ef82944E0e4b4272D24dd8957"
+  })
 });
 export function fstSwapReady(config=FSTSWAP_CONFIG) {
   const address=value=>/^0x[0-9a-f]{40}$/i.test(value||'')&&!/^0x0{40}$/i.test(value);
-  return config.status==='verified-mainnet'&&config.chainId===56&&config.version==='2.0.0'
+  return config.status==='verified-mainnet'&&config.chainId===56&&['2.0.0','2.1.0'].includes(config.version)
     &&address(config.router)&&['fst','pancake','v3'].every(k=>address(config.adapters?.[k]));
 }

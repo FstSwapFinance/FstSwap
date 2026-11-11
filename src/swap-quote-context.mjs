@@ -1,5 +1,5 @@
-import {readSwapConfig} from './swap-aggregator.mjs?v=mainnet-20261111-32';
-import {readPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261111-32';
+import {readSwapConfig} from './swap-aggregator.mjs?v=mainnet-20261111-34';
+import {readPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261111-34';
 
 // Read-only quote work can be shared while typing. Submission always calls the
 // uncached config/pool readers again; this cache never changes snapshot expiry.
@@ -14,7 +14,7 @@ export function createQuoteContext(request,{readConfig=readSwapConfig,readPolicy
  }
  async function get(tokenIn,tokenOut) {
   const current=await config();
-  if(current.version==='2.0.0')return{config:current,poolPolicy:null};
+  if(['2.0.0','2.1.0'].includes(current.version))return{config:current,poolPolicy:null};
   const key=JSON.stringify([String(tokenIn).toLowerCase(),String(tokenOut).toLowerCase(),current],(_,v)=>typeof v==='bigint'?v.toString():v);
   let entry=snapshots.get(key);
   if(entry?.value){

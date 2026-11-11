@@ -1,6 +1,6 @@
-import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261111-32";
-import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261111-32";
-import { swapRpcWork } from "./swap-rpc-work.mjs?v=mainnet-20261111-32";
+import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261111-34";
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261111-34";
+import { swapRpcWork } from "./swap-rpc-work.mjs?v=mainnet-20261111-34";
 // 聚合路由 Swap 引擎（BSC 主网 56，FstSi aggregator-live v9「multi-pool」，合约 VERSION 1.01）。
 // 与 market-trade.mjs 相同的约束风格：全部函数只通过注入的 JSON-RPC
 // request 访问链上，返回精确的十进制字符串/大整数，浏览器与 Node 均可运行。
@@ -326,7 +326,7 @@ export async function readSwapConfig(request, { tokens = SWAP_TOKENS, adapters =
     defaultFeeToken: readEntry(4 + adapterList.length * 2, "defaultFeeToken")[0],
     feeConfigVersion: readEntry(5 + adapterList.length * 2, "feeConfigVersion")[0],
   } : {};
-  if (swapV10Ready() && contractVersion !== (V10_CONFIG.version === "2.0.0" ? "2.0.0" : "1.11")) throw error("SWAP_CONFIG", "聚合路由收费版本不匹配");
+  if (swapV10Ready() && contractVersion !== (["2.0.0","2.1.0"].includes(V10_CONFIG.version) ? V10_CONFIG.version : "1.11")) throw error("SWAP_CONFIG", "聚合路由收费版本不匹配");
   const config = { platformFeeBps: Number(fee), feeReceiver: receiver, wbnb, adaptersOff: off, version: contractVersion, ...feeConfig };
   if (factoryIface) {
     const entry = entries[calls.length - 1];

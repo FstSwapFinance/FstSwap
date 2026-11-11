@@ -1,0 +1,106 @@
+{
+  "schema": 1,
+  "status": "verified-mainnet",
+  "chainId": 56,
+  "name": "FstSwap",
+  "version": "2.1.0",
+  "release": "FstSwap-2.1.0-three-dex",
+  "manifestDigest": "0x6a7a7ffd632fed5dba61a2cacba03c67d0e956285d91862b23da94b9e1130920",
+  "verifiedAt": "2026-11-11T14:09:50.294Z",
+  "verificationBlock": {
+    "number": "0x7ed240f",
+    "hash": "0x0157ff6310b50f157e537cee7120436e03f79afc57ae0f3d9c0eebea1932d2fd"
+  },
+  "owner": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+  "feeReceiver": "0x66f2B90E9fAEf07E5931A3483882804B78f92Ae9",
+  "platformFeeBps": 30,
+  "defaultFeeToken": "0x55d398326f99059fF775485246999027B3197955",
+  "feeConfigVersion": "4",
+  "config": {
+    "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+    "adapters": {
+      "fst": "0xdFabF87EE3A9A4cEdda43D3f8035C89E1C9438b7",
+      "pancake": "0x9De342bDFFB5da04D9865f4cd9846D22560D253a",
+      "v3": "0xE381c967c14b0c6ef82944E0e4b4272D24dd8957"
+    }
+  },
+  "records": [
+    {
+      "step": "router",
+      "hash": "0x4311b5bfa9f96ca093394a45948972a795939cc6bc9c7fc0cdd67da8360627fc",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x34",
+      "contractAddress": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+      "blockNumber": "0x7ed2075",
+      "blockHash": "0x8f7a6366c2bfcf2419047d5731f1e7ce0b5d6f67e42292e4f2f5a72e2ad60a57",
+      "gasUsed": "0x3b584d",
+      "verified": true
+    },
+    {
+      "step": "fst",
+      "hash": "0xaf24bf40877c5f31ce182668913b538f713f1f51ba4f12a9094d95a745f35407",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x35",
+      "contractAddress": "0xdFabF87EE3A9A4cEdda43D3f8035C89E1C9438b7",
+      "blockNumber": "0x7ed2092",
+      "blockHash": "0xa694ed2e792100ed26d793096117a1a97da648217f77dcfa6bfcb46f531ded4b",
+      "gasUsed": "0xdf58d",
+      "verified": true
+    },
+    {
+      "step": "pancake",
+      "hash": "0xc2b32515a6032ff6cbd72aa2f02653dedc23d1f1f16ad04d063d65f3fdf14d4b",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x36",
+      "contractAddress": "0x9De342bDFFB5da04D9865f4cd9846D22560D253a",
+      "blockNumber": "0x7ed20ea",
+      "blockHash": "0x2c2b58e969463d96dd4982a599b83abf3430c913fb5ef82d9effb53b137e700f",
+      "gasUsed": "0xdf58d",
+      "verified": true
+    },
+    {
+      "step": "v3",
+      "hash": "0x5c0ea09d172ee7738ba506bb2f3b8c50a9bb33585ee6ab9be01f53626355c16d",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x37",
+      "contractAddress": "0xE381c967c14b0c6ef82944E0e4b4272D24dd8957",
+      "blockNumber": "0x7ed20fe",
+      "blockHash": "0xabbf67365581d06b35b114842c1ddb9d6bafc31e0dfccf36a9e857fcab8130cf",
+      "gasUsed": "0x10775b",
+      "verified": true
+    },
+    {
+      "step": "register-fst",
+      "hash": "0xd885e0d5a07381b85c93ad76d46b2a86239e536e7ff774d439fc1741b986350b",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x38",
+      "contractAddress": null,
+      "blockNumber": "0x7ed2118",
+      "blockHash": "0x25cfd4d5895f4ae1c8c246a2752e2a946773295252ddb7c573593a47f549c50f",
+      "gasUsed": "0x1c477",
+      "verified": true
+    },
+    {
+      "step": "register-pancake",
+      "hash": "0x0fd2db9a7e91551eead7cbf5b99ee2ea819214e74ee1426b596df05362bdf76f",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x39",
+      "contractAddress": null,
+      "blockNumber": "0x7ed212a",
+      "blockHash": "0x17eba9db73d46204ad445f11f23700d812daa1e70da4bb9d5a13f2140c36c8f2",
+      "gasUsed": "0x1c48d",
+      "verified": true
+    },
+    {
+      "step": "register-v3",
+      "hash": "0xfc128eb368886f71e232ccf4242c2ae7564bc627459cb1e3ebe7d90c582660d8",
+      "from": "0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15",
+      "nonce": "0x3a",
+      "contractAddress": null,
+      "blockNumber": "0x7ed2144",
+      "blockHash": "0x8f516c8fce178722169d5f495400004c27ad35a6532dc36dee1b98a1f8a4092d",
+      "gasUsed": "0x1a141",
+      "verified": true
+    }
+  ]
+}
