@@ -1,15 +1,15 @@
-import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261111-25';
-import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261111-25';
-import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261111-25';
-import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261111-25';
-import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261111-25';
-import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261111-25";
+import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261111-26';
+import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261111-26';
+import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261111-26';
+import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261111-26';
+import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261111-26';
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261111-26";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261111-25";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261111-26";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
@@ -17,16 +17,16 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261111-25";
+} from "./swap-aggregator.mjs?v=mainnet-20261111-26";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261111-25";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261111-26";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261111-25";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261111-26";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261111-25";
-import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261111-25";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261111-26";
+import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261111-26";
 
 const approvals = createApprovalTracker();
 const warmRequest = swapPublicRpc();
@@ -429,7 +429,7 @@ export async function mountSwapView(root) {
       else { label.textContent = T("兑换"); swapBtn.disabled = false; }
       if (!swapBtn.disabled) swapBtn.addEventListener("click", async()=>{
         if(inT()?.key!=="bnb"&&state.allowance==null){swapBtn.disabled=true;await refreshAllowance();renderBottom();return;}
-        openConfirm();
+        await startSwap();
       });
       if (needApprove) {
         const approveBtn = next.querySelector("button:not(#swap-button)");
@@ -610,7 +610,7 @@ export async function mountSwapView(root) {
   let quoteExpiryTimer=null,lastTypedAt=0;
   const quoteFlow=createQuoteRefresh({run:options=>refreshQuote(options),
     ready:()=>main.isConnected && !document.hidden && navigator.onLine!==false && !!inT() && !!outT() && Number(state.amount)>0,
-    blocked:()=>!!state.transactionBusy || !!document.querySelector('#confirm-swap-or-send')});
+    blocked:()=>!!state.transactionBusy});
   function scheduleQuote(ms=180) { ++state.seq;quoteFlow.schedule(ms); }
   function onAmountInput(e) {
     const hadQuote=!!state.quote,now=Date.now();
@@ -733,12 +733,12 @@ export async function mountSwapView(root) {
       poolPolicy?.assertFresh();
       poolPolicy?.assertValue(q.maxIn || q.amountIn, minOut(q));
       if (seq !== state.seq || !main.isConnected) return;
-      if(signal?.aborted || background && (state.transactionBusy || document.querySelector('#confirm-swap-or-send')))return;
+      if(signal?.aborted || background && state.transactionBusy)return;
       q.serviceExpiresAt ??= q.poolCheckedAt+15000;
       state.quote = q;state.quoteKey=inputKey;state.quoteError = "";
       clearTimeout(quoteExpiryTimer);
       quoteExpiryTimer=setTimeout(()=>{
-        if(main.isConnected && state.quote===q && !state.transactionBusy && !document.querySelector('#confirm-swap-or-send')) {state.quote=null;render();if(!quoteFlow.running?.())scheduleQuote(0);}
+        if(main.isConnected && state.quote===q && !state.transactionBusy) {state.quote=null;render();if(!quoteFlow.running?.())scheduleQuote(0);}
       },Math.max(0,q.serviceExpiresAt-Date.now()));
       // Read-only output and preloaded approval state render independently.
       render();
@@ -794,9 +794,8 @@ export async function mountSwapView(root) {
     }
   }
 
-  // —— 确认 / 等待 / 已提交 / 错误 弹窗（官方 ConfirmSwapModal + TransactionConfirmationModal） ——
+  // —— 确认 / 等待 / 已提交 / 错误状态；支付确认由钱包直接显示 ——
   function swapSummary(q, digits = 6) { return [sigDown(q.amountIn, inT().decimals, digits), inT().symbol, sigDown(q.out, outT().decimals, digits), outT().symbol]; }
-  function tokenLogo(tk, fromKey, sel) { return tk.key === "bnb" ? part("confirm_modal", '.hmwZZp') : part("confirm_modal", ".hWvOwN .eVErNz > svg"); }
   function refreshExpiredServiceQuote(q) {
     if (!q?.serviceExpiresAt || Date.now() < q.serviceExpiresAt) return false;
     if (state.quote === q) { state.quote = null; render(); scheduleQuote(0); }
@@ -809,31 +808,12 @@ export async function mountSwapView(root) {
     try { validateServiceQuote({...q.serviceMeta, quote:q}, input, {router:swapActiveRouter(), adapters:SWAP_ADAPTERS}); }
     catch { throw Object.assign(new Error(tr("报价已失效，请重新获取", "Quote is no longer valid; refresh it")), {code:"UNSAFE_QUOTE"}); }
   }
-  function openConfirm() {
+  function startSwap() {
+    const q = state.quote;
+    if (state.transactionBusy || !wallet.account || !q || refreshExpiredServiceQuote(q)) return;
+    if (inputError() || needsApproval()) { renderBottom(); return; }
     quoteFlow.pause();
-    const q = state.quote; if (!q || refreshExpiredServiceQuote(q)) return;
-    const confirmation = {account:wallet.account,inKey:page.inKey,outKey:page.outKey,slippage:settings.slippageBps};
-    const overlay = tpl("confirm_modal");
-    const [ain, sin, aout, sout] = swapSummary(q);
-    const boxes = overlay.querySelectorAll(".exvWjX");
-    const fill = (box, tk, amount) => {
-      const left = box.querySelectorAll(".jmNfaf")[1].children[0]; const logo = left.firstElementChild;
-      const replacement=tokenLogo(tk); logo.replaceWith(replacement); applyTokenLogo(replacement,tk); left.querySelector(".css-10ob8xa").textContent = tk.symbol;
-      box.querySelector(".kHiJLl").textContent = amount;
-    };
-    fill(boxes[0], inT(), ain); fill(boxes[1], outT(), aout);
-    const priceBtn = overlay.querySelector("button.kePVKR"); const pt = priceText(q); priceBtn.title = pt + " "; priceBtn.querySelector(".css-1ieyfqs").textContent = pt;
-    const oldDetails = boxes[2]; const nd = detailsEl(q); nd.className = oldDetails.className; nd.setAttribute("style", oldDetails.getAttribute("style")); oldDetails.replaceWith(nd);
-    const note = overlay.querySelector(".css-aegmdr"); const b = note.querySelector("b"); b.textContent = fmtTokens(minOut(q), outT()) + " " + outT().symbol;
-    note.childNodes.forEach((n) => { if (n.nodeType === 3 && /至少/.test(n.nodeValue)) n.nodeValue = T("输出数额仅为估值。您将收到至少") + " "; });
-    overlay.querySelector(".jmNfaf > svg")?.addEventListener("click", closeModal);
-    const confirmBtn = overlay.querySelector("#confirm-swap-or-send");
-    confirmBtn?.addEventListener("click", () => {
-      if(refreshExpiredServiceQuote(q))return;
-      if(state.quote!==q || wallet.account!==confirmation.account || page.inKey!==confirmation.inKey || page.outKey!==confirmation.outKey || settings.slippageBps!==confirmation.slippage){errorModal(tr("报价、账户或设置已改变，请重新确认", "Quote, account or settings changed; review again"));return;}
-      executeSwap(q);
-    });
-    openModal(overlay,{onClose:()=>{if(main.isConnected && state.amount && !state.transactionBusy)quoteFlow.schedule(0,{background:true});}});
+    return executeSwap(q);
   }
   function pendingModal(text) {
     const overlay = tpl("pending_modal");
@@ -878,6 +858,7 @@ export async function mountSwapView(root) {
     closeModal();renderBottom();return true;
   }
   async function executeSwap(q) {
+    if (state.transactionBusy || !wallet.account || !q || state.quote !== q) return;
     if (refreshExpiredServiceQuote(q)) return;
     if (q.exactOut || q.kind === "v10exact") { state.quote = null; closeModal(); renderBottom(); scheduleQuote(0); return; }
     const [ain, sin, aout, sout] = swapSummary(q);

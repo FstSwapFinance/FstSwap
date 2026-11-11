@@ -1,4 +1,4 @@
-import { swapService } from './swap-service-client.mjs?v=mainnet-20261111-25';
+import { swapService } from './swap-service-client.mjs?v=mainnet-20261111-26';
 const MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
 const ABI=['function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])',
  'function getEthBalance(address) view returns(uint256)','function balanceOf(address) view returns(uint256)'];
