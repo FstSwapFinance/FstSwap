@@ -1,4 +1,4 @@
-import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261111-30';
+import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261111-32';
 // Read-only API acceleration. Wallet requests and final transaction preflight stay local.
 const ZERO='0x'+'00'.repeat(20),ADDRESS=/^0x[0-9a-f]{40}$/i,HASH=/^0x[0-9a-f]{64}$/i;
 const businessErrors=new Set(['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY']);
@@ -34,7 +34,7 @@ function validateFstServiceQuote(q,c,input,adapters){
  const from=lower(input.tokenIn),to=lower(input.tokenOut),mode=feeAssets.has(from)?'input':feeAssets.has(to)?'output':'intermediate',fee=mode==='input'?from:mode==='output'?to:lower(c.defaultFeeToken);
  check(q.feeMode===mode&&lower(q.feeToken)===fee);
  check(Array.isArray(q.segments)&&q.segments.length===(mode==='intermediate'?2:1)&&Array.isArray(q.stages)&&q.stages.length>0&&q.stages.length<=6);
- const dexes=Object.entries(adapters),pools=new Set(),expectedStages=[];
+ const dexes=Object.entries(adapters).filter(([key])=>['fst','pancake','v3'].includes(key)),pools=new Set(),expectedStages=[];
  const wrapPair=(a,b)=>[lower(a),lower(b)].sort().join(':')===[ZERO,WBNB].sort().join(':');
  const signature=l=>JSON.stringify([lower(l.adapter),l.kind,Array.isArray(l.path)?l.path.map(lower):String(l.path).toLowerCase(),lower(l.tokenIn),lower(l.tokenOut),String(l.amountIn),String(l.out),l.weightBps,l.poolIds.map(lower)]);
  function checkLeg(l){
@@ -102,11 +102,12 @@ export function validateServiceQuote(data,input,{router,adapters,clock=Date.now}
  const q=data.quote,c=data.config,now=clock();
  check(Number.isFinite(data.quotedAt)&&Number.isFinite(data.expiresAt)&&data.quotedAt<=now+2000&&data.expiresAt>now&&data.expiresAt-data.quotedAt<=15000);
  check(['1.11','2.0.0'].includes(c?.version)&&Number.isInteger(c.platformFeeBps)&&c.platformFeeBps>=0&&c.platformFeeBps<=100&&addr(c.feeReceiver)&&addr(c.wbnb)&&addr(c.defaultFeeToken)&&typeof c.feeConfigVersion==='bigint'&&Array.isArray(c.adaptersOff));
+ check(c.adaptersOff.every(key=>['fst','pancake','v3'].includes(key))&&new Set(c.adaptersOff).size===c.adaptersOff.length);
  check(q&&typeof q.amountIn==='bigint'&&q.amountIn===BigInt(input.amountIn)&&typeof q.out==='bigint'&&q.out>0n&&typeof q.lpFee==='bigint'&&q.lpFee>=0n&&addr(q.feeToken)&&Number.isFinite(q.impact)&&q.impact>=0);
  check(q.poolCheckedAt+15000===data.expiresAt);
  check(q.maxIn==null&&!q.exactOut);
  if(c.version==='2.0.0'){check(data.quotedAt<data.expiresAt);validateFstServiceQuote(q,c,input,adapters);return data;}
- const entries=Object.entries(adapters),empty=l=>l&&lower(l.adapter)===ZERO&&Array.isArray(l.path)&&l.path.length===0;
+ const entries=Object.entries(adapters).filter(([key])=>['fst','pancake','v3'].includes(key)),empty=l=>l&&lower(l.adapter)===ZERO&&Array.isArray(l.path)&&l.path.length===0;
  const leg=l=>{
   const entry=entries.find(([,a])=>lower(a.adapter)===lower(l?.adapter));check(entry&&!c.adaptersOff.includes(entry[0]));
   let path;

@@ -1,19 +1,19 @@
-import { createReceiptReadScope } from './swap-receipt-read.mjs?v=mainnet-20261111-30';
-import { createIdleRead } from './swap-idle-read.mjs?v=mainnet-20261111-30';
-import { swapRpcWork } from './swap-rpc-work.mjs?v=mainnet-20261111-30';
-import { recheckSwapQuote, createSubmissionReadContext, prepareSwapSubmission } from './swap-preflight.mjs?v=mainnet-20261111-30';
-import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261111-30';
-import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261111-30';
-import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261111-30';
-import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261111-30';
-import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261111-30';
-import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261111-30";
+import { createReceiptReadScope } from './swap-receipt-read.mjs?v=mainnet-20261111-32';
+import { createIdleRead } from './swap-idle-read.mjs?v=mainnet-20261111-32';
+import { swapRpcWork } from './swap-rpc-work.mjs?v=mainnet-20261111-32';
+import { recheckSwapQuote, createSubmissionReadContext, prepareSwapSubmission } from './swap-preflight.mjs?v=mainnet-20261111-32';
+import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261111-32';
+import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261111-32';
+import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261111-32';
+import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261111-32';
+import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261111-32';
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261111-32";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261111-30";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261111-32";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
@@ -21,16 +21,16 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261111-30";
+} from "./swap-aggregator.mjs?v=mainnet-20261111-32";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261111-30";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261111-32";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261111-30";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261111-32";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261111-30";
-import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261111-30";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261111-32";
+import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261111-32";
 
 const approvals = createApprovalTracker();
 const sharedQuoteContext = createQuoteContext(swapPublicRpc());

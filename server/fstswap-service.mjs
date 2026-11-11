@@ -3,8 +3,8 @@ import {pathToFileURL} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {isIP} from 'node:net';
 import {ethers} from 'ethers';
-import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261111-25';
-import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261111-25';
+import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261111-32';
+import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261111-32';
 import {readTokenBalances} from '../src/swap-balances.mjs';
 import {createReadPool} from './swap-read-pool.mjs';
 export {createReadPool};
@@ -208,7 +208,7 @@ export function createApi({engine,pool,balancePool=pool,clock=Date.now,maxActive
   const origin=req.headers.origin;if(allowedOrigins.includes(origin)){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Methods','POST, GET, OPTIONS');res.setHeader('Access-Control-Allow-Headers','Content-Type');res.setHeader('Access-Control-Max-Age','600');}
   const reply=(status,body)=>{if(res.destroyed)return;res.writeHead(status,{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(encode(body));};
   const routes={'/api/swap/quote':'quote','/api/swap/balances':'balances'};
-  if(req.url==='/api/swap/health'&&req.method==='GET'){const health=pool.health();return reply(200,{service:'fstswap-api',version:'1',chainId:56,readOnly:true,router:swapActiveRouter(),ready:health.providers.some(p=>p.ready),active,activeByRole:{...activeByRole},pool:health,balancePool:balancePool===pool?health:balancePool.health(),roles:{quote:'pool',balances:'balancePool',shared:balancePool===pool}});}
+  if(req.url==='/api/swap/health'&&req.method==='GET'){const health=pool.health();return reply(200,{service:'fstswap-api',version:'1',chainId:56,readOnly:true,router:swapActiveRouter(),adapters:Object.keys(SWAP_ADAPTERS),ready:health.providers.some(p=>p.ready),active,activeByRole:{...activeByRole},pool:health,balancePool:balancePool===pool?health:balancePool.health(),roles:{quote:'pool',balances:'balancePool',shared:balancePool===pool}});}
   const action=routes[req.url];if(action&&req.method==='OPTIONS'){res.writeHead(204);return res.end();}if(!action)return reply(404,{error:'NOT_FOUND'});
   if(req.method!=='POST')return reply(405,{error:'METHOD_NOT_ALLOWED'});
   if(!/^application\/json(?:;.*)?$/i.test(req.headers['content-type']||''))return reply(415,{error:'CONTENT_TYPE'});

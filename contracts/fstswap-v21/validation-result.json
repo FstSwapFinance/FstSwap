@@ -30,11 +30,16 @@
     "broadcast": false
   },
   "localDeploymentRehearsal": {
+    "status": "passed-local-only",
     "passed": true,
-    "receipts": 9,
-    "runtimeMatches": 5,
+    "receipts": 7,
+    "runtimeMatches": 4,
+    "feeConfigVersion": "4",
+    "independentDeploymentVerifier": true,
+    "manifestDigest": "0x6a7a7ffd632fed5dba61a2cacba03c67d0e956285d91862b23da94b9e1130920",
     "scope": "LOCAL ANVIL FORK ONLY",
-    "sourceBlock": 132975560
+    "sourceBlock": 132979051,
+    "mainnetBroadcast": false
   },
   "independentReview": "No new P1/P2 found in verified-hop reuse; not a formal audit",
   "externalAbiChanged": false

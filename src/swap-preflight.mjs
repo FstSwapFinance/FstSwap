@@ -8,7 +8,7 @@ const address=(value,allowZero=false)=>{
 function snapshot(config){
  if(!config||!['2.0.0','2.1.0'].includes(config.version)||typeof config.feeConfigVersion!=='bigint'||config.feeConfigVersion<=0n||!Number.isInteger(config.platformFeeBps)||config.platformFeeBps<0||config.platformFeeBps>100||!Array.isArray(config.adaptersOff))throw invalid();
  const off=[...config.adaptersOff];
- if(off.some(key=>!['fst','pancake','biswap','v3'].includes(key))||new Set(off).size!==off.length)throw invalid();
+ if(off.some(key=>!['fst','pancake','v3'].includes(key))||new Set(off).size!==off.length)throw invalid();
  return {version:config.version,feeConfigVersion:config.feeConfigVersion,platformFeeBps:config.platformFeeBps,
   defaultFeeToken:address(config.defaultFeeToken,true),feeReceiver:address(config.feeReceiver),wbnb:address(config.wbnb),adaptersOff:off.sort()};
 }

@@ -1,6 +1,6 @@
-import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261111-30";
-import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261111-30";
-import { swapRpcWork } from "./swap-rpc-work.mjs?v=mainnet-20261111-30";
+import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261111-32";
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261111-32";
+import { swapRpcWork } from "./swap-rpc-work.mjs?v=mainnet-20261111-32";
 // 聚合路由 Swap 引擎（BSC 主网 56，FstSi aggregator-live v9「multi-pool」，合约 VERSION 1.01）。
 // 与 market-trade.mjs 相同的约束风格：全部函数只通过注入的 JSON-RPC
 // request 访问链上，返回精确的十进制字符串/大整数，浏览器与 Node 均可运行。
@@ -23,12 +23,11 @@ const V10_DEFAULT = Object.freeze({
   adapters: Object.freeze({
     fst: "0xB3F425939E0bef2E1312376dF2288CF8a39A63E5",
     pancake: "0xe3f83002413c029BA7F194a878b8C36B03d3d8a0",
-    biswap: "0xA2Be5520ef3FE334fCB68E649787636b3ff84A65",
     v3: "0x43B2Ede2217ACd3de6542F7C4baFEb488cbbC7a2",
   }),
 });
 const V10_CONFIG = globalThis.FST_V10_CONFIG ?? (fstSwapReady() ? FSTSWAP_CONFIG : V10_DEFAULT);
-const V10_REQUIRED = ["fst", "pancake", "v3", "biswap"];
+const V10_REQUIRED = ["fst", "pancake", "v3"];
 export const SWAP_V10 = Object.freeze({
   router: V10_CONFIG.router || "",
   adapters: Object.freeze(Object.fromEntries([...V10_REQUIRED,"thena","kyber"].map(k=>[k,V10_CONFIG.adapters?.[k]||""]))),
@@ -138,8 +137,6 @@ const SWAP_ADAPTERS_V9 = Object.freeze({
     router: "0x10ED43C718714eb63d5aA57B78B54704E256024E", weth: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", v3: false },
   v3: { key: "v3", name: "PancakeSwap V3", adapter: "0xe86dE838B0eFd64ADFCD3F1EA0e0BA04A3d58A4B",
     router: "0x1b81D678ffb9C0263b24A97847620C99d213eB14", weth: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", v3: true },
-  biswap: { key: "biswap", name: "BiSwap", adapter: "0x878e412721fC234f721c84Ca936fcAF89b5637c6",
-    router: "0x3a6d8cA21D1CF76F653A67577FA0D27453350dD8", weth: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", v3: false },
   thena: { key: "thena", name: "Thena", adapter: "0x50e3835222a80A3a043bA52C1f06790c329173d8",
     router: "0xd4ae6eCA985340Dd434D38F470aCCce4DC78D109", weth: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", v3: false },
   kyber: { key: "kyber", name: "KyberSwap", adapter: "0xd7b6Ea84711F55b444e10b21F0944D529ED7Ec35",
@@ -619,20 +616,13 @@ export async function quoteSwap(request, options) {
     { kind: "direct", first: "fst" },
     { kind: "two", first: "pancake", second: "fst", via: usdt },
     { kind: "two", first: "pancake", second: "pancake", via: usdt },
-    { kind: "two", first: "pancake", second: "biswap", via: usdt },
-    { kind: "two", first: "biswap", second: "fst", via: usdt },
-    { kind: "two", first: "biswap", second: "pancake", via: usdt },
     { kind: "two", first: "fst", second: "fst", via: usdt },
     { kind: "two", first: "fst", second: "pancake", via: usdt },
   ] : [
     { kind: "direct", first: "pancake" },
     { kind: "direct", first: "fst" },
     { kind: "two", first: "fst", second: "pancake", via: usdt },
-    { kind: "two", first: "fst", second: "biswap", via: usdt },
     { kind: "two", first: "pancake", second: "pancake", via: usdt },
-    { kind: "two", first: "pancake", second: "biswap", via: usdt },
-    { kind: "two", first: "biswap", second: "pancake", via: usdt },
-    { kind: "two", first: "biswap", second: "biswap", via: usdt },
   ]).filter(seed => !singleHop || seed.kind === "direct");
 
   const state = side === "buy"
@@ -1064,7 +1054,7 @@ export async function v10PlanFeeConversion(request, { input, feeBudget, config, 
     const a = Object.values(SWAP_ADAPTERS).find(a => lower(a.adapter) === lower(leg.adapter));
     return a ? poolKeys(a, leg.path) : [];
   }));
-  for (const key of ["fst", "pancake", "biswap"]) {
+  for (const key of ["fst", "pancake"]) {
     const a = SWAP_ADAPTERS[key];
     if (!a || config.adaptersOff?.includes(key)) continue;
     const target = lower(config.defaultFeeToken) === ZERO_ADDRESS ? a.weth : config.defaultFeeToken;
