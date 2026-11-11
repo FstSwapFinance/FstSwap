@@ -1,4 +1,4 @@
-import { swapService } from './swap-service-client.mjs?v=mainnet-20261112-35';
+import { swapService } from './swap-service-client.mjs?v=mainnet-20261112-36';
 const MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
 const ABI=['function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])',
  'function getEthBalance(address) view returns(uint256)','function balanceOf(address) view returns(uint256)'];
@@ -47,6 +47,7 @@ export async function readTokenBalances(request,account,tokens,{signal}={}) {
 // Short display cache shared by page transitions and the token picker. Transaction
 // refreshes use fresh:true; account/chain changes invalidate all in-flight writes.
 const balanceSnapshots=new Map();
+const DISPLAY_TTL_MS=5000;
 let balanceEpoch=0;
 export function invalidateWalletBalances(){balanceEpoch++;balanceSnapshots.clear();}
 function remember(key,entry){
@@ -66,16 +67,17 @@ export async function readWalletBalances(request,account,tokens,{fresh=false,clo
  const wanted=[...new Map(tokens.filter(Boolean).map(t=>[t.key,{...t}])).values()],owner=account.toLowerCase();
  const identity=t=>[owner,t.key,String(t.address||'native').toLowerCase(),t.decimals??''].join(':');
  if(fresh)invalidateWalletBalances();
+ const epoch=balanceEpoch;
+ const checkCurrent=()=>{checkSignal(signal);if(epoch!==balanceEpoch)throw abortError();};
  if(!wanted.length)return{balances:{},failed:[]};
  // Cancellable reads own their work. Their aborts and late responses cannot
  // disturb a shared display read. Only a successful, still-current result may
  // publish completed values, without replacing another reader's pending work.
  if(signal){
-  const epoch=balanceEpoch,rights=wanted.map(token=>{
+  const rights=wanted.map(token=>{
    const key=identity(token),entry=balanceSnapshots.get(key),age=entry?clock()-entry.completedAt:NaN;
-   return{token,key,entry,wasPending:entry?.pending===true,cached:entry?.pending===false&&age>=0&&age<3000};
+   return{token,key,entry,wasPending:entry?.pending===true,cached:entry?.pending===false&&age>=0&&age<DISPLAY_TTL_MS};
   });
-  const checkCurrent=()=>{checkSignal(signal);if(epoch!==balanceEpoch)throw abortError();};
   const completed=rights.filter(right=>right.cached),missing=rights.filter(right=>!right.cached);
   const values=await untilAborted(Promise.all(completed.map(right=>right.entry.promise)),signal);checkCurrent();
   const result=missing.length?await fetchBalances(request,account,missing.map(right=>right.token),signal):{balances:{},failed:[]};checkCurrent();
@@ -93,22 +95,23 @@ export async function readWalletBalances(request,account,tokens,{fresh=false,clo
  const selected=new Map(),missing=[];
  for(const token of wanted){
   const key=identity(token),entry=balanceSnapshots.get(key),age=entry?clock()-entry.completedAt:NaN;
-  if(entry&&(entry.pending||age>=0&&age<3000))selected.set(key,entry);
+  if(entry&&(entry.pending||age>=0&&age<DISPLAY_TTL_MS))selected.set(key,entry);
   else missing.push(token);
  }
  if(missing.length){
-  const batch=Promise.resolve().then(()=>fetchBalances(request,account,missing));
+  const batch=Promise.resolve().then(()=>{checkCurrent();return fetchBalances(request,account,missing);});
   for(const token of missing){
    const key=identity(token),entry={pending:true};
    const remove=()=>{if(balanceSnapshots.get(key)===entry)balanceSnapshots.delete(key);};
    entry.promise=batch.then(result=>{
-    const value=result.balances[token.key];entry.pending=false;
-    if(value!=null)entry.completedAt=clock();else remove();
+    const value=result.balances[token.key],completedAt=value!=null?clock():null;checkCurrent();entry.pending=false;
+    if(value!=null)entry.completedAt=completedAt;else remove();
     return value;
    },error=>{entry.pending=false;remove();throw error;});
    selected.set(key,entry);remember(key,entry);
   }
  }
  const values=await Promise.all(wanted.map(t=>selected.get(identity(t)).promise));
+ checkCurrent();
  return{balances:Object.fromEntries(wanted.flatMap((t,n)=>values[n]!=null?[[t.key,values[n]]]:[])),failed:wanted.filter((t,n)=>values[n]==null).map(t=>t.key)};
 }

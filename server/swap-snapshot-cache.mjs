@@ -1,5 +1,5 @@
 import {ethers} from 'ethers';
-import {SWAP_ABI,SWAP_ADAPTERS,swapActiveRouter} from '../src/swap-aggregator.mjs?v=mainnet-20261112-35';
+import {SWAP_ABI,SWAP_ADAPTERS,swapActiveRouter} from '../src/swap-aggregator.mjs?v=mainnet-20261112-36';
 
 const MULTICALL='0xca11bde05977b3631167028862be2a173976ca11';
 const abi=new ethers.Interface(['function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])']);
@@ -9,6 +9,14 @@ const protocol=new ethers.Interface([...SWAP_ABI,
  'function slot0() view returns(uint160,int24,uint16,uint16,uint16,uint32,bool)','function liquidity() view returns(uint128)',
  'function balanceOf(address) view returns(uint256)',
 ]);
+// ethers resolves a hex selector by hashing each ABI function on every scan.
+// Compile the fixed ABI once; passing its fragments retains the same decoder.
+const fragmentsBySelector=new Map();
+protocol.forEachFunction(fragment=>{
+ const selector=fragment.selector,previous=fragmentsBySelector.get(selector);
+ if(previous&&previous.format('sighash')!==fragment.format('sighash'))throw new Error('Ambiguous raw snapshot ABI selector');
+ fragmentsBySelector.set(selector,fragment);
+});
 const QUOTER='0xb048bbc1ee6b733fffcfb9e9cef7375518e25997';
 const ORACLES=new Set([
  '0x0567f2323251f0aab15c8dfb1967e4e8a7d42aee','0xb97ad0e74fa7d920791e90258a6e2085088b4320',
@@ -62,8 +70,10 @@ export function snapshotReader(snapshot,request,{nodeId,signal}={}){
  }
  function complete(call,data){
   try{
-   const selector=call.callData.slice(0,10).toLowerCase(),values=protocol.decodeFunctionResult(selector,data);
-   if(selector===AMOUNTS){const args=protocol.decodeFunctionData(selector,call.callData);return values[0].length===args[2].length&&values[0][0]===args[1]&&values[0].every(value=>value>0n);}
+   const selector=call.callData.slice(0,10).toLowerCase(),fragment=fragmentsBySelector.get(selector);
+   if(!fragment)return false;
+   const values=protocol.decodeFunctionResult(fragment,data);
+   if(selector===AMOUNTS){const args=protocol.decodeFunctionData(fragment,call.callData);return values[0].length===args[2].length&&values[0][0]===args[1]&&values[0].every(value=>value>0n);}
    if(selector===DEPTH&&values[0]<=0n)return false;
    // A missing optional factory must remain a fresh miss for the policy's
    // normal discovery fallback rather than poisoning it with an empty proof.
@@ -83,6 +93,12 @@ export function snapshotReader(snapshot,request,{nodeId,signal}={}){
   assertActive(signal);
   const tx=payload?.params?.[0],tag=payload?.params?.[1];
   if(payload?.method!=='eth_call'||payload.params?.length!==2||!tx||typeof tx!=='object'||Object.keys(tx).some(key=>!['to','data'].includes(key))||String(tx.to).toLowerCase()!==MULTICALL||typeof tx.data!=='string'||typeof tag!=='string'||tag.toLowerCase()!==snapshot.block.number.toLowerCase())return request(payload);
+  const traceKey='trace:'+MULTICALL+':'+tx.data.toLowerCase(),fullKey='full:'+MULTICALL+':'+tx.data.toLowerCase();
+  // These private entries exist only after this snapshot fully validates the
+  // same original calldata. The outer context gates above still run first;
+  // no external DTO can authorize skipping ABI work or a transaction check.
+  if(store.calls.has(traceKey))return store.calls.get(traceKey);
+  if(store.calls.has(fullKey))return store.calls.get(fullKey);
   let decoded;try{decoded=abi.decodeFunctionData('tryAggregate',tx.data);}catch{return request(payload);}
   if(decoded[0]!==false)return request(payload);
   const calls=Array.from(decoded[1],call=>({target:call.target,callData:call.callData,key:[call.target,call.callData].join(':').toLowerCase()}));
@@ -92,11 +108,9 @@ export function snapshotReader(snapshot,request,{nodeId,signal}={}){
   // those pools' known state selectors qualify; other unknown calls bypass.
   if(calls.some(call=>!trusted(call))){
    if(!stateTrace(calls))return request(payload);
-   const key='trace:'+MULTICALL+':'+tx.data.toLowerCase();
-   if(store.calls.has(key))return store.calls.get(key);
    const raw=await request(payload);assertActive(signal);
    let result;try{result=abi.decodeFunctionResult('tryAggregate',raw)[0];}catch{return raw;}
-   if(result.length===calls.length&&result.every((entry,n)=>entry.success&&complete(calls[n],entry.returnData)))remember(key,raw);
+   if(result.length===calls.length&&result.every((entry,n)=>entry.success&&complete(calls[n],entry.returnData)))remember(traceKey,raw);
    return raw;
   }
   // Keep this read's completed hits stable if another bound reader causes
@@ -113,7 +127,14 @@ export function snapshotReader(snapshot,request,{nodeId,signal}={}){
   const ordered=calls.map(call=>entries.has(call.key)?[entries.get(call.key).success,entries.get(call.key).returnData]:[true,hits.get(call.key)]);
   const raw=abi.encodeFunctionResult('tryAggregate',[ordered]);assertActive(signal);
   for(const call of calls)if(hits.has(call.key))learn(call,hits.get(call.key));
-  for(const call of missing){const entry=entries.get(call.key);if(entry.success&&complete(call,entry.returnData)){learn(call,entry.returnData);remember(call.key,entry.returnData);}}
+  let allComplete=true;
+  for(const call of missing){
+   const entry=entries.get(call.key),valid=entry.success&&complete(call,entry.returnData);
+   if(valid){learn(call,entry.returnData);remember(call.key,entry.returnData);}else allComplete=false;
+  }
+  // Existing row hits were already validated. Reuse each missing row's check
+  // above instead of decoding again just to admit the final complete response.
+  if(allComplete)remember(fullKey,raw);
   return raw;
  };
 }

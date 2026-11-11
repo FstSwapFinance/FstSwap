@@ -94,14 +94,14 @@ export async function prepareGasOptions({estimate,gasPrice,signal,timeoutMs=1200
 
 // Independent read-only work starts together. A rejected simulation is observed
 // immediately, but insufficient allowance returns to approval before using it.
-export async function prepareSwapSubmission({check,allowance,simulate,estimate,gasPrice,minimum,signal,gasTimeoutMs=1200}){
+export async function prepareSwapSubmission({check,allowance,simulate,estimate,gasPrice,gasOptions,minimum,signal,gasTimeoutMs=1200}){
  if(typeof minimum!=='bigint'||minimum<=0n||[check,allowance,simulate,estimate,gasPrice].some(fn=>typeof fn!=='function'))throw invalid();
  checkSignal(signal);
  const controller=new AbortController(),active=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
  const call=fn=>Promise.resolve().then(()=>{checkSignal(active);return fn({signal:active});});
  const settled=promise=>promise.then(value=>({value}),error=>({error}));
  const simulated=settled(call(simulate));
- const gas=settled(prepareGasOptions({estimate,gasPrice,signal:active,timeoutMs:gasTimeoutMs}));
+ const gas=settled(gasOptions?call(gasOptions):prepareGasOptions({estimate,gasPrice,signal:active,timeoutMs:gasTimeoutMs}));
  try{
   const [validated,approved]=await boundedRead(Promise.all([call(check),call(allowance)]),active);
   const policy=validated.policy;policy.assertFresh();checkSignal(active);

@@ -1,10 +1,13 @@
-import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-35';
-import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261112-35';
-import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261112-35';
+import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-36';
+import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261112-36';
+import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261112-36';
 // Read-only API acceleration. Wallet requests and final transaction preflight stay local.
 const ZERO='0x'+'00'.repeat(20),ADDRESS=/^0x[0-9a-f]{40}$/i,HASH=/^0x[0-9a-f]{64}$/i;
 const businessErrors=new Set(['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY']);
 const addr=v=>typeof v==='string'&&ADDRESS.test(v),lower=v=>String(v||ZERO).toLowerCase();
+const QUOTE_CACHE_MS=2000,QUOTE_CACHE_SIZE=32;
+// Canonicalize deployment fields; the outer adapter lookup order stays explicit.
+function quoteKey(value){return JSON.stringify(value,(_,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):typeof v==='bigint'?{$bigint:String(v)}:v);}
 function parseWire(text){return JSON.parse(text,(_,v)=>v&&typeof v==='object'&&Object.keys(v).length===1&&typeof v.$bigint==='string'&&/^-?[0-9]{1,78}$/.test(v.$bigint)?BigInt(v.$bigint):v);}
 function check(value){if(!value)throw Error('INVALID_SERVICE_RESPONSE');}
 function checkCallerSignal(signal){if(signal?.aborted)throw new DOMException('Service request canceled','AbortError');}
@@ -152,8 +155,13 @@ export function validateServiceQuote(data,input,{router,adapters,clock=Date.now,
  return data;
 }
 export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Date.now,quoteTimeout=6500,balanceTimeout=3500,expectedVersion}={}){
- const cooldown={quote:0,balances:0};
- async function post(action,input,timeout,signal){
+ const cooldown={quote:0,balances:0},completed=new Map(),pending=new Map();
+ function cool(action,signal,current){
+  if(!current())return;
+  const until=clock()+30000;checkCallerSignal(signal);
+  if(current())cooldown[action]=until;
+ }
+ async function post(action,input,timeout,signal,current=()=>true){
   checkCallerSignal(signal);
   if(!base||clock()<cooldown[action])return null;
   try{
@@ -163,15 +171,88 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
    const text=await waitForSignal(r.text(),activeSignal);checkCallerSignal(signal);check(text.length<1024*1024);const data=parseWire(text);checkCallerSignal(signal);
    if(!r.ok){if(businessErrors.has(data?.error))throw Object.assign(new Error(data.error),{code:data.error,reason:data.reason,retryable:['data','stale','oracle'].includes(data.reason)});throw Error('SERVICE_UNAVAILABLE');}
    return data;
-  }catch(e){checkCallerSignal(signal);if(businessErrors.has(e.code))throw e;cooldown[action]=clock()+30000;return null;}
+  }catch(e){checkCallerSignal(signal);if(businessErrors.has(e.code))throw e;cool(action,signal,current);return null;}
+ }
+ function subscribe(entry,signal){
+  checkCallerSignal(signal);
+  return new Promise((resolve,reject)=>{
+   const subscriber={resolve,reject,signal,onAbort:null};
+   subscriber.onAbort=()=>{
+    if(!entry.subscribers.delete(subscriber))return;
+    signal.removeEventListener('abort',subscriber.onAbort);
+    reject(new DOMException('Service request canceled','AbortError'));
+    if(!entry.subscribers.size&&!entry.done){
+     if(pending.get(entry.key)===entry)pending.delete(entry.key);
+     entry.controller.abort();
+    }
+   };
+   entry.subscribers.add(subscriber);
+   signal?.addEventListener('abort',subscriber.onAbort,{once:true});
+   if(signal?.aborted)subscriber.onAbort();
+  });
+ }
+ function settle(entry,error,data){
+  entry.done=true;
+  if(pending.get(entry.key)===entry)pending.delete(entry.key);
+  for(const subscriber of entry.subscribers){
+   subscriber.signal?.removeEventListener('abort',subscriber.onAbort);
+   try{checkCallerSignal(subscriber.signal);if(error)throw error;subscriber.resolve(data?structuredClone(data):null);}
+   catch(e){subscriber.reject(e);}
+  }
+  entry.subscribers.clear();
+ }
+ async function loadQuote(entry,input,binding){
+  const signal=entry.controller.signal,current=()=>pending.get(entry.key)===entry;
+  try{
+   const data=await post('quote',input,quoteTimeout,signal,current);checkCallerSignal(signal);
+   if(data){
+    try{validateServiceQuote(data,input,binding);checkCallerSignal(signal);}
+    catch{checkCallerSignal(signal);cool('quote',signal,current);settle(entry,null,null);return;}
+    const completedAt=clock();checkCallerSignal(signal);
+    // A newer fresh request supersedes this entry even if it finishes first or
+    // is canceled. An older completion must never replace the newer display.
+    if(current()&&entry.subscribers.size){
+     completed.delete(entry.key);completed.set(entry.key,{data,completedAt});
+     while(completed.size>QUOTE_CACHE_SIZE)completed.delete(completed.keys().next().value);
+    }
+   }
+   settle(entry,null,data);
+  }catch(e){settle(entry,e,null);}
  }
  return{
   available(){return !!base&&clock()>=cooldown.quote;},
-  async quote({tokenIn,tokenOut,amountIn,slippageBps,singleHop},{router,adapters,signal}={}){
+  async quote({tokenIn,tokenOut,amountIn,slippageBps,singleHop},{router,adapters,signal,fresh=false}={}){
    checkCallerSignal(signal);
    const input={chainId:56,tokenIn:lower(tokenIn),tokenOut:lower(tokenOut),amountIn:amountIn.toString(),slippageBps,singleHop};
-   const data=await post('quote',input,quoteTimeout,signal);checkCallerSignal(signal);if(!data)return null;
-   try{const result=validateServiceQuote(data,input,{router,adapters,clock,expectedVersion});checkCallerSignal(signal);return result;}catch{checkCallerSignal(signal);cooldown.quote=clock()+30000;return null;}
+   // Snapshot caller-owned deployment data before any asynchronous work. Only
+   // the private parsed DTO is retained; every consumer receives its own clone.
+   const binding={router,adapters:structuredClone(adapters),clock,expectedVersion},key=quoteKey([input,lower(router),Object.entries(binding.adapters??{}),expectedVersion]);
+   const now=clock();checkCallerSignal(signal);
+   if(!base||now<cooldown.quote)return null;
+   if(fresh)completed.delete(key);
+   else{
+    const saved=completed.get(key);
+    if(saved){
+     // Keep cancellation and the original deadlines effective until delivery,
+     // including an abort immediately after this async method is called.
+     await Promise.resolve();checkCallerSignal(signal);
+     const age=clock()-saved.completedAt;checkCallerSignal(signal);
+     if(age>=0&&age<QUOTE_CACHE_MS){
+      try{
+       validateServiceQuote(saved.data,input,binding);checkCallerSignal(signal);
+       if(completed.get(key)===saved){completed.delete(key);completed.set(key,saved);}
+       return structuredClone(saved.data);
+      }catch{checkCallerSignal(signal);}
+     }
+     if(completed.get(key)===saved)completed.delete(key);
+    }
+    const existing=pending.get(key);
+    if(existing){const data=await subscribe(existing,signal);checkCallerSignal(signal);return data;}
+   }
+   const entry={key,controller:new AbortController(),subscribers:new Set(),done:false};
+   pending.set(key,entry);
+   const result=subscribe(entry,signal);void loadQuote(entry,input,binding);
+   const data=await result;checkCallerSignal(signal);return data;
   },
   async balances(account,tokens,{signal}={}){
    checkCallerSignal(signal);

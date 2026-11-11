@@ -8,9 +8,10 @@ function address(value){
 }
 
 // A short display cache. Transaction and receipt checks must request fresh data.
-export function createAllowanceReader(request,{clock=Date.now,ttlMs=3000}={}){
+export function createAllowanceReader(request,{clock=Date.now,ttlMs=5000}={}){
  if(typeof request!=='function'||typeof clock!=='function'||!Number.isFinite(ttlMs)||ttlMs<0)throw new TypeError('Invalid allowance reader');
  const codec=new globalThis.ethers.Interface(ABI),entries=new Map();
+ let epoch=0;
  const remove=entry=>{if(entries.get(entry.key)===entry)entries.delete(entry.key);};
  function remember(entry){
   entries.delete(entry.key);entries.set(entry.key,entry);
@@ -34,6 +35,7 @@ export function createAllowanceReader(request,{clock=Date.now,ttlMs=3000}={}){
   });
  }
  function settle(entry,ok,value){
+  if(entry.epoch!==epoch){ok=false;value=abortError();}
   entry.pending=false;
   if(ok&&entry.cacheable&&entry.subscribers.size){entry.value=value;entry.completedAt=clock();}
   else remove(entry);
@@ -58,14 +60,20 @@ export function createAllowanceReader(request,{clock=Date.now,ttlMs=3000}={}){
    let entry=entries.get(key);
    if(!fresh&&cacheable&&entry?.cacheable){
     if(entry.pending)return subscribe(entry,signal);
-    const now=clock();checkSignal(signal);
-    if(now>=entry.completedAt&&now-entry.completedAt<ttlMs){remember(entry);return entry.value;}
+    const readEpoch=epoch,now=clock();checkSignal(signal);if(readEpoch!==epoch)throw abortError();
+    if(now>=entry.completedAt&&now-entry.completedAt<ttlMs){
+     remember(entry);await Promise.resolve();checkSignal(signal);if(readEpoch!==epoch)throw abortError();return entry.value;
+    }
    }
-   entry={key,cacheable,pending:true,subscribers:new Set(),delivered:false,fresh,controller:new AbortController()};remember(entry);
+   entry={key,cacheable,pending:true,subscribers:new Set(),delivered:false,fresh,epoch,controller:new AbortController()};remember(entry);
    const result=subscribe(entry,signal);
    if(entry.subscribers.size)void run(entry,{method:'eth_call',params:[{to:token,data:codec.encodeFunctionData('allowance',[account,spender])},blockTag]});
    return result;
   },
-  invalidate(){entries.clear();}
+  invalidate(){
+   epoch++;
+   for(const entry of [...entries.values()]){entry.controller.abort();settle(entry,false,abortError());}
+   entries.clear();
+  }
  };
 }
