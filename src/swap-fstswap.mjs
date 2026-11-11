@@ -1,6 +1,6 @@
 // FstSwap staged versions: exact-input only, one fee on the real main route.
-import {SWAP_ADAPTERS,SWAP_ABI,swapActiveRouter} from './swap-aggregator.mjs?v=mainnet-20261111-34';
-import {readPoolPolicy,createPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261111-34';
+import {SWAP_ADAPTERS,SWAP_ABI,swapActiveRouter} from './swap-aggregator.mjs?v=mainnet-20261112-35';
+import {readPoolPolicy,createPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261112-35';
 const ZERO='0x'+'00'.repeat(20),BPS=10000n;
 const lower=x=>String(x||ZERO).toLowerCase();
 export const FST_FEE_ASSETS=Object.freeze({BNB:ZERO,USDT:'0x55d398326f99059ff775485246999027b3197955',FIST:'0xc9882def23bc42d53895b8361d0b1edc7570bc6a',WBNB:'0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',ETH:'0x2170ed0880ac9a755fd29b2688956bd959f933f8',USDC:'0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d'});
@@ -158,19 +158,22 @@ export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],sing
    });
   }
  }
- const work=routes.map(legs=>({legs,quoted:[],out:amount}));
- for(let depth=0;depth<3;depth++){
-  await fill(work.filter(r=>r.out>0n&&r.legs[depth]).map(r=>({leg:r.legs[depth],amount:r.out})));
-  for(const r of work){const leg=r.legs[depth];if(!leg||r.out<=0n)continue;const before=r.out;r.out=cache.get(quoteKey(leg,before))||0n;r.quoted.push({...leg,amountIn:before,out:r.out,weightBps:10000});}
- }
- const candidates=work.filter(r=>r.out>0n).map(r=>({out:r.out,legs:r.quoted,routeStages:r.quoted.map(l=>({tokenIn:l.tokenIn,tokenOut:l.tokenOut,out:l.out,legs:[l]}))}));
  // Parallel direct pools share the same stage; its final branch receives the exact remainder.
+ // Their inputs are known before any route response, so include them in the
+ // first layer rather than waiting for every dependent multi-hop layer.
  const direct=routes.filter(r=>r.length===1&&!linearV2Only&&!fstRequiresLinearV2(configVersion,[r[0].tokenIn,r[0].tokenOut,...(r[0].kind==='v3'?[]:r[0].path)],SWAP_ADAPTERS,adaptersOff)).map(r=>r[0]),splits=[];
  for(let i=0;i<direct.length;i++)for(let j=i+1;j<direct.length;j++)for(const weight of[2500,5000,7500]){
   const a=amount*BigInt(weight)/BPS,b=amount-a;if(a===0n||b===0n)continue;
   splits.push([{leg:direct[i],amount:a,weight},{leg:direct[j],amount:b,weight:10000-weight}]);
  }
- await fill(splits.flat());
+ const work=routes.map(legs=>({legs,quoted:[],out:amount}));
+ for(let depth=0;depth<3;depth++){
+  const items=work.filter(r=>r.out>0n&&r.legs[depth]).map(r=>({leg:r.legs[depth],amount:r.out}));
+  if(depth===0)items.push(...splits.flat());
+  await fill(items);
+  for(const r of work){const leg=r.legs[depth];if(!leg||r.out<=0n)continue;const before=r.out;r.out=cache.get(quoteKey(leg,before))||0n;r.quoted.push({...leg,amountIn:before,out:r.out,weightBps:10000});}
+ }
+ const candidates=work.filter(r=>r.out>0n).map(r=>({out:r.out,legs:r.quoted,routeStages:r.quoted.map(l=>({tokenIn:l.tokenIn,tokenOut:l.tokenOut,out:l.out,legs:[l]}))}));
  for(const split of splits){
   const legs=split.map(({leg,amount,weight})=>({...leg,amountIn:amount,out:cache.get(quoteKey(leg,amount))||0n,weightBps:weight}));if(legs.some(l=>l.out<=0n))continue;
   const out=legs.reduce((a,l)=>a+l.out,0n);candidates.push({out,legs,routeStages:[{tokenIn:from,tokenOut:to,out,legs}]});

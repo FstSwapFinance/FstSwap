@@ -75,21 +75,42 @@ export function createSubmissionReadContext(request,{clock=Date.now,signal}={}){
  return{read,block,signal:active,dispose(){controller.abort();reads.clear();header=null;}};
 }
 
-// Independent read-only work starts together. Configuration, pool admission and
-// simulation remain hard gates; only the existing gas defaults may be used.
-export async function prepareSwapSubmission({check,allowance,simulate,estimate,gasPrice,minimum,signal}){
+// Gas information already had fallbacks. Give only these optional reads a short
+// budget; mandatory simulation and pool/config checks keep their full budget.
+export async function prepareGasOptions({estimate,gasPrice,signal,timeoutMs=1200,multiplierBps=13000,fallbackGasLimit=900000n,fallbackGasPrice=3000000000n}){
+ if([estimate,gasPrice].some(fn=>typeof fn!=='function')||!Number.isInteger(timeoutMs)||timeoutMs<=0||!Number.isInteger(multiplierBps)||multiplierBps<10000)throw invalid();
+ checkSignal(signal);
+ const optional=async fn=>{
+  const controller=new AbortController(),active=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
+  try{
+   const result=await boundedRead(Promise.resolve().then(()=>fn({signal:active})),active,timeoutMs);
+   const value=BigInt(result);return value>0n?value:null;
+  }catch{return null;}
+  finally{controller.abort();}
+ };
+ const [estimated,priced]=await Promise.all([optional(estimate),optional(gasPrice)]);checkSignal(signal);
+ return{gasLimit:estimated==null?fallbackGasLimit:estimated*BigInt(multiplierBps)/10000n,gasPrice:priced??fallbackGasPrice};
+}
+
+// Independent read-only work starts together. A rejected simulation is observed
+// immediately, but insufficient allowance returns to approval before using it.
+export async function prepareSwapSubmission({check,allowance,simulate,estimate,gasPrice,minimum,signal,gasTimeoutMs=1200}){
  if(typeof minimum!=='bigint'||minimum<=0n||[check,allowance,simulate,estimate,gasPrice].some(fn=>typeof fn!=='function'))throw invalid();
  checkSignal(signal);
- const results=await boundedRead(Promise.allSettled([check,allowance,simulate,estimate,gasPrice].map(fn=>Promise.resolve().then(()=>fn({signal})))),signal);
- checkSignal(signal);
- const [validated,approved,simulated,estimated,priced]=results;
- if(validated.status==='rejected')throw validated.reason;
- if(approved.status==='rejected')throw approved.reason;
- const policy=validated.value.policy;policy.assertFresh();
- if(approved.value===true)return{policy,needsApproval:true};
- if(simulated.status==='rejected')throw simulated.reason;
- if(typeof simulated.value!=='bigint'||simulated.value<minimum)throw Object.assign(Error('链上仿真未满足最少到账约束'),{code:'UNSAFE_QUOTE'});
- return{policy,needsApproval:false,simulated:simulated.value,
-  gasLimit:estimated.status==='fulfilled'?BigInt(estimated.value)*13n/10n:900000n,
-  gasPrice:priced.status==='fulfilled'?BigInt(priced.value):3000000000n};
+ const controller=new AbortController(),active=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
+ const call=fn=>Promise.resolve().then(()=>{checkSignal(active);return fn({signal:active});});
+ const settled=promise=>promise.then(value=>({value}),error=>({error}));
+ const simulated=settled(call(simulate));
+ const gas=settled(prepareGasOptions({estimate,gasPrice,signal:active,timeoutMs:gasTimeoutMs}));
+ try{
+  const [validated,approved]=await boundedRead(Promise.all([call(check),call(allowance)]),active);
+  const policy=validated.policy;policy.assertFresh();checkSignal(active);
+  if(approved===true)return{policy,needsApproval:true};
+  const simulation=await boundedRead(simulated,active);checkSignal(active);
+  if(simulation.error)throw simulation.error;
+  if(typeof simulation.value!=='bigint'||simulation.value<minimum)throw Object.assign(Error('链上仿真未满足最少到账约束'),{code:'UNSAFE_QUOTE'});
+  const options=await gas;checkSignal(active);if(options.error)throw options.error;
+  policy.assertFresh();
+  return{policy,needsApproval:false,simulated:simulation.value,...options.value};
+ }finally{controller.abort();}
 }

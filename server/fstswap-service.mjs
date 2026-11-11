@@ -3,10 +3,11 @@ import {pathToFileURL} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {isIP} from 'node:net';
 import {ethers} from 'ethers';
-import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261111-34';
-import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261111-34';
+import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261112-35';
+import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261112-35';
 import {readTokenBalances} from '../src/swap-balances.mjs';
 import {createReadPool} from './swap-read-pool.mjs';
+import {createRawSnapshot,snapshotReader} from './swap-snapshot-cache.mjs';
 export {createReadPool};
 
 globalThis.ethers=ethers;
@@ -104,12 +105,13 @@ function sharedRead(start,{timeoutMs,onSettled,onAbandoned}={}){
  return entry;
 }
 export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=readSwapConfig,readPolicy=readFstPoolPolicy,calculate=computeQuote,readBalances=readTokenBalances,warmup={}}={}){
- const contexts=new Map(),inflight=new Map(),recentPairs=new Map();
- const warmOptions={enabled:true,intervalMs:6000,activeTtlMs:60000,maxPairs:4,...warmup};
- warmOptions.intervalMs=Math.max(1000,Number(warmOptions.intervalMs)||6000);
+ const contexts=new Map(),inflight=new Map(),recentPairs=new Map(),nodeSnapshots=new Map(),invalidSnapshots=new WeakSet();
+ const warmOptions={enabled:true,intervalMs:3000,activeTtlMs:60000,maxPairs:4,...warmup};
+ warmOptions.intervalMs=Math.max(1000,Number(warmOptions.intervalMs)||3000);
  warmOptions.maxPairs=Math.max(1,Math.min(4,Number(warmOptions.maxPairs)||4));
  const defaults=(warmOptions.pairs||[{tokenIn:SWAP_TOKENS.usdt.address.toLowerCase(),tokenOut:FIST}]).slice(0,warmOptions.maxPairs);
  let foreground=0,warming=null,warmTimer=null;
+ const foregroundNodes=new Map(),defaultKey=defaults[0]&&[defaults[0].tokenIn,defaults[0].tokenOut].join(':');
  const pairKey=input=>[input.tokenIn,input.tokenOut].join(':');
  function boundedSet(map,key,value,max){
   if(!map.has(key)&&map.size>=max){const evict=[...map].find(([,entry])=>entry.settled);if(evict)map.delete(evict[0]);else throw fail('SERVICE_BUSY');}
@@ -125,25 +127,47 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
   for(const[key,pair]of [...recentPairs].reverse())if(!pairs.has(key)&&pairs.size<warmOptions.maxPairs)pairs.set(key,pair);
   return[...pairs.values()];
  }
+ function invalidateSnapshot(snapshot){
+  invalidSnapshots.add(snapshot);if(nodeSnapshots.get(snapshot.nodeId)===snapshot)nodeSnapshots.delete(snapshot.nodeId);
+ }
+ function publishSnapshot(snapshot){
+  if(invalidSnapshots.has(snapshot))return;
+  const current=nodeSnapshots.get(snapshot.nodeId);
+  if(current&&current!==snapshot&&current.capturedAt>=snapshot.capturedAt)return;
+  if(!current&&nodeSnapshots.size>=32)nodeSnapshots.delete(nodeSnapshots.keys().next().value);
+  nodeSnapshots.set(snapshot.nodeId,snapshot);
+ }
+ const foregroundNode=()=>foregroundNodes.size===1?foregroundNodes.keys().next().value:null;
  function context(input,consumerSignal,{warm=false,node}={}){
   const nodeId=node?.id||'primary',key=[nodeId,pairKey(input)].join(':'),old=contexts.get(key);
   // Prewarmed data is useful until the next refresh, while its original policy
   // deadline remains authoritative. Ordinary foreground reuse stays at 2.5 s.
-  if(old&&!old.signal.aborted&&(!old.settled||clock()-old.completedAt<(warm?2500:old.warmed?warmOptions.intervalMs+2500:2500))){
+  if(old&&!old.signal.aborted&&!invalidSnapshots.has(old.rawSnapshot)&&(!old.settled||clock()-old.completedAt<(warm?2500:old.warmed?warmOptions.intervalMs+2500:2500))){
    if(!warm||old.warmed)return old.subscribe(consumerSignal);
    return old.subscribe(consumerSignal).then(snapshot=>untilAborted(pool.run(async request=>{
     const canonical=await request({method:'eth_getBlockByNumber',params:[snapshot.block.number,false]});assertRunning(consumerSignal);
-    if(canonical?.hash!==snapshot.block.hash)throw fail('STALE_BLOCK');snapshot.policy.assertFresh();if(clock()>=snapshot.policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');old.warmed=true;return snapshot;
+    if(canonical?.hash!==snapshot.block.hash){invalidateSnapshot(snapshot.snapshot);throw fail('STALE_BLOCK');}snapshot.policy.assertFresh();if(clock()>=snapshot.policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');old.warmed=true;return snapshot;
    },consumerSignal,{operation:'warm',nodeId}),consumerSignal)).catch(error=>{if(contexts.get(key)===old)contexts.delete(key);throw error;});
   }
   let entry;
   entry=sharedRead(signal=>pool.run(async request=>{
-   const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertRunning(signal);assertBlock(block,clock);
-   const read=pinned(request,block),config=await readConfig(read,{block});assertRunning(signal);
+   const previous=nodeSnapshots.get(nodeId),age=previous?clock()-previous.capturedAt:Infinity;
+   let snapshot=!warm&&age>=0&&age<8500?previous:null;
+   if(!snapshot){
+    const capturedAt=clock(),block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertRunning(signal);assertBlock(block,clock);
+    snapshot=createRawSnapshot({nodeId,block,capturedAt});
+    if(!warm)publishSnapshot(snapshot);
+   }
+   entry.rawSnapshot=snapshot;
+   const block=snapshot.block,read=pinned(snapshotReader(snapshot,request,{nodeId,signal}),block),config=await readConfig(read,{block});assertRunning(signal);
    const staged=['2.0.0','2.1.0'].includes(config.version);
-   const policy=await readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:staged?'all':'legacy',extraTokens:staged?[config.defaultFeeToken]:[],block,nodeId,clock,deferCanonical:true});assertRunning(signal);policy.assertFresh();
-   if(warm){const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(signal);if(canonical?.hash!==block.hash)throw fail('STALE_BLOCK');policy.assertFresh();if(clock()>=policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');}
-   entry.completedAt=clock();entry.warmed=warm;return{block,config,policy};
+   const policy=await readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:staged?'all':'legacy',extraTokens:staged?[config.defaultFeeToken]:[],block,nodeId,clock,deferCanonical:true});assertRunning(signal);
+   const originalFresh=policy.assertFresh;
+   policy.checkedAt=Math.min(policy.checkedAt,snapshot.capturedAt);
+   policy.assertFresh=()=>{if(invalidSnapshots.has(snapshot))throw fail('STALE_BLOCK');const elapsed=clock()-snapshot.capturedAt;if(elapsed<0||elapsed>20000)throw Object.assign(new Error('流动性检查已过期，请刷新报价'),{code:'POOL_LIQUIDITY',reason:'stale',retryable:true});return originalFresh.call(policy);};
+   policy.assertFresh();
+   if(warm){const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(signal);if(canonical?.hash!==block.hash){invalidateSnapshot(snapshot);throw fail('STALE_BLOCK');}policy.assertFresh();if(clock()>=policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');publishSnapshot(snapshot);}
+   entry.completedAt=clock();entry.warmed=warm;return{block,config,policy,snapshot};
   },signal,{operation:warm?'warm':'config',nodeId}),{timeoutMs:18000,
    onSettled:error=>{if(error&&contexts.get(key)===entry)contexts.delete(key);},
    onAbandoned:()=>{if(contexts.get(key)===entry)contexts.delete(key);}});
@@ -153,19 +177,23 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
   quote(raw,{signal}={}){
    const input=quoteInput(raw),key=JSON.stringify([input.chainId,input.tokenIn,input.tokenOut,input.amountIn,input.slippageBps,input.singleHop]);if(signal?.aborted)return Promise.reject(abortError(signal));touchPair(input);
    const old=inflight.get(key);if(old&&!old.signal.aborted)return old.subscribe(signal);
-   if(warming&&warming.key!==pairKey(input))warming.controller.abort();
+   if(warming&&(foreground>0||warming.key!==defaultKey))warming.controller.abort();
    foreground++;let entry;
    entry=sharedRead(sharedSignal=>pool.run(async(request,node,attemptSignal)=>{
     // Consumers share the quote lifetime; each provider attempt owns its context
     // subscription so a hedge winner releases only the losing attempt's work.
     const activeSignal=attemptSignal||sharedSignal;
-    if(warming&&warming.nodeId!==(node?.id||'primary'))warming.controller.abort();
-    const {block,config,policy}=await context(input,activeSignal,{node});assertRunning(activeSignal);policy.assertFresh();
-    const q=await untilAborted(calculate(pinned(request,block),input,config,policy,{signal:activeSignal,nodeId:node?.id||'primary',block}),activeSignal);assertRunning(activeSignal);
-    const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(activeSignal);
-    if(canonical?.hash!==block.hash)throw fail('STALE_BLOCK');policy.assertFresh();
-    const expiresAt=policy.checkedAt+15000;if(clock()>=expiresAt)throw fail('QUOTE_EXPIRED');
-    return{schema:1,chainId:56,router:swapActiveRouter(),input,config,quote:q,blockNumber:block.number,blockHash:block.hash,quotedAt:clock(),expiresAt};
+    const nodeId=node?.id||'primary';foregroundNodes.set(nodeId,(foregroundNodes.get(nodeId)||0)+1);
+    try{
+     if(warming&&(foreground>1||warming.nodeId&&warming.nodeId!==nodeId))warming.controller.abort();
+     const {block,config,policy,snapshot}=await context(input,activeSignal,{node});assertRunning(activeSignal);policy.assertFresh();
+     const read=pinned(snapshotReader(snapshot,request,{nodeId:node?.id||'primary',signal:activeSignal}),block);
+     const q=await untilAborted(calculate(read,input,config,policy,{signal:activeSignal,nodeId:node?.id||'primary',block}),activeSignal);assertRunning(activeSignal);
+     const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(activeSignal);
+     if(canonical?.hash!==block.hash){invalidateSnapshot(snapshot);throw fail('STALE_BLOCK');}policy.assertFresh();
+     const expiresAt=policy.checkedAt+15000;if(clock()>=expiresAt)throw fail('QUOTE_EXPIRED');
+     return{schema:1,chainId:56,router:swapActiveRouter(),input,config,quote:q,blockNumber:block.number,blockHash:block.hash,quotedAt:clock(),expiresAt};
+    }finally{const active=(foregroundNodes.get(nodeId)||1)-1;if(active)foregroundNodes.set(nodeId,active);else foregroundNodes.delete(nodeId);}
    },sharedSignal,{hedge:true,operation:'quote'}),{timeoutMs:18000,
     onSettled:()=>{foreground--;if(inflight.get(key)===entry)inflight.delete(key);},
     onAbandoned:()=>{if(inflight.get(key)===entry)inflight.delete(key);}});
@@ -185,11 +213,19 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
    },combined,{operation:'balances'}),combined);
   },
   async warmupOnce(){
-   if(!warmOptions.enabled||foreground||warming)return false;
-   const pairs=activePairs();if(!pairs.length)return false;const controller=new AbortController(),run={key:null,controller};warming=run;
+   if(!warmOptions.enabled||foreground>1||warming)return false;
+   const preferred=foreground===1?foregroundNode():null;if(foreground===1&&!preferred)return false;
+   const pairs=foreground===1?defaults.slice(0,1):activePairs();if(!pairs.length)return false;const controller=new AbortController(),run={key:null,controller};warming=run;
    let completed=false;
    try{
-    for(const input of pairs){if(foreground||controller.signal.aborted)break;run.key=pairKey(input);await pool.run((_request,node)=>{run.nodeId=node?.id||'primary';return context(input,controller.signal,{warm:true,node});},controller.signal,{operation:'warm'});completed=true;}
+    for(const input of pairs){
+     const key=pairKey(input);if(foreground>1||controller.signal.aborted||foreground===1&&key!==defaultKey)break;
+     run.key=key;await pool.run((_request,node)=>{
+      run.nodeId=node?.id||'primary';
+      if(foreground>1||foreground===1&&foregroundNode()!==run.nodeId){controller.abort();throw abortError(controller.signal);}
+      return context(input,controller.signal,{warm:true,node});
+     },controller.signal,{operation:'warm',...(preferred?{nodeId:preferred}:{})});completed=true;
+    }
     return completed&&!controller.signal.aborted;
    }catch{return false;}finally{if(warming===run)warming=null;}
   },

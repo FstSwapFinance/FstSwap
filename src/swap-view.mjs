@@ -1,19 +1,19 @@
-import { createReceiptReadScope } from './swap-receipt-read.mjs?v=mainnet-20261111-34';
-import { createIdleRead } from './swap-idle-read.mjs?v=mainnet-20261111-34';
-import { swapRpcWork } from './swap-rpc-work.mjs?v=mainnet-20261111-34';
-import { recheckSwapQuote, createSubmissionReadContext, prepareSwapSubmission } from './swap-preflight.mjs?v=mainnet-20261111-34';
-import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261111-34';
-import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261111-34';
-import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261111-34';
-import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261111-34';
-import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261111-34';
-import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261111-34";
+import { createReceiptReadScope } from './swap-receipt-read.mjs?v=mainnet-20261112-35';
+import { createIdleRead } from './swap-idle-read.mjs?v=mainnet-20261112-35';
+import { swapRpcWork } from './swap-rpc-work.mjs?v=mainnet-20261112-35';
+import { recheckSwapQuote, createSubmissionReadContext, prepareSwapSubmission, prepareGasOptions } from './swap-preflight.mjs?v=mainnet-20261112-35';
+import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261112-35';
+import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261112-35';
+import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261112-35';
+import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261112-35';
+import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261112-35';
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261112-35";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261111-34";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261112-35";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
@@ -21,16 +21,16 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261111-34";
+} from "./swap-aggregator.mjs?v=mainnet-20261112-35";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261111-34";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261112-35";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261111-34";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261112-35";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261111-34";
-import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261111-34";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261112-35";
+import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261112-35";
 
 const approvals = createApprovalTracker();
 const sharedQuoteContext = createQuoteContext(swapPublicRpc());
@@ -250,7 +250,7 @@ export async function mountSwapView(root) {
   const balanceRequest = swapPublicRpc(globalThis.fetch, undefined, { lane: "balance" });
   const quoteContext = sharedQuoteContext;
   // Short, abortable reads for wallet actions; market/chart reads keep their own retry policy.
-  const transactionRead = payload => swapPublicRpc(globalThis.fetch, AbortSignal.timeout(6000), { priority:"foreground", attempts: 2, timeoutMs: 2000 })(payload);
+  const transactionRead = (payload,{signal}={}) => swapPublicRpc(globalThis.fetch, signal ? AbortSignal.any([signal,AbortSignal.timeout(6000)]) : AbortSignal.timeout(6000), { priority:"foreground", attempts: 2, timeoutMs: 2000 })(payload);
   const settings = readSettings();
   const state = {
     amount: "", quote: null, quoteError: "", quoteErrorReason: "", balances: {}, balanceErrors: {}, balanceEpoch: 0, allowance: null, config: null,
@@ -270,6 +270,7 @@ export async function mountSwapView(root) {
   const ethers = globalThis.ethers;
   const allowanceReader = createAllowanceReader((payload,{signal,fresh}={}) => swapPublicRpc(globalThis.fetch,signal,{priority:fresh?"foreground":"background",attempts:2,timeoutMs:2000})(payload));
   let activeSubmissionContext = null;
+  let activeWalletController = null;
   const $ = (s) => main.querySelector(s);
   const settingsWrap = $(".eWRqBu");
   const swapPage = $("#swap-page");
@@ -652,7 +653,7 @@ export async function mountSwapView(root) {
   document.addEventListener('visibilitychange', resumeIdleReads);
   globalThis.addEventListener('online', resumeIdleReads);
   globalThis.addEventListener('pageshow', resumeIdleReads);
-  function scheduleQuote(ms=180) { activeSubmissionContext?.dispose(); otherBalances.pause(); ++state.seq;quoteFlow.schedule(ms); }
+  function scheduleQuote(ms=180) { activeWalletController?.abort(); activeSubmissionContext?.dispose(); otherBalances.pause(); ++state.seq;quoteFlow.schedule(ms); }
   function onAmountInput(e) {
     const hadQuote=!!state.quote,now=Date.now();
     const v = limitAmountDecimals(e.target.value.replace(/,/g, "."));
@@ -803,8 +804,8 @@ export async function mountSwapView(root) {
     } finally { if (main.isConnected && !signal?.aborted) otherBalances.schedule(); }
   }
 
-  async function sendTx(tx, gasLimit, gasPrice, beforeSubmit) {
-    return sendWalletOnce({provider:wallet.provider,read:transactionRead,transaction:tx,gasLimit,gasPrice,beforeSubmit});
+  async function sendTx(tx, gasLimit, gasPrice, beforeSubmit, {prepare,signal,provider=wallet.provider}={}) {
+    return sendWalletOnce({provider,read:transactionRead,transaction:tx,gasLimit,gasPrice,prepare,beforeSubmit,signal});
   }
   async function waitReceipt(hash, account, onReceipt, read = transactionRead) {
     return waitForApprovalReceipt({read,recover:recoverWalletIntent,hash,account,onReceipt});
@@ -816,15 +817,22 @@ export async function mountSwapView(root) {
     if (!job) return;
     otherBalances.pause(); stopPairPrice(); quoteFlow.pause();
     const releaseReads = swapRpcWork.enterForeground();
+    const controller=new AbortController();activeWalletController?.abort();activeWalletController=controller;
+    const submittedProvider=wallet.provider,quoted=state.quote,amount=state.amount,output=outT()?.address;
+    const slippage=settings.slippageBps,deadline=settings.deadlineMinutes,singleHop=settings.singleHop;
     let hash, refreshed=false;
     try {
       const req = swapApproveRequest(ethers.Interface, { account: job.account, token: job.token, spender: job.spender });
-      const [est, price] = await Promise.allSettled([transactionRead({ method: "eth_estimateGas", params: [req] }), transactionRead({ method: "eth_gasPrice" })]);
-      // Selection changed before the wallet opened: leave the new token alone.
-      if(wallet.account!==job.account || inT()?.address!==job.token || spender()!==job.spender) return;
-      const gasLimit = est.status === "fulfilled" ? BigInt(est.value) * 15n / 10n : 100000n;
-      const gasPrice = price.status === "fulfilled" ? BigInt(price.value) : undefined;
-      ({ hash } = await sendTx(req, gasLimit, gasPrice, () => { const valid=main.isConnected && wallet.account===job.account && inT()?.address===job.token && spender()===job.spender; if(valid)releaseReads(); return valid; }));
+      const beforeSubmit=()=>{
+        const valid=main.isConnected && wallet.provider===submittedProvider && wallet.account===job.account && inT()?.address===job.token && outT()?.address===output && spender()===job.spender && state.quote===quoted && state.amount===amount && settings.slippageBps===slippage && settings.deadlineMinutes===deadline && settings.singleHop===singleHop;
+        if(valid)releaseReads();return valid;
+      };
+      ({ hash } = await sendTx(req,undefined,undefined,beforeSubmit,{provider:submittedProvider,signal:controller.signal,
+        prepare:({signal})=>prepareGasOptions({signal,multiplierBps:15000,fallbackGasLimit:100000n,fallbackGasPrice:null,
+          estimate:({signal})=>transactionRead({method:"eth_estimateGas",params:[req]},{signal}),
+          gasPrice:({signal})=>transactionRead({method:"eth_gasPrice"},{signal}),
+        }),
+      }));
       popup({ summary: "Approve " + job.symbol, hash });
       await waitReceipt(hash, job.account, async receipt => {
         if(!main.isConnected || wallet.account!==job.account || inT()?.address!==job.token || spender()!==job.spender)return;
@@ -832,8 +840,9 @@ export async function mountSwapView(root) {
         await refreshAllowance(receipt.blockNumber);refreshed=state.allowance!=null;renderBottom();
       });
     } catch (err) {
-      if (Number(err?.code) !== 4001 && err?.code !== 'REQUEST_CHANGED') popup({ summary: err?.message || tr("授权失败", "Approval failed"), hash:hash||err?.pendingIntent?.hash, success: false });
+      if (err?.name!=='AbortError' && Number(err?.code) !== 4001 && err?.code !== 'REQUEST_CHANGED') popup({ summary: err?.message || tr("授权失败", "Approval failed"), hash:hash||err?.pendingIntent?.hash, success: false });
     } finally {
+      controller.abort();if(activeWalletController===controller)activeWalletController=null;
       try {
         if(!refreshed && wallet.account===job.account && inT()?.address===job.token) state.allowance=null;
         approvals.end(job);
@@ -898,10 +907,11 @@ export async function mountSwapView(root) {
     }
     openModal(overlay);
   }
-  async function showApprovalIfNeeded(q) {
+  async function showApprovalIfNeeded(q,{signal}={}) {
     if(inT()?.key==="bnb")return false;
     const account=wallet.account;
-    await refreshAllowance();
+    await refreshAllowance("latest",{signal});
+    if(signal?.aborted)throw new DOMException('Submission read canceled','AbortError');
     if(wallet.account!==account||state.quote!==q){closeModal();return true;}
     if(!needsApproval())return false;
     closeModal();renderBottom();return true;
@@ -916,16 +926,18 @@ export async function mountSwapView(root) {
     const deadline = Math.floor(Date.now() / 1000) + settings.deadlineMinutes * 60;
     const min = minOut(q);
     const submittedAccount = wallet.account;
+    const submittedProvider=wallet.provider,submittedAmount=state.amount,submittedSingleHop=settings.singleHop;
     const submittedTokens = { tokenIn: inT().address, tokenOut: outT().address };
     const submittedSlippage = settings.slippageBps, submittedDeadline = settings.deadlineMinutes;
     let expectedRequest;
     state.transactionBusy=true;quoteFlow.pause();otherBalances.pause();stopPairPrice();
     const releaseReads = swapRpcWork.enterForeground();
+    const controller=new AbortController();activeWalletController?.abort();activeWalletController=controller;
     let submissionContext;
     try {
       checkServiceQuote(q);
       assertQuoteSafety({ ...submittedTokens, amountIn: q.maxIn || q.amountIn, amountOut: min, impact: q.impact, quotedAmountIn: q.amountIn, quotedAmountOut: q.out });
-      let freshPolicy,prepared,preparedTx;
+      let freshPolicy,prepared,preparedTx,prepareSubmission;
       if(q.kind === "fstswap" || q.kind === "v10") {
         if(q.kind === "fstswap") preparedTx=fstRequest(ethers.Interface,{router:swapActiveRouter(),account:submittedAccount,quote:q,deadline});
         else {
@@ -933,49 +945,54 @@ export async function mountSwapView(root) {
           if(q.conversion)args.push(q.conversion);
           preparedTx=v10Request(ethers.Interface,{account:submittedAccount,method:q.method,args,value:q.method === "swapBnbToToken"?q.amountIn:0n});
         }
-        submissionContext=createSubmissionReadContext((payload,{signal})=>swapPublicRpc(globalThis.fetch,signal,{priority:"foreground",attempts:2,timeoutMs:6000})(payload));
-        activeSubmissionContext=submissionContext;
-        const read=submissionContext.read;
-        prepared=await prepareSwapSubmission({minimum:min,signal:submissionContext.signal,
-          check:()=>recheckSwapQuote({quote:q,readConfig:async()=>readSwapConfig(read,{block:await submissionContext.block()}),
-            readPolicy:currentConfig=>q.kind === "fstswap"?recheckFstQuote(read,q,currentConfig):readPoolPolicy(read,{...submittedTokens,config:currentConfig})}),
-          allowance:()=>showApprovalIfNeeded(q),
-          simulate:async()=>{
-            const raw=await wallet.provider.request({method:"eth_call",params:[preparedTx,"latest"]});
-            const codec=new ethers.Interface(q.kind === "fstswap"?FST_ABI:SWAP_ABI);
-            return codec.decodeFunctionResult(codec.parseTransaction({data:preparedTx.data}).name,raw)[0];
-          },
-          estimate:()=>swapPublicRpc(globalThis.fetch,submissionContext.signal,{priority:"foreground",attempts:2,timeoutMs:8000})({method:"eth_estimateGas",params:[preparedTx]}),
-          gasPrice:()=>swapPublicRpc(globalThis.fetch,submissionContext.signal,{priority:"foreground",attempts:2,timeoutMs:8000})({method:"eth_gasPrice"}),
-        });
-        if(prepared.needsApproval)return;
-        freshPolicy=prepared.policy;
+        prepareSubmission=async({signal})=>{
+          submissionContext=createSubmissionReadContext((payload,{signal})=>swapPublicRpc(globalThis.fetch,signal,{priority:"foreground",attempts:2,timeoutMs:6000})(payload),{signal});
+          activeSubmissionContext=submissionContext;
+          const read=submissionContext.read;
+          prepared=await prepareSwapSubmission({minimum:min,signal:submissionContext.signal,
+            check:()=>recheckSwapQuote({quote:q,readConfig:async()=>readSwapConfig(read,{block:await submissionContext.block()}),
+              readPolicy:currentConfig=>q.kind === "fstswap"?recheckFstQuote(read,q,currentConfig):readPoolPolicy(read,{...submittedTokens,config:currentConfig})}),
+            allowance:({signal})=>showApprovalIfNeeded(q,{signal}),
+            simulate:async()=>{
+              const raw=await submittedProvider.request({method:"eth_call",params:[preparedTx,"latest"]});
+              const codec=new ethers.Interface(q.kind === "fstswap"?FST_ABI:SWAP_ABI);
+              return codec.decodeFunctionResult(codec.parseTransaction({data:preparedTx.data}).name,raw)[0];
+            },
+            estimate:({signal})=>swapPublicRpc(globalThis.fetch,signal,{priority:"foreground",attempts:2,timeoutMs:8000})({method:"eth_estimateGas",params:[preparedTx]}),
+            gasPrice:({signal})=>swapPublicRpc(globalThis.fetch,signal,{priority:"foreground",attempts:2,timeoutMs:8000})({method:"eth_gasPrice"}),
+          });
+          if(prepared.needsApproval)return prepared;
+          freshPolicy=prepared.policy;
+          if(inT()?.key!=="bnb"&&state.allowance==null)throw new Error(tr("暂时无法读取授权额度，请稍后重试", "Cannot read approval; please try again"));
+          freshPolicy.assert(q.first,q.second);freshPolicy.assertValue(q.maxIn || q.amountIn,min);
+          return prepared;
+        };
       }else {
         if(await showApprovalIfNeeded(q))return;
         ({policy:freshPolicy}=await recheckSwapQuote({quote:q,readConfig:()=>readSwapConfig(transactionRead),
           readPolicy:currentConfig=>readPoolPolicy(transactionRead,{...submittedTokens,config:currentConfig})}));
       }
-      if(inT()?.key!=="bnb"&&state.allowance==null)throw new Error(tr("暂时无法读取授权额度，请稍后重试", "Cannot read approval; please try again"));
+      if(!prepareSubmission&&inT()?.key!=="bnb"&&state.allowance==null)throw new Error(tr("暂时无法读取授权额度，请稍后重试", "Cannot read approval; please try again"));
       const beforeSubmit = () => {
-        if (!main.isConnected || state.quote !== q || wallet.account !== submittedAccount || inT()?.address !== submittedTokens.tokenIn || outT()?.address !== submittedTokens.tokenOut || settings.slippageBps !== submittedSlippage || settings.deadlineMinutes !== submittedDeadline) return false;
+        if (!main.isConnected || state.quote !== q || wallet.provider!==submittedProvider || wallet.account !== submittedAccount || state.amount!==submittedAmount || settings.singleHop!==submittedSingleHop || inT()?.address !== submittedTokens.tokenIn || outT()?.address !== submittedTokens.tokenOut || settings.slippageBps !== submittedSlippage || settings.deadlineMinutes !== submittedDeadline) return false;
         if (refreshExpiredServiceQuote(q)) return false;
         checkServiceQuote(q); freshPolicy.assertFresh(); releaseReads(); return true;
       };
       const quotedRoute = q.route || q;
-      freshPolicy.assert(quotedRoute.first, quotedRoute.second);
-      freshPolicy.assertValue(q.maxIn || q.amountIn, min);
+      if(!prepareSubmission){freshPolicy.assert(quotedRoute.first, quotedRoute.second);freshPolicy.assertValue(q.maxIn || q.amountIn, min);}
       if (state.quote !== q || wallet.account !== submittedAccount) { closeModal(); return; }
       let hash, preflight = null;
       if (q.kind === "agg") {
-        preflight = await preflightSwap(wallet.provider.request.bind(wallet.provider), { account: wallet.account, route: q.route, amountIn: q.amountIn, minOut: min, deadline, allowance: side() === "sell" ? state.allowance : null });
+        preflight = await preflightSwap(submittedProvider.request.bind(submittedProvider), { account: wallet.account, route: q.route, amountIn: q.amountIn, minOut: min, deadline, allowance: side() === "sell" ? state.allowance : null });
         if (preflight.needsApproval) { closeModal(); renderBottom(); return; }
         if (swapV10Ready() && preflight.simulated === null) throw new Error(tr("链上仿真失败，请刷新报价", "Simulation failed; refresh the quote"));
         if (preflight.simulated !== null && preflight.simulated < min) throw new Error(tr("链上仿真低于最少到账，请刷新报价后重试", "Simulation below minimum received; refresh and retry"));
-        const sent = await sendTx(preflight.transaction, preflight.gasLimit, preflight.gasPrice, beforeSubmit);
+        const sent = await sendTx(preflight.transaction, preflight.gasLimit, preflight.gasPrice, beforeSubmit,{provider:submittedProvider,signal:controller.signal});
         hash = sent.hash; expectedRequest = sent.transaction;
       } else {
-        if(!prepared||!preparedTx)throw missing();
-        const sent = await sendTx(preparedTx,prepared.gasLimit,prepared.gasPrice,beforeSubmit);
+        if(!prepareSubmission||!preparedTx)throw missing();
+        const sent = await sendTx(preparedTx,undefined,undefined,beforeSubmit,{provider:submittedProvider,signal:controller.signal,prepare:prepareSubmission});
+        if(sent.needsApproval)return;
         hash = sent.hash; expectedRequest = sent.transaction;
       }
       const summary = "Swap " + a3 + " " + sin + " for " + b3 + " " + sout;
@@ -999,6 +1016,7 @@ export async function mountSwapView(root) {
       else if (Number(err?.code) === 4001) errorModal(T("交易被拒绝。"));
       else errorModal(err?.message || tr("交易失败", "Transaction failed"));
     } finally {
+      controller.abort();if(activeWalletController===controller)activeWalletController=null;
       submissionContext?.dispose();if(activeSubmissionContext===submissionContext)activeSubmissionContext=null;
       releaseReads();state.transactionBusy=false;if(main.isConnected && state.amount)scheduleQuote(0);
     }
@@ -1034,7 +1052,7 @@ export async function mountSwapView(root) {
   initialWalletNotification = false;
   const stopTokens=onTokensChanged(() => { if (main.isConnected) { state.quote=null; state.allowance=null; render(); scheduleQuote(0); } });
   const stopApprovals = approvals.subscribe(()=>{if(!main.isConnected)return false;renderBottom();});
-  globalThis.addEventListener('hashchange',()=>{stopWallet();stopTokens();stopApprovals();document.removeEventListener('click',closeSettings);document.removeEventListener('visibilitychange',resumeIdleReads);globalThis.removeEventListener('online',resumeIdleReads);globalThis.removeEventListener('pageshow',resumeIdleReads);clearTimeout(quoteExpiryTimer);quoteFlow.dispose();otherBalances.dispose();activeSubmissionContext?.dispose();stopPairPrice();allowanceReader.invalidate();},{once:true});
+  globalThis.addEventListener('hashchange',()=>{stopWallet();stopTokens();stopApprovals();document.removeEventListener('click',closeSettings);document.removeEventListener('visibilitychange',resumeIdleReads);globalThis.removeEventListener('online',resumeIdleReads);globalThis.removeEventListener('pageshow',resumeIdleReads);clearTimeout(quoteExpiryTimer);quoteFlow.dispose();otherBalances.dispose();activeWalletController?.abort();activeSubmissionContext?.dispose();stopPairPrice();allowanceReader.invalidate();},{once:true});
   renderSettings(); render();
   refreshDefaultList();
   if (wallet.account) { refreshBalances(false); restoreSubmittedTransaction(); }

@@ -1,5 +1,5 @@
 // Pool admission policy. All reserves and oracle rounds are read at one BSC block.
-import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter, readSwapConfigFactory } from './swap-aggregator.mjs?v=mainnet-20261111-34';
+import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter, readSwapConfigFactory } from './swap-aggregator.mjs?v=mainnet-20261112-35';
 const ZERO='0x'+'00'.repeat(20),MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
 const lower=x=>String(x||ZERO).toLowerCase();
 const USDT=lower(SWAP_TOKENS.usdt.address),USDC='0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d';
@@ -115,7 +115,9 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
  };
  const call=(target,method,args=[],abi=iface)=>({target,method,iface:abi,data:abi.encodeFunctionData(method,args)});
  const needsFistReference=[lower(tokenIn),lower(tokenOut)].some(t=>t!==FIST&&!MAINSTREAM_TOKENS.has(t));
- const anchors=[USDT,USDC,...WRAPPED,BTCB,ETH,...(needsFistReference?[FIST]:[])],tokens=[...new Set([lower(tokenIn),lower(tokenOut),...extraTokens.map(lower),...anchors].filter(t=>t!==ZERO))];
+ const baseAnchors=[USDT,USDC,...WRAPPED,BTCB,ETH],baseTokens=new Set(baseAnchors);
+ const anchors=[...baseAnchors,...(needsFistReference?[FIST]:[])],tokens=[...new Set([lower(tokenIn),lower(tokenOut),...extraTokens.map(lower),...anchors].filter(t=>t!==ZERO))];
+ const readOrder=new Map([...new Set([...anchors,...tokens])].map((token,n)=>[token,n]));
  // The v10 UI executes generic pairs through V2 and only quotes direct BNB/FIST
  // on V3. Still discover every competing V3 main pool for either altcoin.
  const v3Alts=v3Mode==='legacy'?[lower(tokenIn),lower(tokenOut)].filter(t=>!MAINSTREAM_TOKENS.has(t)):null;
@@ -135,12 +137,26 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
    const a=tokens[n],b=tokens[j];if(v3Alts&&!v3Alts.includes(a)&&!v3Alts.includes(b))continue;
    v3Specs.push({id:key(v3.adapter,a,b,fee),adapter:v3.adapter,a,b,fee});
   }
+  // Sort only discovery/state reads. Preserve the original policy insertion
+  // and depth-probe order, including which equally deep main pool wins a tie.
+  const originalSpecs=new Map(v3Specs.map((p,n)=>[p.id,{p:{...p},n}]));
+  for(const p of v3Specs)if(readOrder.get(p.a)>readOrder.get(p.b))[p.a,p.b]=[p.b,p.a];
+  // Keep the fixed base-core prefix identical across pairs; no pool is removed.
+  // Nonstandard token CALL order may change. Each new state batch is executed
+  // and cached intact rather than assuming its balanceOf methods are view.
+  const basePool=p=>baseTokens.has(p.a)&&baseTokens.has(p.b);
+  v3Specs.sort((a,b)=>Number(!basePool(a))-Number(!basePool(b))||readOrder.get(a.a)-readOrder.get(b.a)||readOrder.get(a.b)-readOrder.get(b.b)||a.fee-b.fee);
   const addresses=await batch(v3Specs.map(p=>call(factoryResult[0],'getPool',[p.a,p.b,p.fee])));
   if(addresses.some(r=>!r))throw fail('V3 池发现不完整','data',true);
   const existing=addresses.flatMap((r,n)=>r&&lower(r[0])!==ZERO?[{...v3Specs[n],address:lower(r[0])}]:[]);
   const states=await batch(existing.flatMap(p=>[call(p.address,'slot0'),call(p.address,'liquidity'),call(p.address,'token0'),call(p.address,'token1'),call(p.a,'balanceOf',[p.address]),call(p.b,'balanceOf',[p.address])]));
   if(states.some(r=>!r))throw fail('部分 V3 池读取失败，无法确定主池','data',true);
-  return{existing,states};
+  const ordered=existing.map((p,n)=>{
+   const original=originalSpecs.get(p.id),row=states.slice(n*6,n*6+6);
+   if(p.a!==original.p.a)[row[4],row[5]]=[row[5],row[4]];
+   return{p:{...original.p,address:p.address},n:original.n,row};
+  }).sort((a,b)=>a.n-b.n);
+  return{existing:ordered.map(item=>item.p),states:ordered.flatMap(item=>item.row)};
  };
  const [oracle,results,v3State]=await Promise.all([
   batch(FEEDS.flatMap(f=>[call(f.address,'latestRoundData'),call(f.address,'decimals')])),

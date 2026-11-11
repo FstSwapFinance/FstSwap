@@ -67,7 +67,16 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
   const failureRate=n.totalFailures/Math.max(1,n.totalFailures+n.successes);
   return (n.cooldown>clock()?1e9:0)+latency(n,kind,rpcClass).ms+n.failures*2500+failureRate*1000+Math.max(0,n.inFlight-n.probeInFlight)*100+(headLag(n)??0)*250;
  }
- function ordered(kind,attempted,nodeId,rpcClass){return states.filter(n=>!attempted.has(n)&&n.cooldown<=clock()&&(nodeId===undefined||n.id===nodeId)).sort((a,b)=>score(a,kind,rpcClass)-score(b,kind,rpcClass)||states.indexOf(a)-states.indexOf(b));}
+ function ordered(kind,attempted,nodeId,rpcClass){
+  const candidates=states.filter(n=>!attempted.has(n)&&n.cooldown<=clock()&&(nodeId===undefined||n.id===nodeId));
+  // Until a call has been measured, foreground work can reuse a node whose
+  // chain and startup header were just checked. An in-progress warmup must
+  // not make an entirely untested provider win that first foreground request.
+  const coldForeground=nodeId===undefined&&rpcClass==='call'&&['quote','balances','read'].includes(kind)&&candidates.every(n=>latency(n,kind,rpcClass).source==='unknown');
+  const now=clock(),fresh=(at,ttl)=>at!==null&&now>=at&&now-at<ttl;
+  const bootstrap=new Set(coldForeground?candidates.filter(n=>n.failures===0&&fresh(n.chainAt,10000)&&n.head!==null&&fresh(n.headAt,5000)&&fresh(n.lastOk,5000)&&(headLag(n)??0)<=2):[]);
+  return candidates.sort((a,b)=>Number(bootstrap.has(b))-Number(bootstrap.has(a))||score(a,kind,rpcClass)-score(b,kind,rpcClass)||states.indexOf(a)-states.indexOf(b));
+ }
  async function call(node,payload,signal,isProbe=false){
   if(signal.aborted)throw cancelled(signal);
   if(!payload||!METHODS.has(payload.method))throw fail('RPC_FORBIDDEN');

@@ -1,4 +1,4 @@
-import { swapService } from './swap-service-client.mjs?v=mainnet-20261111-34';
+import { swapService } from './swap-service-client.mjs?v=mainnet-20261112-35';
 const MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
 const ABI=['function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])',
  'function getEthBalance(address) view returns(uint256)','function balanceOf(address) view returns(uint256)'];
@@ -71,13 +71,24 @@ export async function readWalletBalances(request,account,tokens,{fresh=false,clo
  // disturb a shared display read. Only a successful, still-current result may
  // publish completed values, without replacing another reader's pending work.
  if(signal){
-  const epoch=balanceEpoch,rights=wanted.map(token=>{const key=identity(token),entry=balanceSnapshots.get(key);return{token,key,entry,wasPending:entry?.pending===true};});
-  const result=await fetchBalances(request,account,wanted,signal);checkSignal(signal);
-  if(epoch===balanceEpoch)for(const {token,key,entry,wasPending}of rights){
-   const value=result.balances[token.key];
-   if(value!=null&&!wasPending&&balanceSnapshots.get(key)===entry)remember(key,{pending:false,completedAt:clock(),promise:Promise.resolve(value)});
+  const epoch=balanceEpoch,rights=wanted.map(token=>{
+   const key=identity(token),entry=balanceSnapshots.get(key),age=entry?clock()-entry.completedAt:NaN;
+   return{token,key,entry,wasPending:entry?.pending===true,cached:entry?.pending===false&&age>=0&&age<3000};
+  });
+  const checkCurrent=()=>{checkSignal(signal);if(epoch!==balanceEpoch)throw abortError();};
+  const completed=rights.filter(right=>right.cached),missing=rights.filter(right=>!right.cached);
+  const values=await untilAborted(Promise.all(completed.map(right=>right.entry.promise)),signal);checkCurrent();
+  const result=missing.length?await fetchBalances(request,account,missing.map(right=>right.token),signal):{balances:{},failed:[]};checkCurrent();
+  const balances=Object.fromEntries(completed.flatMap((right,n)=>values[n]!=null?[[right.token.key,values[n]]]:[]));
+  for(const {token}of missing)if(result.balances[token.key]!=null)balances[token.key]=result.balances[token.key];
+  // Cache hits retain their original completion time. Resolve the clock before
+  // publishing so an abort or epoch change cannot leave a late display value.
+  const completedAt=missing.length?clock():null;checkCurrent();
+  for(const {token,key,entry,wasPending}of missing){
+   const value=balances[token.key];
+   if(value!=null&&!wasPending&&balanceSnapshots.get(key)===entry)remember(key,{pending:false,completedAt,promise:Promise.resolve(value)});
   }
-  return result;
+  return{balances,failed:wanted.filter(token=>balances[token.key]==null).map(token=>token.key)};
  }
  const selected=new Map(),missing=[];
  for(const token of wanted){
