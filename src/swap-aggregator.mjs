@@ -1,5 +1,5 @@
-import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261111-27";
-import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261111-27";
+import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261111-29";
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261111-29";
 // 聚合路由 Swap 引擎（BSC 主网 56，FstSi aggregator-live v9「multi-pool」，合约 VERSION 1.01）。
 // 与 market-trade.mjs 相同的约束风格：全部函数只通过注入的 JSON-RPC
 // request 访问链上，返回精确的十进制字符串/大整数，浏览器与 Node 均可运行。

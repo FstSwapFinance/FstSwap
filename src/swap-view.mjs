@@ -1,16 +1,17 @@
-import { recheckSwapQuote } from './swap-preflight.mjs?v=mainnet-20261111-27';
-import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261111-27';
-import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261111-27';
-import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261111-27';
-import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261111-27';
-import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261111-27';
-import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261111-27";
+import { createIdleRead } from './swap-idle-read.mjs?v=mainnet-20261111-29';
+import { recheckSwapQuote } from './swap-preflight.mjs?v=mainnet-20261111-29';
+import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261111-29';
+import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261111-29';
+import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261111-29';
+import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261111-29';
+import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261111-29';
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261111-29";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261111-27";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261111-29";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
@@ -18,28 +19,19 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261111-27";
+} from "./swap-aggregator.mjs?v=mainnet-20261111-29";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261111-27";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261111-29";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261111-27";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261111-29";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261111-27";
-import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261111-27";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261111-29";
+import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261111-29";
 
 const approvals = createApprovalTracker();
-const warmRequest = swapPublicRpc();
-const warmBalanceRequest = swapPublicRpc(globalThis.fetch, undefined, { lane: "balance" });
-const sharedQuoteContext = createQuoteContext(warmRequest);
-export async function warmSwapData(account) {
-  await loadSwapLibrary();
-  const jobs = [];
-  if (!swapService.available?.()) jobs.push(sharedQuoteContext.get(TOKENS.usdt.address, TOKENS.fist.address));
-  if (account) jobs.push(readWalletBalances(warmBalanceRequest, account, ORDER.map(k => TOKENS[k])));
-  await Promise.allSettled(jobs);
-}
+const sharedQuoteContext = createQuoteContext(swapPublicRpc());
 const BPS = 10000n;
 const HISTORY_KEY = "swap_history_v1";
 const SETTINGS_KEY = "swap_settings_v2";
@@ -70,7 +62,6 @@ const FST_FIST_WBNB_PAIR = "0x796acbA6556f70A3c5756A0d8Fd0a10251c21050";
 const PAIR_ABI = ["function getReserves() view returns (uint112, uint112, uint32)", "function token0() view returns (address)"];
 const ZERO = "0x0000000000000000000000000000000000000000";
 const NO_LEG = { adapter: ZERO, path: [] };
-const ERC20_ABI = ["function balanceOf(address) view returns (uint256)", "function allowance(address,address) view returns (uint256)"];
 
 /// 官方 CurrencyAmount.toSignificant（ROUND_DOWN，精确十进制）。
 export function sigDown(value, decimals, digits) {
@@ -368,7 +359,9 @@ export async function mountSwapView(root) {
 
   // —— 价格行 + 详情（官方 TradePrice + AdvancedSwapDetails） ——
   function renderTrade() {
-    const q = state.quote;
+    // Unit price is display-only: it never populates state.quote or enables a swap.
+    const preview = !state.amount && state.preview?.serviceExpiresAt > Date.now() ? state.preview : null;
+    const q = state.quote || preview;
     const existingDetails = card.querySelector(":scope > .cKJcLm");
     existingDetails?.remove();
     if (!q) {
@@ -381,8 +374,7 @@ export async function mountSwapView(root) {
     priceBtn.title = text + " "; priceBtn.querySelector(".css-1ieyfqs").textContent = text;
     priceBtn.addEventListener("click", () => { state.showInverted = !state.showInverted; renderTrade(); });
     tradeRow.replaceWith(row); tradeRow = row;
-    const details = detailsEl(q);
-    row.after(details);
+    if (state.quote) row.after(detailsEl(q));
   }
   function priceText(q) {
     const a = q.amountIn, b = q.out, ti = inT(), to = outT();
@@ -531,7 +523,8 @@ export async function mountSwapView(root) {
     }
     settingsWrap.replaceChildren(...fresh.childNodes);
   }
-  document.addEventListener("click", () => { if (state.settingsOpen && main.isConnected) { state.settingsOpen = false; renderSettings(); } });
+  const closeSettings = () => { if (state.settingsOpen && main.isConnected) { state.settingsOpen = false; renderSettings(); } };
+  document.addEventListener("click", closeSettings);
 
   // —— 代币选择弹窗（官方 CurrencySearchModal） ——
   function openTokenModal(field) {
@@ -542,28 +535,30 @@ export async function mountSwapView(root) {
   function selectToken(field, key) {
     if (field === "in") { if (page.outKey === key) page.outKey = page.inKey; page.inKey = key; }
     else { if (page.inKey === key) page.inKey = page.outKey; page.outKey = key; }
-    state.quote = null; state.allowance = null; render(); refreshBalances(); scheduleQuote(0);
+    stopPairPrice();
+    state.quote = null; state.allowance = null; render(); refreshBalances(false); prewarmQuote(); refreshPairPrice(); scheduleQuote(0);
   }
   function flip() {
     [page.inKey, page.outKey] = [page.outKey, page.inKey];
     state.amount = state.quote ? formatAmountInput(state.quote.out, (inT() || TOKENS.bnb).decimals) : limitAmountDecimals(state.amount);
-    state.quote = null; state.allowance = null; render(); refreshBalances(); scheduleQuote(0);
+    stopPairPrice();
+    state.quote = null; state.allowance = null; render(); refreshBalances(false); prewarmQuote(); refreshPairPrice(); scheduleQuote(0);
   }
 
   // —— 余额（BSC 公共只读 RPC）/ 授权（钱包 provider） ——
-  const walletCall = (method, params) => wallet.provider.request({ method, params });
   let balanceRequestId = 0;
   const balanceRequests = new Map();
-  async function loadBalances(keys, fresh = false) {
+  async function loadBalances(keys, fresh = false, {signal} = {}) {
     const account = wallet.account, epoch = state.balanceEpoch;
     if (!account) return;
     const wanted = [...new Set(keys)].filter(k => TOKENS[k]);
     const id = ++balanceRequestId;
     wanted.forEach(k => balanceRequests.set(k, id));
     let result;
-    try { result = await readWalletBalances(balanceRequest, account, wanted.map(k => TOKENS[k]), {fresh}); }
-    catch { result = {balances:{}, failed:wanted}; }
-    if (wallet.account !== account || state.balanceEpoch !== epoch) return;
+    const read = signal ? swapPublicRpc(globalThis.fetch, signal, {lane:"balance"}) : balanceRequest;
+    try { result = await readWalletBalances(read, account, wanted.map(k => TOKENS[k]), {fresh,signal}); }
+    catch { if (signal?.aborted) return; result = {balances:{}, failed:wanted}; }
+    if (signal?.aborted || wallet.account !== account || state.balanceEpoch !== epoch) return;
     for (const k of wanted) {
       if (balanceRequests.get(k) !== id) continue;
       if (result.balances[k] != null) { state.balances[k] = result.balances[k]; delete state.balanceErrors[k]; }
@@ -571,16 +566,19 @@ export async function mountSwapView(root) {
     }
   }
   async function loadAllBalances() {
+    otherBalances.pause();
     await loadBalances(ORDER);
   }
   async function refreshBalances(fresh = true) {
     if (!wallet.account) return;
+    otherBalances.pause();
     const keys = [page.inKey, page.outKey].filter(Boolean);
-    await loadBalances(keys, fresh);
-    if (!main.isConnected) return;
-    renderPanels(); renderBottom();
-    await refreshAllowance();
-    if (main.isConnected) renderBottom();
+    // A slow holdings read must not delay the independent allowance check.
+    await Promise.allSettled([
+      loadBalances(keys, fresh).then(() => { if (main.isConnected) { renderPanels(); renderBottom(); } }),
+      refreshAllowance("latest", {fresh}).then(() => { if (main.isConnected) renderBottom(); }),
+    ]);
+    if (main.isConnected) otherBalances.schedule();
   }
   // 授权对象：v10 → 统一授权 v10 路由器；v9（仅 BNB⇄FIST 卖出）→ 首段适配器（v9 由适配器 transferFrom）；否则无（未部署）
   function spender() {
@@ -607,23 +605,65 @@ export async function mountSwapView(root) {
     if (swapService.available?.()) return;
     if (main.isConnected && inT() && outT()) quoteContext.get(inT().address, outT().address).catch(() => {});
   }
+  let previewController = null, previewExpiryTimer = null;
+  function stopPairPrice() {
+    previewController?.abort(); previewController = null;
+    clearTimeout(previewExpiryTimer); previewExpiryTimer = null; state.preview = null;
+  }
+  async function refreshPairPrice({reuse=false} = {}) {
+    if (reuse && (previewController || state.preview?.serviceExpiresAt > Date.now())) return;
+    stopPairPrice();
+    if (state.amount || state.transactionBusy || !main.isConnected || document.hidden || navigator.onLine === false || !swapService.available?.()) return;
+    const ti = inT(), to = outT(); if (!ti || !to) return;
+    const tokenIn = ti.address, tokenOut = to.address;
+    const controller = new AbortController(); previewController = controller;
+    try {
+      const remote = await swapService.quote({tokenIn, tokenOut, amountIn:10n ** BigInt(ti.decimals),
+        slippageBps:settings.slippageBps, singleHop:settings.singleHop},
+        {router:swapActiveRouter(), adapters:SWAP_ADAPTERS, signal:controller.signal});
+      if (!remote || controller.signal.aborted || previewController !== controller || !main.isConnected || state.amount || inT()?.address !== tokenIn || outT()?.address !== tokenOut || remote.expiresAt <= Date.now()) return;
+      const preview = {...remote.quote, serviceExpiresAt:remote.expiresAt};
+      state.preview = preview; renderTrade();
+      previewExpiryTimer = setTimeout(() => {
+        if (state.preview === preview) { state.preview = null; if (main.isConnected) renderTrade(); }
+      }, Math.max(0, remote.expiresAt - Date.now()));
+    } catch { /* Speculative reads never delay input or open an error modal. */ }
+    finally { if (previewController === controller) previewController = null; }
+  }
   // —— 报价 ——
   let quoteExpiryTimer=null,lastTypedAt=0;
   const quoteFlow=createQuoteRefresh({run:options=>refreshQuote(options),
     ready:()=>main.isConnected && !document.hidden && navigator.onLine!==false && !!inT() && !!outT() && Number(state.amount)>0,
-    blocked:()=>!!state.transactionBusy});
-  function scheduleQuote(ms=180) { ++state.seq;quoteFlow.schedule(ms); }
+    blocked:()=>!!state.transactionBusy || Boolean(approvals.pending(approvalIdentity()))});
+  const otherBalances = createIdleRead({
+    ready:() => main.isConnected && Boolean(wallet.account) && !document.hidden && navigator.onLine !== false,
+    blocked:() => Boolean(previewController) || state.transactionBusy || quoteFlow.running() || Boolean(approvals.pending(approvalIdentity())),
+    run:({signal}) => loadBalances(ORDER.filter(key => key !== page.inKey && key !== page.outKey), false, {signal}),
+  });
+  function resumeIdleReads() {
+    if (!main.isConnected) return;
+    if (document.hidden || navigator.onLine === false) { otherBalances.pause(); stopPairPrice(); return; }
+    otherBalances.schedule();
+    if (!state.amount && !state.transactionBusy && !approvals.pending(approvalIdentity())) refreshPairPrice({reuse:true});
+  }
+  document.addEventListener('visibilitychange', resumeIdleReads);
+  globalThis.addEventListener('online', resumeIdleReads);
+  globalThis.addEventListener('pageshow', resumeIdleReads);
+  function scheduleQuote(ms=180) { otherBalances.pause(); ++state.seq;quoteFlow.schedule(ms); }
   function onAmountInput(e) {
     const hadQuote=!!state.quote,now=Date.now();
     const v = limitAmountDecimals(e.target.value.replace(/,/g, "."));
     if (v !== "" && !/^\d*\.?\d*$/.test(v)) { e.target.value = state.amount; return; }
+    stopPairPrice(); otherBalances.pause();
     e.target.value = v; state.amount = v;  state.quote = null; state.quoteError = ""; state.refocus = true;
     renderTrade(); renderBottom();
     prewarmQuote();
     const out = main.querySelector("#swap-currency-output input"); if (out) out.value = "";
     scheduleQuote(hadQuote || now-lastTypedAt<400 ? 100 : 0);lastTypedAt=now;
+    if (!Number(v)) { refreshPairPrice(); otherBalances.schedule(); }
   }
   function setMax() {
+    stopPairPrice();
     const bal = state.balances[page.inKey]; if (bal == null || !inT()) return;
     const MIN_BNB = 10n ** 16n; // 官方 maxAmountSpend：原生币预留 0.01
     const max = inT().key === "bnb" ? (bal > MIN_BNB ? bal - MIN_BNB : 0n) : bal;
@@ -657,9 +697,9 @@ export async function mountSwapView(root) {
     if(state.quote?.serviceExpiresAt && state.quote.serviceExpiresAt<=Date.now())state.quote=null;
     const ti = inT(), to = outT();
     const typed = state.amount;
-    if (!ti || !to || !typed || !(Number(typed) > 0)) { state.quote = null; render(); return; }
+    if (!ti || !to || !typed || !(Number(typed) > 0)) { state.quote = null; render(); otherBalances.schedule(); return; }
     state.quoteError = ""; state.quoteErrorReason = "";
-    let amount; try { amount = swapUnits(typed, ti.decimals); } catch { state.quote = null; state.quoteError = "AMOUNT_PRECISION"; render(); return; }
+    let amount; try { amount = swapUnits(typed, ti.decimals); } catch { state.quote = null; state.quoteError = "AMOUNT_PRECISION"; render(); otherBalances.schedule(); return; }
     const inputKey=JSON.stringify([ti.address||ZERO,to.address||ZERO,amount.toString(),settings.slippageBps,settings.singleHop]);
     const retained=background && state.quoteKey===inputKey && state.quote?.serviceExpiresAt>Date.now() ? state.quote : null;
     const allowanceRead=refreshAllowance("latest",{fresh:false,signal});
@@ -757,7 +797,7 @@ export async function mountSwapView(root) {
       state.quoteErrorReason = err?.reason || "";
       render();
       if (err?.retryable || !["NO_ROUTE", "NO_FEE_ROUTE", "POOL_LIQUIDITY", "UNSAFE_QUOTE", "PRICE_IMPACT_TOO_HIGH", SWAP_V10_MISSING.code].includes(state.quoteError)) scheduleQuote(8000);
-    }
+    } finally { if (main.isConnected && !signal?.aborted) otherBalances.schedule(); }
   }
 
   async function sendTx(tx, gasLimit, gasPrice, beforeSubmit) {
@@ -771,6 +811,7 @@ export async function mountSwapView(root) {
     const sp = spender(); if (!sp) return;
     const job = approvals.begin({...approvalIdentity(),symbol:inT().symbol});
     if (!job) return;
+    otherBalances.pause(); stopPairPrice(); quoteFlow.pause();
     let hash, refreshed=false;
     try {
       const req = swapApproveRequest(ethers.Interface, { account: job.account, token: job.token, spender: job.spender });
@@ -792,6 +833,7 @@ export async function mountSwapView(root) {
       if(!refreshed && wallet.account===job.account && inT()?.address===job.token) state.allowance=null;
       approvals.end(job);
       if(main.isConnected && !refreshed){await refreshAllowance();renderBottom();}
+      if(main.isConnected) { otherBalances.schedule(); if (state.amount) scheduleQuote(0); }
     }
   }
 
@@ -871,7 +913,7 @@ export async function mountSwapView(root) {
     const submittedTokens = { tokenIn: inT().address, tokenOut: outT().address };
     const submittedSlippage = settings.slippageBps, submittedDeadline = settings.deadlineMinutes;
     let expectedRequest;
-    state.transactionBusy=true;quoteFlow.pause();
+    state.transactionBusy=true;quoteFlow.pause();otherBalances.pause();stopPairPrice();
     try {
       checkServiceQuote(q);
       assertQuoteSafety({ ...submittedTokens, amountIn: q.maxIn || q.amountIn, amountOut: min, impact: q.impact, quotedAmountIn: q.amountIn, quotedAmountOut: q.out });
@@ -954,20 +996,25 @@ export async function mountSwapView(root) {
     }).catch(()=>{});
   }
   applyDefaults();
+  // subscribe() immediately emits the current wallet; startup below already handles it.
+  let initialWalletNotification = true;
   const stopWallet=wallet.subscribe(() => {
+    if (initialWalletNotification) return;
     if (!main.isConnected) return;
+    otherBalances.pause();
     if (wallet.account && !page.connectedDefaults) applyDefaults();
-    invalidateWalletBalances();allowanceReader.invalidate();state.allowance=null;state.allowanceIdentity=null; warmSwapData(wallet.account);
-    state.quote = null; ++state.seq; ++state.balanceEpoch; closeModal(); state.balances = {}; state.balanceErrors = {}; render(); refreshBalances(false); restoreSubmittedTransaction(); scheduleQuote(0);
+    invalidateWalletBalances();allowanceReader.invalidate();state.allowance=null;state.allowanceIdentity=null;
+    state.quote = null; ++state.seq; ++state.balanceEpoch; closeModal(); state.balances = {}; state.balanceErrors = {}; render(); refreshBalances(false); restoreSubmittedTransaction(); scheduleQuote(0); refreshPairPrice({reuse:true});
   });
 
+  initialWalletNotification = false;
   const stopTokens=onTokensChanged(() => { if (main.isConnected) { state.quote=null; state.allowance=null; render(); scheduleQuote(0); } });
-  approvals.subscribe(()=>{if(!main.isConnected)return false;renderBottom();});
-  globalThis.addEventListener('hashchange',()=>{stopWallet();stopTokens();clearTimeout(quoteExpiryTimer);quoteFlow.dispose();allowanceReader.invalidate();},{once:true});
+  const stopApprovals = approvals.subscribe(()=>{if(!main.isConnected)return false;renderBottom();});
+  globalThis.addEventListener('hashchange',()=>{stopWallet();stopTokens();stopApprovals();document.removeEventListener('click',closeSettings);document.removeEventListener('visibilitychange',resumeIdleReads);globalThis.removeEventListener('online',resumeIdleReads);globalThis.removeEventListener('pageshow',resumeIdleReads);clearTimeout(quoteExpiryTimer);quoteFlow.dispose();otherBalances.dispose();stopPairPrice();allowanceReader.invalidate();},{once:true});
   renderSettings(); render();
   refreshDefaultList();
-  if (wallet.account) { warmSwapData(wallet.account); refreshBalances(false); restoreSubmittedTransaction(); }
-  prewarmQuote();
+  if (wallet.account) { refreshBalances(false); restoreSubmittedTransaction(); }
+  prewarmQuote(); refreshPairPrice();
   if (!swapService.available?.()) {
     try { state.config = await quoteContext.config(); } catch { state.config = null; }
   }
