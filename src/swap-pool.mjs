@@ -552,7 +552,7 @@ async function mountAdd(root, request, parts) {
       const summary = "Add " + sigDown(p.a, TOKENS[st.a].decimals, 3) + " " + sa + " and " + sigDown(p.b, TOKENS[st.b].decimals, 3) + " " + sb;
       submittedModal(hash); popup({ summary, hash });
       st.typed = ""; render();
-      tx.waitReceipt(hash).then(async () => { rememberPool(pl); await Promise.all([loadPool(), loadAccount()]); refreshNativeBalance(); if (main.isConnected) render(); })
+      tx.waitReceipt(hash).then(async () => { rememberPool(pl); await Promise.all([loadPool(), loadAccount()]); refreshNativeBalance({fresh: true}); if (main.isConnected) render(); })
         .catch((err) => popup({ summary: summary + " — " + (err?.message || ""), hash, success: false }));
     } catch (err) {
       errorModal(isReject(err) ? T("交易被拒绝。") : (err?.message || tr("交易失败", "Transaction failed")));
@@ -686,7 +686,7 @@ async function mountRemove(root, request, parts) {
       const summary = "Remove " + sigDown(am.a, TOKENS[st.a].decimals, 3) + " " + sa + " and " + sigDown(am.b, TOKENS[st.b].decimals, 3) + " " + sb;
       submittedModal(hash); popup({ summary, hash });
       st.pct = 0; render();
-      tx.waitReceipt(hash).then(async () => { await load(); refreshNativeBalance(); if (main.isConnected) render(); })
+      tx.waitReceipt(hash).then(async () => { await load(); refreshNativeBalance({fresh: true}); if (main.isConnected) render(); })
         .catch((err) => popup({ summary: summary + " — " + (err?.message || ""), hash, success: false }));
     } catch (err) {
       errorModal(isReject(err) ? T("交易被拒绝。") : (err?.message || tr("交易失败", "Transaction failed")));

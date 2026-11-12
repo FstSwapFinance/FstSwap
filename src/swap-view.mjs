@@ -1113,7 +1113,7 @@ export async function mountSwapView(root) {
         } else if (q.kind === "agg") {
           await readSwapReceipt(receiptReads.read, hash, { account: submittedAccount, route: q.route, minOut: min, expectedRequest });
         }
-        refreshBalances(); refreshNativeBalance();
+        refreshBalances(); refreshNativeBalance({fresh: true});
       }).catch((err) => popup({ summary: summary + " — " + (err?.message || ""), hash, success: false })).finally(()=>receiptReads.dispose());
     } catch (err) {
       walletTimingFailure(timing,err);

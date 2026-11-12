@@ -185,10 +185,10 @@ export const dockHtml = () => "";
 
 // —— Polling（区块高度） ——
 let lastBlock = null, pollTimer = null, nativeBalanceEpoch = 0, nativeBalancePending = null;
-function resetNativeBalance() {
+function resetNativeBalance({clearValue = true} = {}) {
   ++nativeBalanceEpoch;
   const previous = nativeBalancePending; nativeBalancePending = null;
-  previous?.controller.abort(); walletState.bnb = null;
+  previous?.controller.abort(); if (clearValue) walletState.bnb = null;
 }
 function pollingEl() {
   const el = tpl("polling");
@@ -215,8 +215,9 @@ function startPolling() {
   globalThis.addEventListener('online',tick);
   tick(); pollTimer = setInterval(tick, 6000);
 }
-export async function refreshNativeBalance() {
+export async function refreshNativeBalance({fresh = false} = {}) {
   if (!walletState.wallet) return;
+  if (fresh) resetNativeBalance({clearValue: false});
   const account = walletState.account, provider = walletState.provider, epoch = nativeBalanceEpoch;
   if (nativeBalancePending?.account === account && nativeBalancePending.provider === provider && nativeBalancePending.epoch === epoch) return nativeBalancePending.promise;
   const entry = {account, provider, epoch, controller: new AbortController()}; nativeBalancePending = entry;
