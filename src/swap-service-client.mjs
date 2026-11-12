@@ -1,6 +1,6 @@
-import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-37';
-import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261112-37';
-import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261112-37';
+import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-38';
+import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261112-38';
+import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261112-38';
 // Read-only API acceleration. Wallet requests and final transaction preflight stay local.
 const ZERO='0x'+'00'.repeat(20),ADDRESS=/^0x[0-9a-f]{40}$/i,HASH=/^0x[0-9a-f]{64}$/i;
 const businessErrors=new Set(['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY']);
@@ -167,7 +167,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
   if(!base||clock()<cooldown[action])return null;
   try{
    const timeoutSignal=AbortSignal.timeout(timeout),activeSignal=signal?AbortSignal.any([signal,timeoutSignal]):timeoutSignal;
-   const r=await waitForSignal(fetchImpl(base+'/'+action,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input),signal:activeSignal,credentials:'omit'}),activeSignal);
+   const r=await waitForSignal(fetchImpl(base+'/'+action,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input),signal:activeSignal,credentials:'omit',cache:'no-store'}),activeSignal);
    checkCallerSignal(signal);
    const text=await waitForSignal(r.text(),activeSignal);checkCallerSignal(signal);check(text.length<1024*1024);const data=parseWire(text);checkCallerSignal(signal);
    if(!r.ok){if(businessErrors.has(data?.error))throw Object.assign(new Error(data.error),{code:data.error,reason:data.reason,retryable:['data','stale','oracle'].includes(data.reason)});throw Error('SERVICE_UNAVAILABLE');}
@@ -285,6 +285,9 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
   }
  };
 }
-const host=globalThis.location?.hostname,local=['127.0.0.1','localhost'].includes(host);
-const enabled=!globalThis.FST_RPC_OVERRIDE&&!globalThis.FST_V10_CONFIG&&(local||host==='fstswap.pro'||host==='www.fstswap.pro'||/^fstswap-live(?:-[a-z0-9-]+)?\.vercel\.app$/.test(host||''));
-export const swapService=createServiceClient({base:enabled?'https://logo-api.fstswap.si/api/swap':'',expectedVersion:FSTSWAP_CONFIG.version});
+export function serviceBaseForHost(host,{rpcOverride=false,routerOverride=false}={}){
+ if(rpcOverride||routerOverride)return '';
+ if(/^fstswap-live(?:-[a-z0-9-]+)?\.vercel\.app$/.test(host||''))return '/api/swap';
+ return ['127.0.0.1','localhost','fstswap.pro','www.fstswap.pro'].includes(host)?'https://logo-api.fstswap.si/api/swap':'';
+}
+export const swapService=createServiceClient({base:serviceBaseForHost(globalThis.location?.hostname,{rpcOverride:Boolean(globalThis.FST_RPC_OVERRIDE),routerOverride:Boolean(globalThis.FST_V10_CONFIG)}),expectedVersion:FSTSWAP_CONFIG.version});

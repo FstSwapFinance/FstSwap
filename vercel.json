@@ -3,7 +3,21 @@
   "installCommand": "",
   "buildCommand": "",
   "outputDirectory": ".",
+  "rewrites": [
+    {"source": "/api/swap/health", "destination": "https://logo-api.fstswap.si/api/swap/health"},
+    {"source": "/api/swap/quote", "destination": "https://logo-api.fstswap.si/api/swap/quote"},
+    {"source": "/api/swap/balances", "destination": "https://logo-api.fstswap.si/api/swap/balances"}
+  ],
   "headers": [
+    {
+      "source": "/api/swap/:path*",
+      "headers": [
+        {"key": "Cache-Control", "value": "no-store"},
+        {"key": "CDN-Cache-Control", "value": "no-store"},
+        {"key": "Vercel-CDN-Cache-Control", "value": "no-store"},
+        {"key": "x-vercel-enable-rewrite-caching", "value": "0"}
+      ]
+    },
     {
       "source": "/assets/token-logos/:path*",
       "headers": [{"key": "Cache-Control", "value": "public, max-age=31536000, immutable"}]
