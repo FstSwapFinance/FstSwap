@@ -82,6 +82,55 @@
 .fst-balance-row .cfnxzr:disabled { opacity: 0.45; cursor: default; }
 .fst-balance-row .cfnxzr:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 3px; }
 
+/* Separate the amount fields from their balance and Max actions on the swap page. */
+.fst-swap-card #swap-page > .dcfnNF { grid-template-columns: minmax(0, 1fr); }
+.fst-swap-card #swap-page > .dcfnNF > * { min-width: 0; }
+.fst-swap-card #swap-page :is(#swap-currency-input, #swap-currency-output),
+.fst-swap-card #swap-page :is(#swap-currency-input, #swap-currency-output) > .jhmeqW {
+  background: transparent;
+  border: 0;
+}
+.fst-swap-card #swap-page .buISKp {
+  min-width: 0;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--ui-raised);
+  border-radius: 20px;
+  background: var(--ui-page);
+}
+.fst-swap-card #swap-page .buISKp:focus-within { border-color: var(--ui-border); }
+.fst-swap-card #swap-page .open-currency-select-button {
+  flex-shrink: 0;
+  max-width: 55%;
+  margin-right: 0;
+  font-size: 20px;
+}
+.fst-swap-card #swap-page .token-symbol-container { overflow: hidden; text-overflow: ellipsis; }
+.fst-swap-card #swap-page .cFosER { min-width: 0; gap: 8px; }
+.fst-swap-card #swap-page .cFosER > .iWJdVe { min-width: 0; }
+.fst-swap-card #swap-page .SzIbk { flex-shrink: 0; }
+.fst-swap-card #swap-page .token-amount-input { min-width: 0; font-variant-numeric: tabular-nums; }
+.fst-swap-card #swap-page .fNKPVt { padding: 6px 4px 0; }
+.fst-swap-card #swap-page .fst-balance-row { width: 100%; gap: 4px 12px; }
+.fst-swap-card #swap-page .fst-balance-row .css-djrxae { flex: 1 1 0; min-width: 0; font-size: 12px; line-height: 20px; }
+.fst-swap-card #swap-page .fst-balance-row .cfnxzr {
+  flex: 0 0 auto;
+  min-height: 28px;
+  margin: 0 0 0 auto;
+  padding: 4px 10px;
+  background: var(--ui-raised);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 20px;
+}
+.fst-swap-card #swap-page .hDVbXn { margin-top: 8px; margin-bottom: 8px; }
+.fst-swap-card #swap-page .open-currency-select-button:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 3px; }
+@media (max-width: 360px) {
+  .fst-swap-card #swap-page .buISKp { padding: 12px; gap: 8px; }
+  .fst-swap-card #swap-page .open-currency-select-button { font-size: 18px; }
+  .fst-swap-card #swap-page .token-amount-input { font-size: 22px; }
+}
+
 /* The live block link sits above the mobile navigation, including its safe area. */
 @media (max-width: 960px) {
   .kStqaV {
@@ -110,7 +159,7 @@
 /* Use the visible viewport above a software keyboard, rather than layout vh. */
 .fst-token-dialog.fst-keyboard-open[data-reach-dialog-content]{height:calc(var(--fst-visible-height) - 16px);max-height:calc(var(--fst-visible-height) - 16px);margin:0}
 .fst-token-dialog.fst-keyboard-open .kcbEdf{padding:10px 14px;gap:8px}
-.fst-token-dialog.fst-keyboard-open .jmNfaf{display:none}
+.fst-token-dialog.fst-keyboard-open .kcbEdf > .jmNfaf{display:none}
 .fst-token-dialog.fst-keyboard-open .fst-common-tokens{display:none}
 .fst-token-dialog.fst-keyboard-open #token-search-input{padding:10px 12px;font-size:16px}
 .fst-token-dialog.fst-keyboard-open .fst-token-results [role=button]{min-height:48px;padding-top:4px;padding-bottom:4px}

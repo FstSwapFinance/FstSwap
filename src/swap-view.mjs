@@ -155,7 +155,9 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
     const height = viewport?.height || globalThis.innerHeight || 0;
     const focused = document.activeElement === search;
     if (!focused) baselineHeight = Math.max(baselineHeight, height);
-    const compact = focused && (baselineHeight - height > 120 || height < 540);
+    // Keep the compressed layout through blur until the viewport recovers;
+    // moving the rows between pointer down and click can swallow token taps.
+    const compact = (focused || dialog.classList.contains('fst-keyboard-open')) && (baselineHeight - height > 120 || height < 540);
     dialog.classList.toggle('fst-keyboard-open', compact);
     dialog.style.setProperty('--fst-visible-height', height + 'px');
     if (compact) { overlay.style.height = height + 'px'; overlay.style.top = (viewport?.offsetTop || 0) + 'px'; }
@@ -269,6 +271,7 @@ export async function mountSwapView(root) {
   await loadSwapLibrary();
   if (!main.isConnected) return;
   main.inert = false;
+  main.removeAttribute('inert'); // Older WebViews do not reflect the inert property to the SSR attribute.
   const ethers = globalThis.ethers;
   const allowanceReader = createAllowanceReader((payload,{signal,fresh}={}) => swapPublicRpc(globalThis.fetch,signal,{priority:fresh?"foreground":"background",attempts:2,timeoutMs:2000})(payload));
   let activeSubmissionContext = null;
@@ -315,6 +318,7 @@ export async function mountSwapView(root) {
     }
     const input = src.querySelector("input.token-amount-input");
     input.value = limitAmountDecimals(value); input.setAttribute("value", input.value); input.title = value || "";
+    input.setAttribute("aria-label", id === "swap-currency-input" ? tr("支付数量", "Amount to pay") : tr("预计获得数量", "Estimated amount to receive"));
     if (id === "swap-currency-output") input.readOnly = true;
     const fiat = src.querySelector(".fNKPVt > div");
     if (fiat) {
@@ -333,6 +337,7 @@ export async function mountSwapView(root) {
         if (max && !showMax) max.remove();
         if (max && showMax) {
           max.type = "button";
+          max.textContent = tr("最大值", "MAX");
           max.disabled = !wallet.account || bal == null || Boolean(state.balanceErrors[tk.key]) || bal === 0n;
           max.addEventListener("click", () => setMax());
         }
