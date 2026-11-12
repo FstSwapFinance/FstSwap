@@ -1,19 +1,17 @@
 // 首页 / 币对分析（#/analysis/A/B，官方 pages/PoolAnalysis）与 我的（#/my，官方 pages/My）——
 // 界面逐节点复刻官方 DOM 模板；K 线使用官方同版本 TradingView Lightweight Charts v3.8.0（取自官方构建），
 // 数据：链上储备/余额/LP（RPC 池）+ GeckoTerminal OHLCV / 成交（官方 /api/Fst/* 接口在静态站点不可用）。
-import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261112-39";
-import { tr, T, tpl, part, html, mountFrame, useWallet, popup, getLanguage, hashParts, DEFAULT_ANALYSIS } from "./swap-shell.mjs?v=mainnet-20261112-39";
-import { TOKENS } from "./swap-view.mjs?v=mainnet-20261112-39";
-import { discoverAnalysisPools, readAnalysisPool, analysisStats, analysisTrade, analysisKlinePath, analysisPrice, matchesAnalysisToken, isPoolAddress } from "./swap-analysis-data.mjs?v=mainnet-20261112-39";
+import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261112-40";
+import { tr, T, tpl, part, html, mountFrame, useWallet, popup, getLanguage, hashParts, DEFAULT_ANALYSIS } from "./swap-shell.mjs?v=mainnet-20261112-40";
+import { discoverAnalysisPools, readAnalysisPool, analysisStats, analysisTrade, analysisKlinePath, analysisPrice, matchesAnalysisToken, isPoolAddress } from "./swap-analysis-data.mjs?v=mainnet-20261112-40";
 import { marketData } from "./swap-market-data.mjs?v=review-20261110-3";
 import { getTheme, setTheme, SOCIAL_LINKS } from "./swap-ui.mjs?v=review-20261110-3";
 
-import { findActiveToken, refreshDefaultList, readToken } from "./swap-manage.mjs?v=mainnet-20261112-39";
+import { findActiveToken, refreshDefaultList, readToken } from "./swap-manage.mjs?v=mainnet-20261112-40";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
 
 const WBNB_FST = "0x0efb5FD2402A0967B92551d6AF54De148504A115";
 const HISTORY_KEY = "swap_history_v1";
-const PAIR_ABI = ["function getReserves() view returns (uint112,uint112,uint32)", "function totalSupply() view returns (uint256)", "function balanceOf(address) view returns (uint256)"];
 const ERC20 = ["function balanceOf(address) view returns (uint256)"];
 
 
@@ -65,11 +63,14 @@ export async function mountAnalysisPage(root) {
   const parts = hashParts();
   const ida = (parts[1] || DEFAULT_ANALYSIS.a).toLowerCase(), idb = (parts[2] || DEFAULT_ANALYSIS.b).toLowerCase();
   const main = tpl("home");
-  let disposed = false, chart = null, candle = null, volume = null, chartObserver = null, stopWallet = () => {};
+  let disposed = false, chart = null, candle = null, volume = null, chartObserver = null, stopWallet = () => {}, accountVersion = 0, refreshAccount = () => {};
   const alive = () => !disposed && main.isConnected;
-  const dispose = () => { disposed = true; stopWallet(); chartObserver?.disconnect(); chart?.remove(); window.removeEventListener('hashchange', dispose); };
+  const dispose = () => { disposed = true; ++accountVersion; stopWallet(); chartObserver?.disconnect(); chart?.remove(); window.removeEventListener('hashchange', dispose); };
   window.addEventListener('hashchange', dispose, { once: true });
   mountFrame(root, "analysis", main);
+  // Subscribe after first paint, before dependency or pool reads. Early wallet
+  // changes advance the identity; the data controller starts once the pool exists.
+  stopWallet = wallet.subscribe(() => { if (alive()) { ++accountVersion; refreshAccount(); } else stopWallet(); });
   const card = main.querySelector(".eyuYtB");
   const title = card.querySelector("header.jCPZFR");
   const pairIcons = [...title.querySelectorAll(".kVwuYv > svg")];
@@ -108,7 +109,7 @@ export async function mountAnalysisPage(root) {
     });
   };
   const resolveToken = async id => {
-    if (id === 'bnb' || id === WBNB_FST.toLowerCase()) return { ...TOKENS.bnb, native: true };
+    if (id === 'bnb' || id === WBNB_FST.toLowerCase()) return { ...SWAP_TOKENS.bnb, key: 'bnb', name: 'BSC', address: null, id: 'BNB', item: 'token-item-ETHER', native: true };
     if (!isPoolAddress(id)) throw Error('Invalid token address');
     const token = findActiveToken(id) || await readToken(request, id);
     if (!token) throw Error('Token metadata unavailable');
@@ -147,13 +148,11 @@ export async function mountAnalysisPage(root) {
   const [t0, t1] = pool.tokens;
   const state = { stats: [null, null, null, null], iv: 5, tab: "kline" };
   [0, 1, 2, 3, 6, 7].forEach(i => { if (labelPairs[i]) labelPairs[i].textContent = (i % 2 === 0 ? t0 : t1).symbol; });
-  let accountSequence = 0;
-  async function fillData() {
-    const sequence = ++accountSequence, acct = wallet.account;
-    const call = async (to, abi, method, args = []) => {
-      const codec = new globalThis.ethers.Interface(abi);
-      return codec.decodeFunctionResult(method, await request({ method: 'eth_call', params: [{ to, data: codec.encodeFunctionData(method, args) }, 'latest'] }));
-    };
+  let accountSequence = 0, accountRead = null, accountSnapshot = null;
+  const balanceCodec = new globalThis.ethers.Interface(ERC20);
+  const sameAccount = entry => entry && entry.account === wallet.account && entry.provider === wallet.provider && entry.version === accountVersion;
+  function paintAccount() {
+    const amounts = sameAccount(accountSnapshot) ? accountSnapshot.amounts : !wallet.account ? [0n, 0n, pool.kind === 'v2' ? 0n : null] : null;
     const [r0, r1] = pool.reserves, ts = pool.totalSupply;
     const res0 = toNum(r0, t0.decimals), res1 = toNum(r1, t1.decimals);
     const price1Per0 = pool.kind === 'v3' ? pool.price1Per0 : res1 / res0;
@@ -163,11 +162,8 @@ export async function mountAnalysisPage(root) {
     valueSpans[3].textContent = '1 ' + unit.coin + ' ≈ ' + analysisPrice(unit.num) + ' ' + unit.money;
     valueSpans[9].textContent = display(res0); valueSpans[10].textContent = display(res1);
     [0, 1, 2, 4, 5, 6, 7, 8].forEach(i => { valueSpans[i].textContent = '—'; });
-    try {
-      const balance = async m => m.native ? BigInt(await request({ method: 'eth_getBalance', params: [acct, 'latest'] }))
-        : (await call(m.address, ERC20, 'balanceOf', [acct]))[0];
-      const [b0, b1, lp] = acct ? await Promise.all([balance(t0), balance(t1), pool.kind === 'v2' ? call(pool.pair, PAIR_ABI, 'balanceOf', [acct]).then(r => r[0]) : null]) : [0n, 0n, pool.kind === 'v2' ? 0n : null];
-      if (!alive() || sequence !== accountSequence || acct !== wallet.account) return;
+    if (amounts) {
+      const [b0, b1, lp] = amounts;
       const v0 = toNum(b0, t0.decimals), v1 = toNum(b1, t1.decimals);
       const d0 = lp != null && ts > 0n ? toNum(lp * r0 / ts, t0.decimals) : lp === 0n ? 0 : null;
       const d1 = lp != null && ts > 0n ? toNum(lp * r1 / ts, t1.decimals) : lp === 0n ? 0 : null;
@@ -179,8 +175,30 @@ export async function mountAnalysisPage(root) {
         share != null && state.stats[3] != null ? display(state.stats[3] * share / 100) : '—',
         share == null ? '—' : numberText(share, { a: '%' })];
       values.forEach((value, i) => { if (value != null) valueSpans[i].textContent = value; });
-    } catch { /* Preserve pool data while unavailable wallet balances remain unknown. */ }
+    }
   }
+  async function fillData() {
+    if (!alive()) return;
+    if (!sameAccount(accountSnapshot)) accountSnapshot = null;
+    paintAccount();
+    if (!wallet.account || accountSnapshot) return;
+    if (sameAccount(accountRead)) return accountRead.promise;
+    const acct = wallet.account, entry = {account: acct, provider: wallet.provider, version: accountVersion, sequence: ++accountSequence}; accountRead = entry;
+    entry.promise = (async () => {
+      try {
+        // All three balanceOf calls have the same argument; encode it once.
+        const data = balanceCodec.encodeFunctionData('balanceOf', [acct]);
+        const balanceOf = async to => balanceCodec.decodeFunctionResult('balanceOf', await request({method: 'eth_call', params: [{to, data}, 'latest']}))[0];
+        const balance = m => m.native ? request({method: 'eth_getBalance', params: [acct, 'latest']}).then(BigInt) : balanceOf(m.address);
+        const amounts = await Promise.all([balance(t0), balance(t1), pool.kind === 'v2' ? balanceOf(pool.pair) : null]);
+        if (!alive() || accountRead !== entry || entry.sequence !== accountSequence || !sameAccount(entry)) return;
+        accountSnapshot = {account: acct, provider: entry.provider, version: entry.version, amounts}; paintAccount();
+      } catch { /* Preserve pool data while unavailable wallet balances remain unknown. */ }
+      finally { if (accountRead === entry) accountRead = null; }
+    })();
+    return entry.promise;
+  }
+  refreshAccount = () => { void fillData(); };
   if (tabs) tabs.style.display = '';
   if (capturedChart) capturedChart.parentElement.style.display = '';
 
@@ -321,10 +339,9 @@ export async function mountAnalysisPage(root) {
       if (!alive()) return;
       state.stats = analysisStats(body.data, pool.tokens, pool.feeRate);
       state.stats.forEach((value, i) => { if (valueSpans[11 + i]) valueSpans[11 + i].textContent = value == null ? '—' : numberText(value); });
-      fillData();
+      paintAccount();
     } catch {}
   }
-  stopWallet = wallet.subscribe(() => { if (alive()) fillData(); else stopWallet(); });
   fillData(); loadKline(); loadStats();
   // 用户还在阅读上方数据时预取交易记录，切换标签直接复用。
   if (pool) loadTrades();

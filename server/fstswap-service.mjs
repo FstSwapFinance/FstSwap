@@ -3,8 +3,8 @@ import {pathToFileURL} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {isIP} from 'node:net';
 import {ethers} from 'ethers';
-import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261112-39';
-import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261112-39';
+import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261112-40';
+import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261112-40';
 import {readTokenBalances} from '../src/swap-balances.mjs';
 import {createReadPool} from './swap-read-pool.mjs';
 import {createRawSnapshot,snapshotReader} from './swap-snapshot-cache.mjs';
@@ -111,7 +111,7 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
  warmOptions.maxPairs=Math.max(1,Math.min(4,Number(warmOptions.maxPairs)||4));
  const defaults=(warmOptions.pairs||[{tokenIn:SWAP_TOKENS.usdt.address.toLowerCase(),tokenOut:FIST}]).slice(0,warmOptions.maxPairs);
  let foreground=0,warming=null,warmTimer=null;
- const foregroundNodes=new Map(),defaultKey=defaults[0]&&[defaults[0].tokenIn,defaults[0].tokenOut].join(':');
+ const foregroundNodes=new Map();
  const pairKey=input=>[input.tokenIn,input.tokenOut].join(':');
  function boundedSet(map,key,value,max){
   if(!map.has(key)&&map.size>=max){const evict=[...map].find(([,entry])=>entry.settled);if(evict)map.delete(evict[0]);else throw fail('SERVICE_BUSY');}
@@ -177,7 +177,9 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
   quote(raw,{signal}={}){
    const input=quoteInput(raw),key=JSON.stringify([input.chainId,input.tokenIn,input.tokenOut,input.amountIn,input.slippageBps,input.singleHop]);if(signal?.aborted)return Promise.reject(abortError(signal));touchPair(input);
    const old=inflight.get(key);if(old&&!old.signal.aborted)return old.subscribe(signal);
-   if(warming&&(foreground>0||warming.key!==defaultKey))warming.controller.abort();
+   // Reuse a matching in-flight policy. An unrelated default refresh competes
+   // with the new pair's discovery and ABI work, so foreground cancels it.
+   if(warming&&warming.key!==pairKey(input))warming.controller.abort();
    foreground++;let entry;
    entry=sharedRead(sharedSignal=>pool.run(async(request,node,attemptSignal)=>{
     // Consumers share the quote lifetime; each provider attempt owns its context
@@ -185,7 +187,7 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
     const activeSignal=attemptSignal||sharedSignal;
     const nodeId=node?.id||'primary';foregroundNodes.set(nodeId,(foregroundNodes.get(nodeId)||0)+1);
     try{
-     if(warming&&(foreground>1||warming.nodeId&&warming.nodeId!==nodeId))warming.controller.abort();
+     if(warming&&warming.nodeId&&warming.nodeId!==nodeId)warming.controller.abort();
      const {block,config,policy,snapshot}=await context(input,activeSignal,{node});assertRunning(activeSignal);policy.assertFresh();
      const read=pinned(snapshotReader(snapshot,request,{nodeId:node?.id||'primary',signal:activeSignal}),block);
      const q=await untilAborted(calculate(read,input,config,policy,{signal:activeSignal,nodeId:node?.id||'primary',block}),activeSignal);assertRunning(activeSignal);
@@ -213,18 +215,18 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
    },combined,{operation:'balances'}),combined);
   },
   async warmupOnce(){
-   if(!warmOptions.enabled||foreground>1||warming)return false;
-   const preferred=foreground===1?foregroundNode():null;if(foreground===1&&!preferred)return false;
-   const pairs=foreground===1?defaults.slice(0,1):activePairs();if(!pairs.length)return false;const controller=new AbortController(),run={key:null,controller};warming=run;
+   if(!warmOptions.enabled||foreground>0||warming)return false;
+   const pairs=activePairs();if(!pairs.length)return false;const controller=new AbortController(),run={key:null,controller};warming=run;
    let completed=false;
    try{
     for(const input of pairs){
-     const key=pairKey(input);if(foreground>1||controller.signal.aborted||foreground===1&&key!==defaultKey)break;
+     const key=pairKey(input);if(foreground>0||controller.signal.aborted)break;
      run.key=key;await pool.run((_request,node)=>{
       run.nodeId=node?.id||'primary';
-      if(foreground>1||foreground===1&&foregroundNode()!==run.nodeId){controller.abort();throw abortError(controller.signal);}
+      const activeNode=foregroundNode();
+      if(controller.signal.aborted||foreground>0&&activeNode!==run.nodeId){controller.abort();throw abortError(controller.signal);}
       return context(input,controller.signal,{warm:true,node});
-     },controller.signal,{operation:'warm',...(preferred?{nodeId:preferred}:{})});completed=true;
+     },controller.signal,{operation:'warm'});completed=true;
     }
     return completed&&!controller.signal.aborted;
    }catch{return false;}finally{if(warming===run)warming=null;}

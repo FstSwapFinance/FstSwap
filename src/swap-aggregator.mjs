@@ -1,6 +1,6 @@
-import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261112-39";
-import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261112-39";
-import { swapRpcWork } from "./swap-rpc-work.mjs?v=mainnet-20261112-39";
+import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261112-40";
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261112-40";
+import { swapRpcWork } from "./swap-rpc-work.mjs?v=mainnet-20261112-40";
 // 聚合路由 Swap 引擎（BSC 主网 56，FstSi aggregator-live v9「multi-pool」，合约 VERSION 1.01）。
 // 与 market-trade.mjs 相同的约束风格：全部函数只通过注入的 JSON-RPC
 // request 访问链上，返回精确的十进制字符串/大整数，浏览器与 Node 均可运行。
@@ -1000,29 +1000,37 @@ export function swapPublicRpc(fetchImpl = globalThis.fetch, signal, { lane = "tr
     const list = rpcList(lane);
     const start = state.cursor % list.length;
     state.cursor = (state.cursor + 1) % list.length;
-    const order = [];
+    const order = [], tried = new Set();
+    const budget = Math.min(new Set(list).size, Math.max(1, Math.floor(attempts) || RPC_ATTEMPTS));
     if (state.lastGood && list.includes(state.lastGood) && state.lastGood !== list[start]) order.push(state.lastGood);
-    for (let attempt = 0; attempt < attempts; attempt++) {
-      const endpoint = list[(start + attempt) % list.length];
+    for (let offset = 0; offset < list.length; offset++) {
+      const endpoint = list[(start + offset) % list.length];
       if (!order.includes(endpoint)) order.push(endpoint);
     }
     let lastError = null, sawMissingTransaction = false;
     const nullableTransaction = ["eth_getTransactionReceipt", "eth_getTransactionByHash"].includes(payload.method);
-    for (const endpoint of order) {
-      if ((state.cooldown.get(endpoint) ?? 0) > Date.now()) continue;
-      try {
-        const result = await once(endpoint, { ...payload, id });
-        // Some public providers return null for an existing historical hash.
-        // Check only the bounded alternate read set; never resend a transaction.
-        if (result === null && nullableTransaction) { sawMissingTransaction = true; continue; }
-        state.lastGood = endpoint;
-        return result;
-      } catch (err) {
-        lastError = err;
-        if (signal?.aborted || err?.name === "AbortError") throw err; // 主动取消不冷却，也不启动故障转移。
-        state.cooldown.set(endpoint, Date.now() + RPC_COOLDOWN_MS);
+    const readPublic = async (ignoreCooldown = false) => {
+      for (const endpoint of order) {
+        if (tried.size >= budget) break;
+        if (tried.has(endpoint) || !ignoreCooldown && (state.cooldown.get(endpoint) ?? 0) > Date.now()) continue;
+        tried.add(endpoint);
+        try {
+          const result = await once(endpoint, { ...payload, id });
+          // Some public providers return null for an existing historical hash.
+          // Check only the bounded alternate read set; never resend a transaction.
+          if (result === null && nullableTransaction) { sawMissingTransaction = true; continue; }
+          if (!ignoreCooldown) state.lastGood = endpoint;
+          return { result };
+        } catch (err) {
+          lastError = err;
+          if (signal?.aborted || err?.name === "AbortError") throw err; // 主动取消不冷却，也不启动故障转移。
+          if (!ignoreCooldown) state.cooldown.set(endpoint, Date.now() + RPC_COOLDOWN_MS);
+        }
       }
-    }
+      return null;
+    };
+    const healthy = await readPublic();
+    if (healthy) return healthy.result;
     if (sawMissingTransaction) return null;
     // Authenticated backup is available only through the local credential-hiding proxy.
     // It is a fallback, never promoted ahead of healthy public endpoints or local fork overrides.
@@ -1030,13 +1038,10 @@ export function swapPublicRpc(fetchImpl = globalThis.fetch, signal, { lane = "tr
       try { return await once("http://127.0.0.1:8126/rpc", { ...payload, id }); }
       catch (err) { lastError = err; if (signal?.aborted || err?.name === "AbortError") throw err; }
     }
-    // 全池冷却/失败兜底：忽略冷却再试一轮，防止冷却死锁
-    for (const endpoint of order) {
-      try {
-        const result = await once(endpoint, { ...payload, id });
-        if (result === null && nullableTransaction) { sawMissingTransaction = true; continue; }
-        return result;
-      } catch (err) { lastError = err; if (signal?.aborted || err?.name === "AbortError") throw err; }
+    // 全池冷却时仍可受限探测；本次已失败的端点不再重复，亲和端点也计入总预算。
+    if (!tried.size) {
+      const probe = await readPublic(true);
+      if (probe) return probe.result;
     }
     if (sawMissingTransaction) return null;
     throw lastError ?? rpcError();

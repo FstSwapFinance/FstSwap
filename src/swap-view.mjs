@@ -1,21 +1,21 @@
-import { createReceiptReadScope } from './swap-receipt-read.mjs?v=mainnet-20261112-39';
-import { createIdleRead } from './swap-idle-read.mjs?v=mainnet-20261112-39';
-import { swapRpcWork } from './swap-rpc-work.mjs?v=mainnet-20261112-39';
-import { recheckSwapQuote, createSubmissionReadContext, prepareSwapSubmission, prepareGasOptions } from './swap-preflight.mjs?v=mainnet-20261112-39';
-import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261112-39';
-import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261112-39';
-import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261112-39';
-import { createSubmissionWarmup } from './swap-submission-warmup.mjs?v=mainnet-20261112-39';
-import { createWalletTiming, timeWalletPhase, walletTimingFailure } from './swap-wallet-timing.mjs?v=mainnet-20261112-39';
-import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261112-39';
-import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261112-39';
-import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261112-39";
+import { createReceiptReadScope } from './swap-receipt-read.mjs?v=mainnet-20261112-40';
+import { createIdleRead } from './swap-idle-read.mjs?v=mainnet-20261112-40';
+import { swapRpcWork } from './swap-rpc-work.mjs?v=mainnet-20261112-40';
+import { recheckSwapQuote, createSubmissionReadContext, prepareSwapSubmission, prepareGasOptions } from './swap-preflight.mjs?v=mainnet-20261112-40';
+import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261112-40';
+import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261112-40';
+import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261112-40';
+import { createSubmissionWarmup } from './swap-submission-warmup.mjs?v=mainnet-20261112-40';
+import { createWalletTiming, timeWalletPhase, walletTimingFailure } from './swap-wallet-timing.mjs?v=mainnet-20261112-40';
+import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261112-40';
+import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261112-40';
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261112-40";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261112-39";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261112-40";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
@@ -23,16 +23,16 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261112-39";
+} from "./swap-aggregator.mjs?v=mainnet-20261112-40";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261112-39";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261112-40";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261112-39";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261112-40";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261112-39";
-import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261112-39";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261112-40";
+import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261112-40";
 
 const approvals = createApprovalTracker();
 const sharedQuoteContext = createQuoteContext(swapPublicRpc());
@@ -680,17 +680,17 @@ export async function mountSwapView(root) {
   }
   const missing = () => Object.assign(new Error(SWAP_V10_MISSING.zh), { code: SWAP_V10_MISSING.code });
   // FstSwap 报价：v10 经聚合路由 getAmountsOutVia(FstSwap 适配器)；不直连 FstSwap 路由器
-  async function fstAmounts(amountIn, path) {
+  async function fstAmounts(amountIn, path, read = request) {
     if (!swapV10Ready()) throw missing();
-    return v10AmountsOut(request, "fst", amountIn, path);
+    return v10AmountsOut(read, "fst", amountIn, path);
   }
   // 中间价参照（价格影响）：v10 → 小额 getAmountsOutVia；v9 → FstSwap FIST/WBNB 池储备（只读交易对，不调用路由器）
-  async function midOut(tiny, path) {
-    if (swapV10Ready()) return (await fstAmounts(tiny, path)).at(-1);
+  async function midOut(tiny, path, read = request) {
+    if (swapV10Ready()) return (await fstAmounts(tiny, path, read)).at(-1);
     const iface = new ethers.Interface(PAIR_ABI);
     const [r0raw, t0raw] = await Promise.all([
-      request({ method: "eth_call", params: [{ to: FST_FIST_WBNB_PAIR, data: iface.encodeFunctionData("getReserves", []) }, "latest"] }),
-      request({ method: "eth_call", params: [{ to: FST_FIST_WBNB_PAIR, data: iface.encodeFunctionData("token0", []) }, "latest"] }),
+      read({ method: "eth_call", params: [{ to: FST_FIST_WBNB_PAIR, data: iface.encodeFunctionData("getReserves", []) }, "latest"] }),
+      read({ method: "eth_call", params: [{ to: FST_FIST_WBNB_PAIR, data: iface.encodeFunctionData("token0", []) }, "latest"] }),
     ]);
     const [r0, r1] = iface.decodeFunctionResult("getReserves", r0raw);
     const t0 = iface.decodeFunctionResult("token0", t0raw)[0];
@@ -704,6 +704,17 @@ export async function mountSwapView(root) {
   async function refreshQuote({background=false,signal}={}) {
     cancelSubmissionWarm();
     const seq = ++state.seq;
+    const assertCurrent=()=>{if(signal?.aborted||seq!==state.seq||!main.isConnected)throw new DOMException('Quote read canceled','AbortError');};
+    // Configuration remains shared. Cancel only this consumer, never another
+    // quote's configuration read or its existing four-second cache lifetime.
+    const consume=work=>new Promise((resolve,reject)=>{
+      let done=false;
+      const finish=(fn,value)=>{if(done)return;done=true;signal?.removeEventListener('abort',onAbort);fn(value);};
+      const onAbort=()=>finish(reject,new DOMException('Quote read canceled','AbortError'));
+      signal?.addEventListener('abort',onAbort,{once:true});
+      Promise.resolve(work).then(value=>{try{assertCurrent();finish(resolve,value);}catch(error){finish(reject,error);}},error=>finish(reject,error));
+      if(signal?.aborted)onAbort();
+    });
     if(state.quote?.serviceExpiresAt && state.quote.serviceExpiresAt<=Date.now())state.quote=null;
     const ti = inT(), to = outT();
     const typed = state.amount;
@@ -716,34 +727,42 @@ export async function mountSwapView(root) {
     renderBottom();
     try {
       let q, poolPolicy;
+      assertCurrent();
       const remote = await swapService.quote({ tokenIn: ti.address, tokenOut: to.address, amountIn: amount,
         slippageBps: settings.slippageBps, singleHop: settings.singleHop }, { router: swapActiveRouter(), adapters: SWAP_ADAPTERS, signal, fresh:background });
-      if (signal?.aborted || seq !== state.seq || !main.isConnected) return;
+      assertCurrent();
       if (remote) {
         state.config = remote.config; q = remote.quote;
         q.serviceMeta = {...remote}; delete q.serviceMeta.quote; q.serviceExpiresAt = remote.expiresAt;
         q.feeAsset = resolveFeeAsset(q.feeToken,TOKENS);
       } else {
-      const context = await quoteContext.get(ti.address, to.address);
-      if (seq !== state.seq || !main.isConnected) return;
-      state.config = context.config;
-      poolPolicy = context.poolPolicy;
+      const scopedRead=swapPublicRpc(globalThis.fetch,signal);
+      const localRead=async payload=>{assertCurrent();const value=await scopedRead(payload);assertCurrent();return value;};
+      const config = await consume(quoteContext.config());
+      assertCurrent();
+      state.config = config;
+      if(!['2.0.0','2.1.0'].includes(config.version)){
+        poolPolicy=await readPoolPolicy(localRead,{tokenIn:ti.address,tokenOut:to.address,config,v3Mode:config.version==='1.11'?'legacy':'all'});
+        assertCurrent();
+      }
       const feeBps = feeBpsNow();
       const policy = swapFeePolicy(ti.address, to.address, state.config?.defaultFeeToken);
       const feeAsset = Object.values(TOKENS).find(t => (t.address || ZERO).toLowerCase() === policy.token.toLowerCase()) || TOKENS.usdt;
       if (["2.0.0","2.1.0"].includes(state.config?.version)) {
-        q = await quoteFstSwap(request, { tokenIn: ti.address, tokenOut: to.address, amountIn: amount, config: state.config, slippageBps: settings.slippageBps, singleHop: settings.singleHop });
+        q = await quoteFstSwap(localRead, { tokenIn: ti.address, tokenOut: to.address, amountIn: amount, config: state.config, slippageBps: settings.slippageBps, singleHop: settings.singleHop });
+        assertCurrent();
         q.feeAsset = resolveFeeAsset(q.feeToken,TOKENS);
       } else if (isAggPair()) {
         const amountIn = amount;
-        const route = await quoteSwap(request, { side: side(), amountIn, feeBps, poolPolicy, singleHop: settings.singleHop });
+        const route = await quoteSwap(localRead, { side: side(), amountIn, feeBps, poolPolicy, singleHop: settings.singleHop });
+        assertCurrent();
         q = { kind: "agg", route, amountIn, out: route.estimateOut, lpFee: route.platformFee, feeAsset: swapV10Ready() ? feeAsset : TOKENS.bnb };
         if (swapV10Ready()) {
-          q.impact = await v10RouteImpact(request, [route.first, route.second].filter(Boolean), route.swapBudget, q.out);
+          q.impact = await v10RouteImpact(localRead, [route.first, route.second].filter(Boolean), route.swapBudget, q.out);
         } else try {
           const path = side() === "buy" ? [FST_WBNB, SWAP_TOKENS.fist.address] : [SWAP_TOKENS.fist.address, FST_WBNB];
           const tiny = 10n ** BigInt(Math.max(0, ti.decimals - 4));
-          q.impact = impactOf(amountIn, q.out, tiny, await midOut(tiny, path));
+          q.impact = impactOf(amountIn, q.out, tiny, await midOut(tiny, path, localRead));
         } catch { q.impact = null; }
       } else {
         // —— 通用币对：一次批量比较所有已启用的 V2 DEX（含平台费） ——
@@ -753,15 +772,17 @@ export async function mountSwapView(root) {
         if (ti.key === "bnb") { swapIn = swapBuyBudget(amountIn, feeBps).budget; method = "swapBnbToToken"; }
         else if (to.key === "bnb") { swapIn = policy.mode === "input" ? amountIn - amountIn * BigInt(feeBps) / BPS : amountIn; method = "swapTokenToBnb"; }
         else { swapIn = policy.mode === "output" ? amountIn : amountIn - amountIn * BigInt(feeBps) / BPS; method = "swapTokenToToken"; }
-        let best = await v10BestAmountsOut(request, { tokenIn: ti.address, tokenOut: to.address, amountIn: swapIn,
+        let best = await v10BestAmountsOut(localRead, { tokenIn: ti.address, tokenOut: to.address, amountIn: swapIn,
           singleHop: settings.singleHop, config: state.config, poolPolicy });
+        assertCurrent();
         let feePlan;
         if (policy.mode === "convert") {
           let lastError;
           for (const candidate of best.candidates) {
             try {
-              feePlan = await v10PlanFeeConversion(request, { input: ti.address, feeBudget: amountIn * BigInt(feeBps) / BPS,
+              feePlan = await v10PlanFeeConversion(localRead, { input: ti.address, feeBudget: amountIn * BigInt(feeBps) / BPS,
                 config: state.config, slippageBps: settings.slippageBps, mainLegs: [candidate.first, candidate.second].filter(Boolean) });
+              assertCurrent();
               best = candidate; break;
             } catch (err) { if (err?.code !== "NO_FEE_ROUTE") throw err; lastError = err; }
           }
@@ -769,7 +790,8 @@ export async function mountSwapView(root) {
         }
         const gross = best.out, path = best.first.path;
         const out = policy.mode === "output" ? swapSellNet(gross, feeBps).net : gross;
-        const impact = await v10RouteImpact(request, [best.first, best.second].filter(Boolean), swapIn, gross);
+        const impact = await v10RouteImpact(localRead, [best.first, best.second].filter(Boolean), swapIn, gross);
+        assertCurrent();
         q = { kind: "v10", method, path, amountIn, out, impact, feeAsset, adapterKey: best.key,
           lpFee: (policy.mode === "output" ? gross : amountIn) * BigInt(feeBps) / BPS,
           first: best.first, second: best.second };
@@ -778,6 +800,7 @@ export async function mountSwapView(root) {
         }
       }
       }
+      assertCurrent();
       assertQuoteSafety({ tokenIn: ti.address, tokenOut: to.address, amountIn: q.maxIn || q.amountIn,
         amountOut: minOut(q), impact: q.impact, quotedAmountIn: q.amountIn, quotedAmountOut: q.out });
       q.poolCheckedAt = poolPolicy?.checkedAt ?? q.poolCheckedAt ?? Date.now();
