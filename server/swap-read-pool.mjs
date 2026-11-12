@@ -4,7 +4,7 @@ const TERMINAL=new Set(['INVALID_INPUT','RPC_FORBIDDEN','NO_ROUTE','NO_FEE_ROUTE
 const KNOWN=new Set([...TERMINAL,'STALE_BLOCK','BALANCE_UNAVAILABLE','WRONG_CHAIN','UPSTREAM_UNAVAILABLE','UPSTREAM_TIMEOUT','UPSTREAM_LIMIT','UPSTREAM_RATE_LIMIT','REQUEST_ABORTED','REQUEST_TIMEOUT']);
 const LIMIT=2*1024*1024,MAX_ACTIVE=48,MAX_ATTEMPTS=3;
 let globalHedges=0;
-const INTERNAL_ERROR=Symbol('read-pool-error'),PROBE_READ=Symbol('fixed-background-probe');
+const INTERNAL_ERROR=Symbol('read-pool-error'),PROBE_READ=Symbol('fixed-background-probe'),CHAIN_GUARD_FAILURE=Symbol('physical-chain-guard-failure');
 const PROBE_TOKEN='0x55d398326f99059ff775485246999027b3197955',PROBE_DATA='0x313ce567',MEASUREMENT_TTL=300000;
 const fail=(code,extra)=>Object.assign(new Error(code),{code,[INTERNAL_ERROR]:true},extra);
 const terminal=e=>TERMINAL.has(e?.code)||(typeof e?.code==='string'&&e.code.startsWith('POOL')&&e.retryable!==true);
@@ -40,7 +40,7 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
  let nextId=0,active=0,eligibleOperations=0,ownHedges=0,probing=false,lastProbeStartedAt=null,activeProbeController=null;
  const probeInterval=Math.max(30000,Number(probeIntervalMs)||30000);
  const operationStats=Object.create(null);
- const states=endpoints.map((url,index)=>({url,id:'upstream-'+(index+1),chainAt:null,lastOk:null,failures:0,totalFailures:0,successes:0,cooldown:0,inFlight:0,probeInFlight:0,head:null,headAt:null,lastProbeAt:null,lastProbeOk:null,requests:Object.create(null),probeRequests:Object.create(null),operations:Object.create(null),public:{id:'upstream-'+(index+1),chainAt:0,lastOk:0,failures:0,cooldown:0}}));
+ const states=endpoints.map((url,index)=>({url,id:'upstream-'+(index+1),chainAt:null,chainGuard:null,lastOk:null,failures:0,totalFailures:0,successes:0,cooldown:0,inFlight:0,probeInFlight:0,head:null,headAt:null,lastProbeAt:null,lastProbeOk:null,requests:Object.create(null),probeRequests:Object.create(null),operations:Object.create(null),public:{id:'upstream-'+(index+1),chainAt:0,lastOk:0,failures:0,cooldown:0}}));
  const nodes=states.map(n=>n.public);
  function sync(n){Object.assign(n.public,{id:n.id,chainAt:n.chainAt??0,lastOk:n.lastOk??0,failures:n.failures,cooldown:n.cooldown});}
  function headLag(n){
@@ -122,7 +122,48 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
    throw fail('UPSTREAM_UNAVAILABLE');
   }finally{active--;clearTimeout(timer);signal.removeEventListener('abort',onAbort);}
  }
+ function verifyChain(node,signal,isProbe){
+  if(signal.aborted)return Promise.reject(cancelled(signal));
+  const age=node.chainAt===null?Infinity:clock()-node.chainAt;
+  if(!isProbe&&age>=0&&age<10000)return Promise.resolve();
+  // Ordinary operations share only an in-flight guard, with their own right to
+  // cancel. A fixed background probe always measures a new physical chain read.
+  let entry=isProbe?null:node.chainGuard;
+  if(!entry||entry.controller.signal.aborted){
+   entry={controller:new AbortController(),consumers:new Set(),settled:false,failureRecorded:false};
+   if(!isProbe)node.chainGuard=entry;
+   entry.promise=Promise.resolve().then(async()=>{
+    const chain=await call(node,{method:'eth_chainId',params:[]},entry.controller.signal,isProbe);
+    if(entry.controller.signal.aborted)throw cancelled(entry.controller.signal);
+    if(chain!=='0x38')throw fail('WRONG_CHAIN');
+    node.chainAt=clock();sync(node);
+   }).catch(error=>{
+    if(!entry.controller.signal.aborted)Object.defineProperty(error,CHAIN_GUARD_FAILURE,{value:entry});
+    throw error;
+   }).finally(()=>{
+    entry.settled=true;if(node.chainGuard===entry)node.chainGuard=null;
+   });
+   // An upstream implementation may settle after its last consumer canceled.
+   entry.promise.catch(()=>{});
+  }
+  return new Promise((resolve,reject)=>{
+   const consumer={},leave=()=>{signal.removeEventListener('abort',abort);return entry.consumers.delete(consumer);};
+   const abort=()=>{
+    if(!leave())return;
+    reject(cancelled(signal));
+    if(!entry.settled&&!entry.consumers.size){
+     if(node.chainGuard===entry)node.chainGuard=null;
+     entry.controller.abort(signal.reason);
+    }
+   };
+   entry.consumers.add(consumer);signal.addEventListener('abort',abort,{once:true});
+   entry.promise.then(value=>{if(leave())resolve(value);},error=>{if(leave())reject(error);});
+   if(signal.aborted)abort();
+  });
+ }
  function recordFailure(node,error){
+  const guard=error[CHAIN_GUARD_FAILURE];
+  if(guard){if(guard.failureRecorded)return;guard.failureRecorded=true;}
   node.failures++;node.totalFailures++;
   const delay=error.code==='UPSTREAM_RATE_LIMIT'?error.retryAfterMs:Math.min(60000,5000*2**Math.min(node.failures,4));
   node.cooldown=Math.max(node.cooldown,clock()+delay);sync(node);
@@ -173,10 +214,7 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
      const started=clock();
      const attempt=(async()=>{
       const request=payload=>call(node,payload,controller.signal,isProbe);
-      if(isProbe||node.chainAt===null||clock()-node.chainAt>=10000){
-       if(await request({method:'eth_chainId',params:[]})!=='0x38')throw fail('WRONG_CHAIN');
-       node.chainAt=clock();sync(node);
-      }
+      await verifyChain(node,controller.signal,isProbe);
       if(controller.signal.aborted)throw cancelled(controller.signal);
       return operation(request,node.public,controller.signal);
      })();

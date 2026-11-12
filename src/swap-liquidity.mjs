@@ -1,6 +1,7 @@
 // Pool admission policy. All reserves and oracle rounds are read at one BSC block.
-import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter, readSwapConfigFactory } from './swap-aggregator.mjs?v=mainnet-20261112-38';
-import {readCodec} from './swap-read-codec.mjs?v=mainnet-20261112-38';
+import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter, readSwapConfigFactory } from './swap-aggregator.mjs?v=mainnet-20261112-39';
+import {readCodec} from './swap-read-codec.mjs?v=mainnet-20261112-39';
+import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-39';
 const ZERO='0x'+'00'.repeat(20),MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
 const lower=x=>String(x||ZERO).toLowerCase();
 const USDT=lower(SWAP_TOKENS.usdt.address),USDC='0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d';
@@ -10,6 +11,7 @@ export const MAINSTREAM_TOKENS=new Set([ZERO,...WRAPPED,USDT,USDC,BTCB,ETH]);
 export const MIN_POOL_USD=100000n;
 const SCALE=10n**18n;
 const FIST=lower(SWAP_TOKENS.fist.address);
+const CANONICAL_V2_ADAPTERS=new Set(['fst','pancake'].map(key=>lower(FSTSWAP_CONFIG.adapters[key])));
 // Chainlink BSC directory, verified 2026-11-10; prices are validated on chain, never inferred from the candidate pool.
 const FEEDS=[
  {tokens:WRAPPED,address:'0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE',maxAge:180},
@@ -159,9 +161,14 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
   }).sort((a,b)=>a.n-b.n);
   return{existing:ordered.map(item=>item.p),states:ordered.flatMap(item=>item.row)};
  };
+ // These deployed V2 factories have symmetric getPair queries; getPairInfo
+ // returns canonical token0/token1 reserves and skips balanceOf for ZERO.
+ // Normalize only wire arguments, preserving policy insertion and tie order.
+ // Unknown deployments keep their original query order and cache identity.
+ const canonicalV2=lower(swapActiveRouter())===lower(FSTSWAP_CONFIG.router);
  const [oracle,results,v3State]=await Promise.all([
   batch(FEEDS.flatMap(f=>[call(f.address,'latestRoundData'),call(f.address,'decimals')])),
-  batch(specs.map(p=>call(swapActiveRouter(),'getPairInfo',[p.adapter,p.a,p.b,ZERO],router))),
+  batch(specs.map(p=>call(swapActiveRouter(),'getPairInfo',[p.adapter,...(canonicalV2&&CANONICAL_V2_ADAPTERS.has(lower(p.adapter))?[p.a,p.b].sort():[p.a,p.b]),ZERO],router))),
   includeV3?readV3State():null,
  ]);
  const prices=new Map(),expiry=[];

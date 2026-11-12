@@ -3,8 +3,8 @@ import {pathToFileURL} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {isIP} from 'node:net';
 import {ethers} from 'ethers';
-import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261112-38';
-import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261112-38';
+import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261112-39';
+import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261112-39';
 import {readTokenBalances} from '../src/swap-balances.mjs';
 import {createReadPool} from './swap-read-pool.mjs';
 import {createRawSnapshot,snapshotReader} from './swap-snapshot-cache.mjs';
@@ -286,7 +286,9 @@ export function createProbeScheduler({pool,balancePool=pool,engine,signal,timers
  }
  async function initial(){if(running||activeSignal.aborted)return false;running=true;try{for(const target of roles){if(activeSignal.aborted)break;await probe(target);}return !activeSignal.aborted;}finally{running=false;}}
  async function tick(){if(running||activeSignal.aborted)return false;running=true;const target=roles[next];next=(next+1)%roles.length;try{await probe(target);return !activeSignal.aborted;}finally{running=false;}}
- return{initial,tick,start(){if(timer!==null||activeSignal.aborted)return;timer=timers.setInterval(()=>{void tick();},31000);timer?.unref?.();},stop(){if(timer!==null)timers.clearInterval(timer);timer=null;controller.abort();}};
+ // Each independent role gets a slot every 31 seconds. One shared ticker and
+ // the running guard keep probes sequential; pool-local 30-second limits stay in force.
+ return{initial,tick,start(){if(timer!==null||activeSignal.aborted)return;timer=timers.setInterval(()=>{void tick();},31000/roles.length);timer?.unref?.();},stop(){if(timer!==null)timers.clearInterval(timer);timer=null;controller.abort();}};
 }
 if(process.argv[1]&&pathToFileURL(realpathSync(process.argv[1])).href===import.meta.url){
  const pool=createReadPool(endpointsFromEnv(process.env)),balancePool=process.env.FSTSWAP_BALANCE_RPC_URLS?createReadPool(endpointsFromEnv(process.env,{role:'balances'})):pool;

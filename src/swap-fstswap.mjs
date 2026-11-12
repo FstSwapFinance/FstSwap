@@ -1,6 +1,6 @@
 // FstSwap staged versions: exact-input only, one fee on the real main route.
-import {SWAP_ADAPTERS,SWAP_ABI,swapActiveRouter} from './swap-aggregator.mjs?v=mainnet-20261112-38';
-import {readPoolPolicy,createPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261112-38';
+import {SWAP_ADAPTERS,SWAP_ABI,swapActiveRouter} from './swap-aggregator.mjs?v=mainnet-20261112-39';
+import {readPoolPolicy,createPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261112-39';
 const ZERO='0x'+'00'.repeat(20),BPS=10000n;
 const lower=x=>String(x||ZERO).toLowerCase();
 export const FST_FEE_ASSETS=Object.freeze({BNB:ZERO,USDT:'0x55d398326f99059ff775485246999027b3197955',FIST:'0xc9882def23bc42d53895b8361d0b1edc7570bc6a',WBNB:'0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',ETH:'0x2170ed0880ac9a755fd29b2688956bd959f933f8',USDC:'0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d'});
