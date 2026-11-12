@@ -2,8 +2,9 @@
 // 模板来自 swap-official-tpl.mjs（官方 DOM 快照），样式来自 swap-official.css（官方运行时样式）。
 // 钱包按品牌选择注入 provider；未安装时通过 WalletConnect 扫码连接。
 import { SWAP_CHAIN, connectInjected, injectedProvider, restoreInjected, walletAppLink, walletConnectAccount,
-  walletShort, loadSwapWalletConnect, disconnectWalletConnect } from "./swap-wallet.mjs?v=mainnet-20261112-41";
-import { swapPublicRpc, loadSwapLibrary } from "./swap-aggregator.mjs?v=mainnet-20261112-41";
+  walletShort, loadSwapWalletConnect, disconnectWalletConnect } from "./swap-wallet.mjs?v=mainnet-20261112-44";
+import { swapPublicRpc, loadSwapLibrary } from "./swap-aggregator.mjs?v=mainnet-20261112-44";
+import { readWalletBalances, invalidateWalletBalances } from "./swap-balances.mjs?v=mainnet-20261112-44";
 import { TPL, EN } from "./swap-official-tpl.mjs?v=official-20261112-41";
 import { jazziconHtml } from "./swap-jazzicon.mjs?v=official-20261109";
 import "./swap-ui.mjs?v=review-20261110-3";
@@ -185,10 +186,11 @@ export const dockHtml = () => "";
 
 // —— Polling（区块高度） ——
 let lastBlock = null, pollTimer = null, nativeBalanceEpoch = 0, nativeBalancePending = null;
+const nativeBalanceToken = Object.freeze({key: 'bnb', address: null, decimals: 18});
 function resetNativeBalance({clearValue = true} = {}) {
   ++nativeBalanceEpoch;
   const previous = nativeBalancePending; nativeBalancePending = null;
-  previous?.controller.abort(); if (clearValue) walletState.bnb = null;
+  previous?.controller.abort(); invalidateWalletBalances(); if (clearValue) walletState.bnb = null;
 }
 function pollingEl() {
   const el = tpl("polling");
@@ -223,9 +225,11 @@ export async function refreshNativeBalance({fresh = false} = {}) {
   const entry = {account, provider, epoch, controller: new AbortController()}; nativeBalancePending = entry;
   entry.promise = (async () => {
     try {
-      const raw = await swapPublicRpc(globalThis.fetch, entry.controller.signal, { lane: "balance" })({ method: "eth_getBalance", params: [account, "latest"] });
+      const read = (payload, {signal} = {}) => swapPublicRpc(globalThis.fetch, signal, { lane: "balance" })(payload);
+      const result = await readWalletBalances(read, account, [nativeBalanceToken], {signal: entry.controller.signal});
       if (entry.controller.signal.aborted || nativeBalanceEpoch !== epoch || walletState.account !== account || walletState.provider !== provider) return;
-      const next = BigInt(raw); if (next !== walletState.bnb) { walletState.bnb = next; renderHeader(); }
+      const next = result.balances.bnb;
+      if (next != null && next !== walletState.bnb) { walletState.bnb = next; renderHeader(); }
     } catch {} finally { if (nativeBalancePending === entry) nativeBalancePending = null; }
   })();
   return entry.promise;

@@ -1,21 +1,21 @@
-import { createReceiptReadScope } from './swap-receipt-read.mjs?v=mainnet-20261112-41';
-import { createIdleRead } from './swap-idle-read.mjs?v=mainnet-20261112-41';
-import { swapRpcWork } from './swap-rpc-work.mjs?v=mainnet-20261112-41';
-import { recheckSwapQuote, createSubmissionReadContext, prepareSwapSubmission, prepareGasOptions } from './swap-preflight.mjs?v=mainnet-20261112-41';
-import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261112-41';
-import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261112-41';
-import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261112-41';
-import { createSubmissionWarmup } from './swap-submission-warmup.mjs?v=mainnet-20261112-41';
-import { createWalletTiming, timeWalletPhase, walletTimingFailure } from './swap-wallet-timing.mjs?v=mainnet-20261112-41';
-import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261112-41';
-import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261112-41';
-import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261112-41";
+import { createReceiptReadScope } from './swap-receipt-read.mjs?v=mainnet-20261112-44';
+import { createIdleRead } from './swap-idle-read.mjs?v=mainnet-20261112-44';
+import { swapRpcWork } from './swap-rpc-work.mjs?v=mainnet-20261112-44';
+import { recheckSwapQuote, createSubmissionReadContext, prepareSwapSubmission, prepareGasOptions } from './swap-preflight.mjs?v=mainnet-20261112-44';
+import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261112-44';
+import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261112-44';
+import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261112-44';
+import { createSubmissionWarmup } from './swap-submission-warmup.mjs?v=mainnet-20261112-44';
+import { createWalletTiming, timeWalletPhase, walletTimingFailure } from './swap-wallet-timing.mjs?v=mainnet-20261112-44';
+import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261112-44';
+import { readWalletBalances } from './swap-balances.mjs?v=mainnet-20261112-44';
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261112-44";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261112-41";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261112-44";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
@@ -23,16 +23,16 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261112-41";
+} from "./swap-aggregator.mjs?v=mainnet-20261112-44";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261112-41";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261112-44";
 import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261112-41";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261112-44";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261112-41";
-import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261112-41";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261112-44";
+import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261112-44";
 
 const approvals = createApprovalTracker();
 const sharedQuoteContext = createQuoteContext(swapPublicRpc());
@@ -97,6 +97,8 @@ function saveHistory(entry) {
 
 // 页面级状态（跨路由保留选择，和官方 redux 一致）
 const page = { inKey: null, outKey: null, connectedDefaults: false };
+function quoteNow(quote) { return quote?.serviceMeta ? swapService.now() : Date.now(); }
+function warmNow(warm) { return warm?.cacheServiceTime ? swapService.now() : Date.now(); }
 
 export function openTokenPicker({ selected, other, balances = {}, onPick, loadBalances }) {
   syncTokenRegistry();
@@ -138,7 +140,7 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
   };
   // Token metadata always comes from BSC, even when the wallet is on another chain.
   const readRpc = swapPublicRpc();
-  const balanceRequest = swapPublicRpc(globalThis.fetch, undefined, { lane: "balance" });
+  const balanceRequest = (payload, {signal} = {}) => swapPublicRpc(globalThis.fetch, signal, {lane:"balance"})(payload);
   const dialog = overlay.querySelector("[data-reach-dialog-content]");
   dialog.classList.add("fst-token-dialog");
   const searchCls = dialog.className;
@@ -251,7 +253,7 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
 export async function mountSwapView(root) {
   const wallet = useWallet();
   const request = swapPublicRpc();
-  const balanceRequest = swapPublicRpc(globalThis.fetch, undefined, { lane: "balance" });
+  const balanceRequest = (payload, {signal} = {}) => swapPublicRpc(globalThis.fetch, signal, {lane:"balance"})(payload);
   const quoteContext = sharedQuoteContext;
   // Short, abortable reads for wallet actions; market/chart reads keep their own retry policy.
   const transactionRead = (payload,{signal}={}) => swapPublicRpc(globalThis.fetch, signal ? AbortSignal.any([signal,AbortSignal.timeout(6000)]) : AbortSignal.timeout(6000), { priority:"foreground", attempts: 2, timeoutMs: 2000 })(payload);
@@ -276,7 +278,7 @@ export async function mountSwapView(root) {
   const allowanceReader = createAllowanceReader((payload,{signal,fresh}={}) => swapPublicRpc(globalThis.fetch,signal,{priority:fresh?"foreground":"background",attempts:2,timeoutMs:2000})(payload));
   let activeSubmissionContext = null;
   let activeWalletController = null;
-  const submissionWarmup=createSubmissionWarmup();
+  const submissionWarmup=createSubmissionWarmup({clock:()=>quoteNow(state.quote)});
   const walletTiming=createWalletTiming();
   let submissionWarmTimer=null,walletSubmissionEpoch=0,activeBalanceReads=0;
   const $ = (s) => main.querySelector(s);
@@ -289,6 +291,8 @@ export async function mountSwapView(root) {
 
   const token = (k) => (k ? TOKENS[k] : null);
   const inT = () => token(page.inKey), outT = () => token(page.outKey);
+  const selectedTokenIdentity = () => JSON.stringify([inT(),outT()].map(t => t ? [t.key,t.address?.toLowerCase()??null,t.decimals,ORDER.includes(t.key)] : null));
+  let selectedTokenSignature = selectedTokenIdentity();
   const isAggPair = () => [page.inKey, page.outKey].sort().join("/") === "bnb/fist";
   const side = () => (page.inKey === "bnb" ? "buy" : "sell");
   const routeSymbols = () => {
@@ -355,6 +359,7 @@ export async function mountSwapView(root) {
   }
 
   function renderPanels() {
+    selectedTokenSignature = selectedTokenIdentity();
     const outVal = state.quote ? formatAmountInput(state.quote.out, outT().decimals) : "";
     const inVal = state.amount;
     const refocus = state.refocus || document.activeElement === main.querySelector("#swap-currency-input input");
@@ -374,7 +379,7 @@ export async function mountSwapView(root) {
   // —— 价格行 + 详情（官方 TradePrice + AdvancedSwapDetails） ——
   function renderTrade() {
     // Unit price is display-only: it never populates state.quote or enables a swap.
-    const preview = !state.amount && state.preview?.serviceExpiresAt > Date.now() ? state.preview : null;
+    const preview = !state.amount && state.preview?.serviceExpiresAt > quoteNow(state.preview) ? state.preview : null;
     const q = state.quote || preview;
     const existingDetails = card.querySelector(":scope > .cKJcLm");
     existingDetails?.remove();
@@ -474,7 +479,7 @@ export async function mountSwapView(root) {
     if (state.quoteError === "AMOUNT_PRECISION") return tr("输入金额超出代币精度", "Amount exceeds token precision");
     if (state.quoteError) return tr("报价暂不可用，正在重试", "Quote unavailable; retrying");
     if (!state.quote) return tr("正在获取报价…", "Fetching quote…");
-    if (state.quote.serviceExpiresAt && Date.now() >= state.quote.serviceExpiresAt) return tr("正在更新报价…", "Refreshing quote…");
+    if (state.quote.serviceExpiresAt && quoteNow(state.quote) >= state.quote.serviceExpiresAt) return tr("正在更新报价…", "Refreshing quote…");
     const bal = state.balances[page.inKey];
     if (bal != null && bal < (state.quote.maxIn ?? state.quote.amountIn)) return tr(inT().symbol + " 余额不足", "Insufficient " + inT().symbol + " balance");
     return "";
@@ -566,9 +571,8 @@ export async function mountSwapView(root) {
     const id = ++balanceRequestId;
     wanted.forEach(k => balanceRequests.set(k, id));
     let result;
-    const read = signal ? swapPublicRpc(globalThis.fetch, signal, {lane:"balance"}) : balanceRequest;
     if(submissionWarmup.pending())cancelSubmissionWarm();activeBalanceReads++;
-    try { result = await readWalletBalances(read, account, wanted.map(k => TOKENS[k]), {fresh,signal}); }
+    try { result = await readWalletBalances(balanceRequest, account, wanted.map(k => TOKENS[k]), {fresh,signal}); }
     catch { if (signal?.aborted) return; result = {balances:{}, failed:wanted}; }
     finally { activeBalanceReads--;if(wanted.some(key=>key===page.inKey||key===page.outKey))queueSubmissionWarm(); }
     if (signal?.aborted || wallet.account !== account || state.balanceEpoch !== epoch) return;
@@ -585,7 +589,7 @@ export async function mountSwapView(root) {
   async function refreshBalances(fresh = true) {
     if (!wallet.account) return;
     otherBalances.pause();
-    const keys = [page.inKey, page.outKey].filter(Boolean);
+    const keys = [...new Set([page.inKey, page.outKey, "bnb"].filter(Boolean))];
     // A slow holdings read must not delay the independent allowance check.
     await Promise.allSettled([
       loadBalances(keys, fresh).then(() => { if (main.isConnected) { renderPanels(); renderBottom(); } }),
@@ -625,7 +629,7 @@ export async function mountSwapView(root) {
     clearTimeout(previewExpiryTimer); previewExpiryTimer = null; state.preview = null;
   }
   async function refreshPairPrice({reuse=false} = {}) {
-    if (reuse && (previewController || state.preview?.serviceExpiresAt > Date.now())) return;
+    if (reuse && (previewController || state.preview?.serviceExpiresAt > quoteNow(state.preview))) return;
     stopPairPrice();
     if (state.amount || state.transactionBusy || !main.isConnected || document.hidden || navigator.onLine === false || !swapService.available?.()) return;
     const ti = inT(), to = outT(); if (!ti || !to) return;
@@ -635,12 +639,12 @@ export async function mountSwapView(root) {
       const remote = await swapService.quote({tokenIn, tokenOut, amountIn:10n ** BigInt(ti.decimals),
         slippageBps:settings.slippageBps, singleHop:settings.singleHop},
         {router:swapActiveRouter(), adapters:SWAP_ADAPTERS, signal:controller.signal});
-      if (!remote || controller.signal.aborted || previewController !== controller || !main.isConnected || state.amount || inT()?.address !== tokenIn || outT()?.address !== tokenOut || remote.expiresAt <= Date.now()) return;
-      const preview = {...remote.quote, serviceExpiresAt:remote.expiresAt};
+      if (!remote || controller.signal.aborted || previewController !== controller || !main.isConnected || state.amount || inT()?.address !== tokenIn || outT()?.address !== tokenOut || remote.expiresAt <= swapService.now()) return;
+      const preview = {...remote.quote, serviceMeta:remote, serviceExpiresAt:remote.expiresAt};
       state.preview = preview; renderTrade();
       previewExpiryTimer = setTimeout(() => {
         if (state.preview === preview) { state.preview = null; if (main.isConnected) renderTrade(); }
-      }, Math.max(0, remote.expiresAt - Date.now()));
+      }, Math.max(0, remote.expiresAt - quoteNow(preview)));
     } catch { /* Speculative reads never delay input or open an error modal. */ }
     finally { if (previewController === controller) previewController = null; }
   }
@@ -720,14 +724,14 @@ export async function mountSwapView(root) {
       Promise.resolve(work).then(value=>{try{assertCurrent();finish(resolve,value);}catch(error){finish(reject,error);}},error=>finish(reject,error));
       if(signal?.aborted)onAbort();
     });
-    if(state.quote?.serviceExpiresAt && state.quote.serviceExpiresAt<=Date.now())state.quote=null;
+    if(state.quote?.serviceExpiresAt && state.quote.serviceExpiresAt<=quoteNow(state.quote))state.quote=null;
     const ti = inT(), to = outT();
     const typed = state.amount;
     if (!ti || !to || !typed || !(Number(typed) > 0)) { state.quote = null; render(); otherBalances.schedule(); return; }
     state.quoteError = ""; state.quoteErrorReason = "";
     let amount; try { amount = swapUnits(typed, ti.decimals); } catch { state.quote = null; state.quoteError = "AMOUNT_PRECISION"; render(); otherBalances.schedule(); return; }
     const inputKey=JSON.stringify([ti.address||ZERO,to.address||ZERO,amount.toString(),settings.slippageBps,settings.singleHop]);
-    const retained=background && state.quoteKey===inputKey && state.quote?.serviceExpiresAt>Date.now() ? state.quote : null;
+    const retained=background && state.quoteKey===inputKey && state.quote?.serviceExpiresAt>quoteNow(state.quote) ? state.quote : null;
     const allowanceRead=refreshAllowance("latest",{fresh:false,signal});
     renderBottom();
     try {
@@ -818,7 +822,7 @@ export async function mountSwapView(root) {
       clearTimeout(quoteExpiryTimer);
       quoteExpiryTimer=setTimeout(()=>{
         if(main.isConnected && state.quote===q && !state.transactionBusy) {state.quote=null;render();if(!quoteFlow.running?.())scheduleQuote(0);}
-      },Math.max(0,q.serviceExpiresAt-Date.now()));
+      },Math.max(0,q.serviceExpiresAt-quoteNow(q)));
       // Read-only output and preloaded approval state render independently.
       render();
       await allowanceRead;
@@ -828,7 +832,7 @@ export async function mountSwapView(root) {
     } catch (err) {
       if (signal?.aborted || err?.name==='AbortError' || seq !== state.seq) return;
       const hardFailure=["NO_ROUTE","NO_FEE_ROUTE","UNSAFE_QUOTE","PRICE_IMPACT_TOO_HIGH"].includes(err?.code) || err?.code==="POOL_LIQUIDITY"&&!err?.retryable;
-      if(!hardFailure && retained && retained.serviceExpiresAt>Date.now() && state.quote===retained) {state.quoteError="";renderBottom();return;}
+      if(!hardFailure && retained && retained.serviceExpiresAt>quoteNow(retained) && state.quote===retained) {state.quoteError="";renderBottom();return;}
       state.quote = null;
       state.quoteError = err?.code === SWAP_V10_MISSING.code ? SWAP_V10_MISSING.code
         : err?.code === "NO_ROUTE" || /revert|INSUFFICIENT/i.test(err?.message || "") ? "NO_ROUTE" : (err?.code || "SWAP_RPC");
@@ -862,18 +866,18 @@ export async function mountSwapView(root) {
       const expected=kind==='approve'?swapApproveRequest(ethers.Interface,{account:wallet.account,token:inT().address,spender:spender()}):swapTransaction(state.quote,value.deadline,wallet.account);
       if(!sameTransaction(value.transaction,expected))return false;
       if(value.policy)value.policy.assertFresh();
-      result={...value,cacheCompletedAt:lifetime.completedAt,cacheExpiresAt:lifetime.expiresAt};return true;
+      result={...value,cacheCompletedAt:lifetime.completedAt,cacheExpiresAt:lifetime.expiresAt,cacheServiceTime:Boolean(identity.quote?.serviceMeta)};return true;
     });return result;
   }
   function warmPublicSubmission(){
     const identity=submissionIdentity(),q=state.quote;
-    if(!identity||!Number.isFinite(identity.expiresAt)||identity.expiresAt<=Date.now()+1200||!main.isConnected||document.hidden||navigator.onLine===false||state.transactionBusy||activeBalanceReads||quoteFlow.running?.()||approvals.pending(approvalIdentity())||!['fstswap','v10'].includes(q.kind))return false;
+    if(!identity||!Number.isFinite(identity.expiresAt)||identity.expiresAt<=quoteNow(q)+1200||!main.isConnected||document.hidden||navigator.onLine===false||state.transactionBusy||activeBalanceReads||quoteFlow.running?.()||approvals.pending(approvalIdentity())||!['fstswap','v10'].includes(q.kind))return false;
     if(inT()?.key!=='bnb'&&state.allowance==null)return false;
-    const kind=needsApproval()?'approve':'swap',account=wallet.account,minimum=minOut(q),deadline=Math.floor(Date.now()/1000)+settings.deadlineMinutes*60;
+    const kind=needsApproval()?'approve':'swap',account=wallet.account,minimum=minOut(q),deadline=Math.floor(quoteNow(q)/1000)+settings.deadlineMinutes*60;
     if(kind==='swap'&&(q.kind!=='fstswap'||!['2.0.0','2.1.0'].includes(q.serviceMeta?.config?.version)))return false;
     let transaction;try{checkServiceQuote(q);transaction=Object.freeze(kind==='approve'?swapApproveRequest(ethers.Interface,{account,token:inT().address,spender:spender()}):swapTransaction(q,deadline,account));}catch{return false;}
     const started=submissionWarmup.start(identity,async({signal})=>{
-      const startedAt=Date.now();
+      const startedAt=quoteNow(q);
       const background=(payload,{signal:active=signal}={})=>swapPublicRpc(globalThis.fetch,active,{priority:'background',attempts:1,timeoutMs:2000})(payload);
       const gasOptions=async()=>{
         let estimated=false,priced=false;
@@ -922,7 +926,7 @@ export async function mountSwapView(root) {
         if(valid)releaseReads();return valid;
       };
       ({ hash } = await sendTx(req,undefined,undefined,beforeSubmit,{provider:submittedProvider,signal:controller.signal,onTiming:timing,
-        prepare:({signal})=>timeWalletPhase(timing,'public_gas',()=>warm&&Date.now()>=warm.cacheCompletedAt&&Date.now()<warm.cacheExpiresAt?Promise.resolve({gasLimit:warm.gasLimit,gasPrice:warm.gasPrice}):prepareGasOptions({signal,multiplierBps:15000,fallbackGasLimit:100000n,fallbackGasPrice:null,
+        prepare:({signal})=>timeWalletPhase(timing,'public_gas',()=>warm&&warmNow(warm)>=warm.cacheCompletedAt&&warmNow(warm)<warm.cacheExpiresAt?Promise.resolve({gasLimit:warm.gasLimit,gasPrice:warm.gasPrice}):prepareGasOptions({signal,multiplierBps:15000,fallbackGasLimit:100000n,fallbackGasPrice:null,
           estimate:({signal})=>transactionRead({method:"eth_estimateGas",params:[req]},{signal}),
           gasPrice:({signal})=>transactionRead({method:"eth_gasPrice"},{signal}),
         })),
@@ -951,7 +955,7 @@ export async function mountSwapView(root) {
   // —— 确认 / 等待 / 已提交 / 错误状态；支付确认由钱包直接显示 ——
   function swapSummary(q, digits = 6) { return [sigDown(q.amountIn, inT().decimals, digits), inT().symbol, sigDown(q.out, outT().decimals, digits), outT().symbol]; }
   function refreshExpiredServiceQuote(q) {
-    if (!q?.serviceExpiresAt || Date.now() < q.serviceExpiresAt) return false;
+    if (!q?.serviceExpiresAt || quoteNow(q) < q.serviceExpiresAt) return false;
     if (state.quote === q) { state.quote = null; render(); scheduleQuote(0); }
     closeModal(); return true;
   }
@@ -959,7 +963,7 @@ export async function mountSwapView(root) {
     if (!q.serviceMeta) return;
     const input = { chainId:56, tokenIn:(inT().address || ZERO).toLowerCase(), tokenOut:(outT().address || ZERO).toLowerCase(),
       amountIn:swapUnits(state.amount, inT().decimals).toString(), slippageBps:settings.slippageBps, singleHop:settings.singleHop };
-    try { validateServiceQuote({...q.serviceMeta, quote:q}, input, {router:swapActiveRouter(), adapters:SWAP_ADAPTERS, expectedVersion:state.config?.version}); }
+    try { validateServiceQuote({...q.serviceMeta, quote:q}, input, {router:swapActiveRouter(), adapters:SWAP_ADAPTERS, expectedVersion:state.config?.version,clock:()=>swapService.now(),timeBounds:()=>swapService.timeBounds()}); }
     catch { throw Object.assign(new Error(tr("报价已失效，请重新获取", "Quote is no longer valid; refresh it")), {code:"UNSAFE_QUOTE"}); }
   }
   async function handleSwapClick(button) {
@@ -1032,7 +1036,7 @@ export async function mountSwapView(root) {
     const [ain, sin, aout, sout] = swapSummary(q);
     const [a3, , b3] = swapSummary(q, 3);
     pendingModal(tr("将 " + ain + " " + sin + " 兑换为 " + aout + " " + sout, "Swapping " + ain + " " + sin + " for " + aout + " " + sout));
-    const deadline = warm?.deadline??Math.floor(Date.now() / 1000) + settings.deadlineMinutes * 60;
+    const deadline = warm?.deadline??Math.floor(quoteNow(q) / 1000) + settings.deadlineMinutes * 60;
     const min = minOut(q);
     const submittedAccount = wallet.account;
     const submittedProvider=wallet.provider,submittedAmount=state.amount,submittedSingleHop=settings.singleHop;
@@ -1055,8 +1059,8 @@ export async function mountSwapView(root) {
           activeSubmissionContext=submissionContext;
           const read=submissionContext.read;
           const warmValid=(async()=>{
-            if(!warm||Date.now()<warm.cacheCompletedAt||Date.now()>=warm.cacheExpiresAt)return false;
-            try{const canonical=await timeWalletPhase(timing,'warm_canonical',()=>read({method:'eth_getBlockByNumber',params:[warm.block.number,false]}));if(canonical?.hash!==warm.block.hash)return false;warm.policy.assertFresh();return Date.now()<warm.cacheExpiresAt;}catch(error){if(submissionContext.signal.aborted)throw error;return false;}
+            if(!warm||warmNow(warm)<warm.cacheCompletedAt||warmNow(warm)>=warm.cacheExpiresAt)return false;
+            try{const canonical=await timeWalletPhase(timing,'warm_canonical',()=>read({method:'eth_getBlockByNumber',params:[warm.block.number,false]}));if(canonical?.hash!==warm.block.hash)return false;warm.policy.assertFresh();return warmNow(warm)<warm.cacheExpiresAt;}catch(error){if(submissionContext.signal.aborted)throw error;return false;}
           })();
           const freshGas=({signal})=>prepareGasOptions({signal,estimate:({signal})=>swapPublicRpc(globalThis.fetch,signal,{priority:'foreground',attempts:2,timeoutMs:8000})({method:'eth_estimateGas',params:[preparedTx]}),gasPrice:({signal})=>swapPublicRpc(globalThis.fetch,signal,{priority:'foreground',attempts:2,timeoutMs:8000})({method:'eth_gasPrice'})});
           prepared=await prepareSwapSubmission({minimum:min,signal:submissionContext.signal,
@@ -1118,7 +1122,7 @@ export async function mountSwapView(root) {
         } else if (q.kind === "agg") {
           await readSwapReceipt(receiptReads.read, hash, { account: submittedAccount, route: q.route, minOut: min, expectedRequest });
         }
-        refreshBalances(); refreshNativeBalance({fresh: true});
+        await refreshBalances(); refreshNativeBalance();
       }).catch((err) => popup({ summary: summary + " — " + (err?.message || ""), hash, success: false })).finally(()=>receiptReads.dispose());
     } catch (err) {
       walletTimingFailure(timing,err);
@@ -1159,12 +1163,16 @@ export async function mountSwapView(root) {
     walletSubmissionEpoch++;cancelSubmissionWarm();
     otherBalances.pause();
     if (wallet.account && !page.connectedDefaults) applyDefaults();
-    invalidateWalletBalances();allowanceReader.invalidate();state.allowance=null;state.allowanceIdentity=null;
+    allowanceReader.invalidate();state.allowance=null;state.allowanceIdentity=null;
     state.quote = null; ++state.seq; ++state.balanceEpoch; closeModal(); state.balances = {}; state.balanceErrors = {}; render(); refreshBalances(false); restoreSubmittedTransaction(); scheduleQuote(0); refreshPairPrice({reuse:true});
   });
 
   initialWalletNotification = false;
-  const stopTokens=onTokensChanged(() => { if (main.isConnected) { state.quote=null; state.allowance=null; render(); scheduleQuote(0); } });
+  const stopTokens=onTokensChanged(() => {
+    if (!main.isConnected) return;
+    if (selectedTokenIdentity() === selectedTokenSignature) { renderPanels(); renderTrade(); renderBottom(); return; }
+    state.quote=null; state.allowance=null; render(); scheduleQuote(0);
+  });
   const stopApprovals = approvals.subscribe(()=>{if(!main.isConnected)return false;renderBottom();});
   globalThis.addEventListener('hashchange',()=>{cancelSubmissionWarm();stopWallet();stopTokens();stopApprovals();document.removeEventListener('click',closeSettings);document.removeEventListener('visibilitychange',resumeIdleReads);globalThis.removeEventListener('online',resumeIdleReads);globalThis.removeEventListener('pageshow',resumeIdleReads);clearTimeout(quoteExpiryTimer);quoteFlow.dispose();otherBalances.dispose();activeWalletController?.abort();activeSubmissionContext?.dispose();stopPairPrice();allowanceReader.invalidate();},{once:true});
   renderSettings(); render();

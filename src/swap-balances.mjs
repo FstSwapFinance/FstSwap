@@ -1,4 +1,4 @@
-import { swapService } from './swap-service-client.mjs?v=mainnet-20261112-41';
+import { swapService } from './swap-service-client.mjs?v=mainnet-20261112-44';
 const MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
 const ABI=['function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])',
  'function getEthBalance(address) view returns(uint256)','function balanceOf(address) view returns(uint256)'];
@@ -30,7 +30,7 @@ export async function readTokenBalances(request,account,tokens,{signal}={}) {
   });
   let results;
   try {
-   const raw=await untilAborted(request({method:'eth_call',params:[{to:MULTICALL,data:codec.encodeFunctionData('tryAggregate',[false,calls])},'latest']}),signal);
+   const raw=await untilAborted(request({method:'eth_call',params:[{to:MULTICALL,data:codec.encodeFunctionData('tryAggregate',[false,calls])},'latest']},{signal}),signal);
    checkSignal(signal);
    results=codec.decodeFunctionResult('tryAggregate',raw)[0];
    if(results.length!==group.length)throw new Error('Incomplete balance response');
@@ -44,16 +44,27 @@ export async function readTokenBalances(request,account,tokens,{signal}={}) {
  return{balances,failed};
 }
 
-// Short display cache shared by page transitions and the token picker. Transaction
-// refreshes use fresh:true; account/chain changes invalidate all in-flight writes.
-const balanceSnapshots=new Map();
+// Five-second display snapshots and physical batches are shared by the header,
+// pages and token lists. Each caller owns only its subscription, not the batch.
+const balanceSnapshots=new Map(),balanceBatches=new Set();
 const DISPLAY_TTL_MS=5000;
+const balanceMonotonic=()=>globalThis.performance?.now?.()??Date.now();
 let balanceEpoch=0;
-export function invalidateWalletBalances(){balanceEpoch++;balanceSnapshots.clear();}
+export function invalidateWalletBalances(){
+ balanceEpoch++;balanceSnapshots.clear();
+ for(const batch of balanceBatches)batch.controller.abort();
+ balanceBatches.clear();
+}
 function remember(key,entry){
  balanceSnapshots.set(key,entry);
- // At most the former six 64-token batch capacities are retained.
  while(balanceSnapshots.size>384)balanceSnapshots.delete(balanceSnapshots.keys().next().value);
+}
+function removeBatchEntries(batch){
+ for(const entry of batch.entries)if(balanceSnapshots.get(entry.key)===entry)balanceSnapshots.delete(entry.key);
+}
+function checkBatch(batch){
+ checkSignal(batch.controller.signal);
+ if(batch.epoch!==balanceEpoch)throw abortError();
 }
 async function fetchBalances(request,account,tokens,signal){
  checkSignal(signal);
@@ -61,57 +72,67 @@ async function fetchBalances(request,account,tokens,signal){
  checkSignal(signal);
  return remote||readTokenBalances(request,account,tokens,{signal});
 }
-export async function readWalletBalances(request,account,tokens,{fresh=false,clock=Date.now,signal}={}){
+function startBatch(request,account,tokens,identity,clock,monotonic){
+ const batch={controller:new AbortController(),epoch:balanceEpoch,consumers:new Set(),entries:[],settled:false};
+ for(const token of tokens){
+  const entry={key:identity(token),token,pending:true,batch};batch.entries.push(entry);remember(entry.key,entry);
+ }
+ balanceBatches.add(batch);
+ batch.promise=Promise.resolve().then(()=>{checkBatch(batch);return fetchBalances(request,account,tokens,batch.controller.signal);}).then(result=>{
+  checkBatch(batch);
+  const completedAt=clock(),completedMono=monotonic();checkBatch(batch);
+  if(!batch.consumers.size)throw abortError();
+  for(const entry of batch.entries){
+   const value=result.balances[entry.token.key];
+   if(balanceSnapshots.get(entry.key)!==entry)continue;
+   if(value==null)balanceSnapshots.delete(entry.key);
+   else{entry.pending=false;entry.value=value;entry.completedAt=completedAt;entry.completedMono=completedMono;entry.batch=null;}
+  }
+  return result;
+ }).catch(error=>{removeBatchEntries(batch);throw error;}).finally(()=>{
+  batch.settled=true;balanceBatches.delete(batch);
+ });
+ // An abandoned transport may settle late; keep its rejection observed.
+ batch.promise.catch(()=>{});
+ return batch.entries;
+}
+function subscribeBalance(entry,signal,epoch){
+ const current=()=>{checkSignal(signal);if(epoch!==balanceEpoch)throw abortError();};
+ if(!entry.pending)return Promise.resolve().then(()=>{current();return entry.value;});
+ const batch=entry.batch;
+ return new Promise((resolve,reject)=>{
+  let done=false;
+  const consumer={};
+  const finish=(ok,value)=>{
+   if(done)return;done=true;
+   batch.consumers.delete(consumer);signal?.removeEventListener('abort',onAbort);
+   if(!batch.settled&&!batch.consumers.size){removeBatchEntries(batch);batch.controller.abort();}
+   if(ok)resolve(value);else reject(value);
+  };
+  const onAbort=()=>finish(false,abortError());
+  batch.consumers.add(consumer);signal?.addEventListener('abort',onAbort,{once:true});
+  batch.promise.then(result=>{try{current();finish(true,result.balances[entry.token.key]);}catch(error){finish(false,error);}},error=>finish(false,error));
+  if(signal?.aborted)onAbort();
+ });
+}
+export async function readWalletBalances(request,account,tokens,{fresh=false,clock=Date.now,monotonic=balanceMonotonic,signal,chainId=56}={}){
  if(!/^0x[0-9a-f]{40}$/i.test(account||''))throw new Error('Invalid balance account');
+ if(chainId!==56)throw new Error('Invalid balance chain');
  checkSignal(signal);
  const wanted=[...new Map(tokens.filter(Boolean).map(t=>[t.key,{...t}])).values()],owner=account.toLowerCase();
- const identity=t=>[owner,t.key,String(t.address||'native').toLowerCase(),t.decimals??''].join(':');
+ const identity=t=>[chainId,owner,t.key,String(t.address||'native').toLowerCase(),t.decimals??''].join(':');
  if(fresh)invalidateWalletBalances();
- const epoch=balanceEpoch;
- const checkCurrent=()=>{checkSignal(signal);if(epoch!==balanceEpoch)throw abortError();};
- if(!wanted.length)return{balances:{},failed:[]};
- // Cancellable reads own their work. Their aborts and late responses cannot
- // disturb a shared display read. Only a successful, still-current result may
- // publish completed values, without replacing another reader's pending work.
- if(signal){
-  const rights=wanted.map(token=>{
-   const key=identity(token),entry=balanceSnapshots.get(key),age=entry?clock()-entry.completedAt:NaN;
-   return{token,key,entry,wasPending:entry?.pending===true,cached:entry?.pending===false&&age>=0&&age<DISPLAY_TTL_MS};
-  });
-  const completed=rights.filter(right=>right.cached),missing=rights.filter(right=>!right.cached);
-  const values=await untilAborted(Promise.all(completed.map(right=>right.entry.promise)),signal);checkCurrent();
-  const result=missing.length?await fetchBalances(request,account,missing.map(right=>right.token),signal):{balances:{},failed:[]};checkCurrent();
-  const balances=Object.fromEntries(completed.flatMap((right,n)=>values[n]!=null?[[right.token.key,values[n]]]:[]));
-  for(const {token}of missing)if(result.balances[token.key]!=null)balances[token.key]=result.balances[token.key];
-  // Cache hits retain their original completion time. Resolve the clock before
-  // publishing so an abort or epoch change cannot leave a late display value.
-  const completedAt=missing.length?clock():null;checkCurrent();
-  for(const {token,key,entry,wasPending}of missing){
-   const value=balances[token.key];
-   if(value!=null&&!wasPending&&balanceSnapshots.get(key)===entry)remember(key,{pending:false,completedAt,promise:Promise.resolve(value)});
-  }
-  return{balances,failed:wanted.filter(token=>balances[token.key]==null).map(token=>token.key)};
- }
- const selected=new Map(),missing=[];
+ const epoch=balanceEpoch,selected=new Map(),missing=[];
  for(const token of wanted){
-  const key=identity(token),entry=balanceSnapshots.get(key),age=entry?clock()-entry.completedAt:NaN;
-  if(entry&&(entry.pending||age>=0&&age<DISPLAY_TTL_MS))selected.set(key,entry);
+  checkSignal(signal);
+  const key=identity(token),entry=balanceSnapshots.get(key),age=entry&&!entry.pending?clock()-entry.completedAt:NaN,monoAge=entry&&!entry.pending?monotonic()-entry.completedMono:NaN;
+  checkSignal(signal);if(epoch!==balanceEpoch)throw abortError();
+  // Wall-clock changes may invalidate a hit, but can never extend its lifetime.
+  if(entry&&(entry.pending&&!entry.batch.controller.signal.aborted||!entry.pending&&age>=0&&age<DISPLAY_TTL_MS&&monoAge>=0&&monoAge<DISPLAY_TTL_MS))selected.set(key,entry);
   else missing.push(token);
  }
- if(missing.length){
-  const batch=Promise.resolve().then(()=>{checkCurrent();return fetchBalances(request,account,missing);});
-  for(const token of missing){
-   const key=identity(token),entry={pending:true};
-   const remove=()=>{if(balanceSnapshots.get(key)===entry)balanceSnapshots.delete(key);};
-   entry.promise=batch.then(result=>{
-    const value=result.balances[token.key],completedAt=value!=null?clock():null;checkCurrent();entry.pending=false;
-    if(value!=null)entry.completedAt=completedAt;else remove();
-    return value;
-   },error=>{entry.pending=false;remove();throw error;});
-   selected.set(key,entry);remember(key,entry);
-  }
- }
- const values=await Promise.all(wanted.map(t=>selected.get(identity(t)).promise));
- checkCurrent();
+ if(missing.length)for(const entry of startBatch(request,account,missing,identity,clock,monotonic))selected.set(entry.key,entry);
+ const values=await Promise.all(wanted.map(token=>subscribeBalance(selected.get(identity(token)),signal,epoch)));
+ checkSignal(signal);if(epoch!==balanceEpoch)throw abortError();
  return{balances:Object.fromEntries(wanted.flatMap((t,n)=>values[n]!=null?[[t.key,values[n]]]:[])),failed:wanted.filter((t,n)=>values[n]==null).map(t=>t.key)};
 }

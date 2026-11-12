@@ -1,7 +1,7 @@
 // Pool admission policy. All reserves and oracle rounds are read at one BSC block.
-import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter, readSwapConfigFactory } from './swap-aggregator.mjs?v=mainnet-20261112-41';
-import {readCodec} from './swap-read-codec.mjs?v=mainnet-20261112-41';
-import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-41';
+import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter, readSwapConfigFactory } from './swap-aggregator.mjs?v=mainnet-20261112-44';
+import {readCodec} from './swap-read-codec.mjs?v=mainnet-20261112-44';
+import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-44';
 const ZERO='0x'+'00'.repeat(20),MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
 const lower=x=>String(x||ZERO).toLowerCase();
 const USDT=lower(SWAP_TOKENS.usdt.address),USDC='0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d';

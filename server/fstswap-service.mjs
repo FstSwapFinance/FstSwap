@@ -3,8 +3,8 @@ import {pathToFileURL} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {isIP} from 'node:net';
 import {ethers} from 'ethers';
-import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261112-41';
-import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261112-41';
+import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261112-44';
+import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261112-44';
 import {readTokenBalances} from '../src/swap-balances.mjs';
 import {createReadPool} from './swap-read-pool.mjs';
 import {createRawSnapshot,snapshotReader} from './swap-snapshot-cache.mjs';
@@ -105,7 +105,7 @@ function sharedRead(start,{timeoutMs,onSettled,onAbandoned}={}){
  return entry;
 }
 export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=readSwapConfig,readPolicy=readFstPoolPolicy,calculate=computeQuote,readBalances=readTokenBalances,warmup={}}={}){
- const contexts=new Map(),inflight=new Map(),recentPairs=new Map(),nodeSnapshots=new Map(),invalidSnapshots=new WeakSet();
+ const contexts=new Map(),inflight=new Map(),completedQuotes=new Map(),recentPairs=new Map(),nodeSnapshots=new Map(),invalidSnapshots=new WeakSet();
  const warmOptions={enabled:true,intervalMs:3000,activeTtlMs:60000,maxPairs:4,...warmup};
  warmOptions.intervalMs=Math.max(1000,Number(warmOptions.intervalMs)||3000);
  warmOptions.maxPairs=Math.max(1,Math.min(4,Number(warmOptions.maxPairs)||4));
@@ -178,15 +178,50 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
    onAbandoned:()=>{if(contexts.get(key)===entry)contexts.delete(key);}});
   try{boundedSet(contexts,key,entry,32);}catch(error){entry.controller.abort();return Promise.reject(error);}return entry.subscribe(consumerSignal);
  }
+ function assertCanonical(canonical,block){
+  if(!/^0x[0-9a-f]+$/i.test(canonical?.number||'')||!/^0x[0-9a-f]{64}$/i.test(canonical?.hash||'')||!/^0x[0-9a-f]+$/i.test(canonical?.timestamp||'')||canonical.number!==block.number||canonical.hash!==block.hash)throw fail('STALE_BLOCK');
+  assertBlock(canonical,clock);
+ }
+ const completionCurrent=entry=>{const age=clock()-entry.completedAt;return age>=0&&age<2000&&clock()<entry.data.expiresAt;};
+ async function readCompletedQuote(saved,input,signal){
+  if(!completionCurrent(saved))return null;
+  // Keep only the DTO and node identity in the completion cache. The existing
+  // context supplies its original Oracle and pool deadlines, without a new
+  // retained policy/request closure or an older-context chain.
+  const existing=contexts.get([saved.nodeId,pairKey(input)].join(':'));
+  if(!existing?.settled||existing.signal.aborted||invalidSnapshots.has(existing.rawSnapshot)||existing.rawSnapshot?.block.hash!==saved.data.blockHash)return null;
+  const current=await existing.subscribe(signal);assertRunning(signal);
+  current.policy.assertFresh();
+  return untilAborted(pool.run(async(request,node,attemptSignal)=>{
+   const activeSignal=attemptSignal||signal;
+   if((node?.id||'primary')!==saved.nodeId)throw fail('STALE_BLOCK');
+   const canonical=await request({method:'eth_getBlockByNumber',params:[current.block.number,false]});assertRunning(activeSignal);
+   try{assertCanonical(canonical,current.block);}catch(error){invalidateSnapshot(current.snapshot);throw error;}
+   current.policy.assertFresh();
+   if(!completionCurrent(saved))return null;
+   return structuredClone(saved.data);
+  },signal,{nodeId:saved.nodeId,operation:'quote'}),signal);
+ }
  const engine={
-  quote(raw,{signal}={}){
-   const input=quoteInput(raw),key=JSON.stringify([input.chainId,input.tokenIn,input.tokenOut,input.amountIn,input.slippageBps,input.singleHop]);if(signal?.aborted)return Promise.reject(abortError(signal));touchPair(input);
-   const old=inflight.get(key);if(old&&!old.signal.aborted)return old.subscribe(signal);
+  quote(raw,{signal,fresh=false}={}){
+   const input=quoteInput(raw),key=JSON.stringify([input.chainId,input.tokenIn,input.tokenOut,input.amountIn,input.slippageBps,input.singleHop]);if(signal?.aborted)return Promise.reject(abortError(signal));if(typeof fresh!=='boolean')return Promise.reject(fail('INVALID_INPUT'));touchPair(input);
+   const workKey=fresh?Symbol('fresh-quote'):key;
+   const deliver=value=>{assertRunning(signal);return structuredClone(value);};
+   const old=fresh?null:inflight.get(workKey);if(old&&!old.signal.aborted)return old.subscribe(signal).then(deliver);
    // Reuse a matching in-flight policy. An unrelated default refresh competes
    // with the new pair's discovery and ABI work, so foreground cancels it.
    if(warming&&warming.key!==pairKey(input))warming.controller.abort();
    foreground++;let entry;
-   entry=sharedRead(sharedSignal=>pool.run(async(request,node,attemptSignal)=>{
+   entry=sharedRead(async sharedSignal=>{
+    const saved=fresh?null:completedQuotes.get(key);
+    if(saved){
+     try{
+      const result=await readCompletedQuote(saved,input,sharedSignal);assertRunning(sharedSignal);
+      if(result)return result;
+     }catch(error){assertRunning(sharedSignal);}
+     if(completedQuotes.get(key)===saved)completedQuotes.delete(key);
+    }
+    const completed=await untilAborted(pool.run(async(request,node,attemptSignal)=>{
     // Consumers share the quote lifetime; each provider attempt owns its context
     // subscription so a hedge winner releases only the losing attempt's work.
     const activeSignal=attemptSignal||sharedSignal;
@@ -197,15 +232,23 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
      const read=pinned(snapshotReader(snapshot,request,{nodeId:node?.id||'primary',signal:activeSignal}),block);
      const q=await untilAborted(calculate(read,input,config,policy,{signal:activeSignal,nodeId:node?.id||'primary',block}),activeSignal);assertRunning(activeSignal);
      const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(activeSignal);
-     if(canonical?.hash!==block.hash){invalidateSnapshot(snapshot);throw fail('STALE_BLOCK');}policy.assertFresh();
+     try{assertCanonical(canonical,block);}catch(error){invalidateSnapshot(snapshot);throw error;}policy.assertFresh();
      const expiresAt=policy.checkedAt+15000;if(clock()>=expiresAt)throw fail('QUOTE_EXPIRED');
-     return{schema:1,chainId:56,router:swapActiveRouter(),input,config,quote:q,blockNumber:block.number,blockHash:block.hash,quotedAt:clock(),expiresAt};
+     return{nodeId,data:{schema:1,chainId:56,router:swapActiveRouter(),input,config,quote:q,blockNumber:block.number,blockHash:block.hash,quotedAt:clock(),expiresAt}};
     }finally{const active=(foregroundNodes.get(nodeId)||1)-1;if(active)foregroundNodes.set(nodeId,active);else foregroundNodes.delete(nodeId);}
-   },sharedSignal,{hedge:true,operation:'quote'}),{timeoutMs:18000,
-    onSettled:()=>{foreground--;if(inflight.get(key)===entry)inflight.delete(key);},
-    onAbandoned:()=>{if(inflight.get(key)===entry)inflight.delete(key);}});
-   try{boundedSet(inflight,key,entry,32);}catch(error){entry.controller.abort();return Promise.reject(error);}
-   return entry.subscribe(signal);
+    },sharedSignal,{hedge:true,operation:'quote'}),sharedSignal);assertRunning(sharedSignal);
+    const data=structuredClone(completed.data);
+    if(!fresh&&inflight.get(workKey)===entry&&entry.consumers.size){
+     const completedAt=clock();assertRunning(sharedSignal);
+     completedQuotes.delete(key);completedQuotes.set(key,{data:structuredClone(data),nodeId:completed.nodeId,completedAt});
+     while(completedQuotes.size>32)completedQuotes.delete(completedQuotes.keys().next().value);
+    }
+    return data;
+   },{timeoutMs:18000,
+    onSettled:()=>{foreground--;if(inflight.get(workKey)===entry)inflight.delete(workKey);},
+    onAbandoned:()=>{if(inflight.get(workKey)===entry)inflight.delete(workKey);}});
+   try{boundedSet(inflight,workKey,entry,32);}catch(error){entry.controller.abort();return Promise.reject(error);}
+   return entry.subscribe(signal).then(deliver);
   },
   balances(raw,{signal}={}){
    const input=balanceInput(raw);if(signal?.aborted)return Promise.reject(abortError(signal));
@@ -249,8 +292,15 @@ const publicErrors=new Set(['INVALID_INPUT','NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QU
 export function createApi({engine,pool,balancePool=pool,clock=Date.now,maxActive=12,rateLimit=240,allowedOrigins=['http://127.0.0.1:8124','http://localhost:8124','https://fstswap-live.vercel.app','https://fstswap-live-haocutbabas.vercel.app','https://fstswap.pro','https://www.fstswap.pro']}={}){
  const rates=new Map(),activeByRole={quote:0,balances:0},roleLimits={quote:Math.min(8,maxActive),balances:Math.min(4,maxActive)};let active=0;
  const server=createServer({headersTimeout:5000,requestTimeout:22000,maxHeaderSize:8192},async(req,res)=>{
-  const origin=req.headers.origin;if(allowedOrigins.includes(origin)){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Methods','POST, GET, OPTIONS');res.setHeader('Access-Control-Allow-Headers','Content-Type');res.setHeader('Access-Control-Max-Age','600');}
-  const reply=(status,body)=>{if(res.destroyed)return;res.writeHead(status,{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(encode(body));};
+  const started=performance.now(),timeNonce=req.headers['x-fstswap-time-nonce'];
+  const origin=req.headers.origin;if(allowedOrigins.includes(origin)){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Methods','POST, GET, OPTIONS');res.setHeader('Access-Control-Allow-Headers','Content-Type, X-Fstswap-Time-Nonce, X-Fstswap-Fresh');res.setHeader('Access-Control-Expose-Headers','X-Fstswap-Time-Nonce, X-Fstswap-Server-Time, Server-Timing');res.setHeader('Access-Control-Max-Age','600');}
+  const reply=(status,body)=>{
+   if(res.destroyed)return;
+   if(status===200&&typeof timeNonce==='string'&&/^[0-9a-f]{32}$/.test(timeNonce)){
+    res.setHeader('X-Fstswap-Time-Nonce',timeNonce);res.setHeader('X-Fstswap-Server-Time',String(clock()));
+   }
+   res.writeHead(status,{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff','server-timing':'total;dur='+Math.max(0,performance.now()-started).toFixed(1)});res.end(encode(body));
+  };
   const routes={'/api/swap/quote':'quote','/api/swap/balances':'balances'};
   if(req.url==='/api/swap/health'&&req.method==='GET'){const health=pool.health();return reply(200,{service:'fstswap-api',version:'1',chainId:56,readOnly:true,router:swapActiveRouter(),adapters:Object.keys(SWAP_ADAPTERS),ready:health.providers.some(p=>p.ready),active,activeByRole:{...activeByRole},pool:health,balancePool:balancePool===pool?health:balancePool.health(),roles:{quote:'pool',balances:'balancePool',shared:balancePool===pool}});}
   const action=routes[req.url];if(action&&req.method==='OPTIONS'){res.writeHead(204);return res.end();}if(!action)return reply(404,{error:'NOT_FOUND'});
@@ -270,7 +320,7 @@ export function createApi({engine,pool,balancePool=pool,clock=Date.now,maxActive
    timer=setTimeout(()=>req.destroy(),2000);
    for await(const chunk of req){length+=chunk.length;if(length>16384)throw fail('BODY_LIMIT');chunks.push(chunk);}
    clearTimeout(timer);let body;try{body=JSON.parse(Buffer.concat(chunks).toString())}catch{throw fail('INVALID_INPUT');}
-   reply(200,await engine[action](body,{signal:controller.signal}));
+   reply(200,await engine[action](body,{signal:controller.signal,fresh:req.headers['x-fstswap-fresh']==='1'}));
   }catch(e){const code=publicErrors.has(e.code)?e.code:'SERVICE_UNAVAILABLE';reply(code==='INVALID_INPUT'?400:code==='BODY_LIMIT'?413:422,{error:code,...(e.code==='POOL_LIQUIDITY'&&['data','stale','oracle','price'].includes(e.reason)?{reason:e.reason}:{})});}
   finally{clearTimeout(timer);req.removeListener('aborted',disconnected);res.removeListener('close',disconnected);active--;activeByRole[action]--;}
  });

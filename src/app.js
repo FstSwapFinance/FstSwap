@@ -1,10 +1,13 @@
 // Fstswap 聚合前端入口：官方同款路由（#/swap、#/pool、#/pool/v2/find、#/add/v2/A/B、#/remove/v2/A/B、#/analysis/A/B、#/my）。
-import { currentRoute, restoreWallet, closeModal } from "./swap-shell.mjs?v=mainnet-20261112-41";
+import { currentRoute, restoreWallet, closeModal, useWallet } from "./swap-shell.mjs?v=mainnet-20261112-44";
+import { startDefaultSwapReads } from "./swap-startup.mjs?v=mainnet-20261112-44";
 
-import { refreshDefaultList, onTokensChanged, findActiveToken } from "./swap-manage.mjs?v=mainnet-20261112-41";
+import { refreshDefaultList, onTokensChanged, findActiveToken } from "./swap-manage.mjs?v=mainnet-20261112-44";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
 
 const root = document.getElementById("root");
+const stopDefaultReads = startDefaultSwapReads({wallet:useWallet(),active:()=>currentRoute()==="swap"});
+window.addEventListener('pagehide',stopDefaultReads,{once:true});
 let rendering = 0;
 
 async function render() {
@@ -14,16 +17,16 @@ async function render() {
     closeModal();
     document.body.classList.remove("agg-scroll-lock");
     if (route === "swap") {
-      const { mountSwapView } = await import("./swap-view.mjs?v=mainnet-20261112-43");
+      const { mountSwapView } = await import("./swap-view.mjs?v=mainnet-20261112-44");
       if (ticket === rendering) await mountSwapView(root);
     } else if (route === "pool" || route === "add" || route === "remove") {
-      const { mountPoolPage } = await import("./swap-pool.mjs?v=mainnet-20261112-43");
+      const { mountPoolPage } = await import("./swap-pool.mjs?v=mainnet-20261112-44");
       if (ticket === rendering) await mountPoolPage(root, route);
     } else if (route === "analysis") {
-      const { mountAnalysisPage } = await import("./swap-pages.mjs?v=mainnet-20261112-41");
+      const { mountAnalysisPage } = await import("./swap-pages.mjs?v=mainnet-20261112-44");
       if (ticket === rendering) await mountAnalysisPage(root);
     } else if (route === "my") {
-      const { mountMyPage } = await import("./swap-pages.mjs?v=mainnet-20261112-41");
+      const { mountMyPage } = await import("./swap-pages.mjs?v=mainnet-20261112-44");
       if (ticket === rendering) await mountMyPage(root);
     }
   } catch (err) {
@@ -39,7 +42,7 @@ render();
 const background = fn => setTimeout(() => fn().catch(() => {}), 0);
 background(restoreWallet);
 background(async()=>{
-  const {swapService}=await import('./swap-service-client.mjs?v=mainnet-20261112-41');
+  const {swapService}=await import('./swap-service-client.mjs?v=mainnet-20261112-44');
   await swapService.warmConnection();
 });
 window.addEventListener('ethereum#initialized', () => background(restoreWallet));

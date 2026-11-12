@@ -1,6 +1,7 @@
-import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-41';
-import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261112-41';
-import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261112-41';
+import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-44';
+import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261112-44';
+import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261112-44';
+import {createServiceClock,serviceMonotonic,SERVICE_TIME_NONCE_HEADER} from './swap-service-clock.mjs?v=mainnet-20261112-44';
 // Read-only API acceleration. Wallet requests and final transaction preflight stay local.
 const ZERO='0x'+'00'.repeat(20),ADDRESS=/^0x[0-9a-f]{40}$/i,HASH=/^0x[0-9a-f]{64}$/i;
 const businessErrors=new Set(['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY']);
@@ -102,12 +103,13 @@ function validateFstServiceQuote(q,c,input,adapters){
  check(q.out===(mode==='output'?last.out-q.lpFee:last.out));
  check(Math.abs(q.impact-(1-q.segments.reduce((v,s)=>v*(1-s.impact),1)))<=1e-12);
 }
-export function validateServiceQuote(data,input,{router,adapters,clock=Date.now,expectedVersion}={}){
+export function validateServiceQuote(data,input,{router,adapters,clock=Date.now,timeBounds,expectedVersion}={}){
  check(data?.schema===1&&data.chainId===56&&lower(data.router)===lower(router));
  check(addr(data.router)&&HASH.test(data.blockHash)&&/^0x[0-9a-f]+$/i.test(data.blockNumber));
  check(data.input&&Object.keys(input).every(k=>data.input[k]===input[k]));
- const q=data.quote,c=data.config,now=clock();
- check(Number.isFinite(data.quotedAt)&&Number.isFinite(data.expiresAt)&&data.quotedAt<=now+2000&&data.expiresAt>now&&data.expiresAt-data.quotedAt<=15000);
+ const q=data.quote,c=data.config,bounds=timeBounds?timeBounds():null,now=bounds?.upper??clock(),earliest=bounds?.lower??now;
+ check(Number.isFinite(now)&&Number.isFinite(earliest)&&earliest<=now);
+ check(Number.isFinite(data.quotedAt)&&Number.isFinite(data.expiresAt)&&data.quotedAt<=earliest+2000&&data.expiresAt>now&&data.expiresAt-data.quotedAt<=15000);
  check(['1.11','2.0.0','2.1.0'].includes(c?.version)&&Number.isInteger(c.platformFeeBps)&&c.platformFeeBps>=0&&c.platformFeeBps<=100&&addr(c.feeReceiver)&&addr(c.wbnb)&&addr(c.defaultFeeToken)&&typeof c.feeConfigVersion==='bigint'&&Array.isArray(c.adaptersOff));
  if(expectedVersion!==undefined)check(c.version===expectedVersion);
  check(c.adaptersOff.every(key=>['fst','pancake','v3'].includes(key))&&new Set(c.adaptersOff).size===c.adaptersOff.length);
@@ -154,23 +156,34 @@ export function validateServiceQuote(data,input,{router,adapters,clock=Date.now,
 
  return data;
 }
-export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Date.now,quoteTimeout=6500,balanceTimeout=3500,expectedVersion}={}){
- const cooldown={quote:0,balances:0},completed=new Map(),pending=new Map();
+export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Date.now,monotonic=serviceMonotonic,quoteTimeout=6500,balanceTimeout=3500,expectedVersion}={}){
+ const cooldown={quote:null,balances:null},completed=new Map(),pending=new Map(),responseTimes=new WeakMap();
+ const serviceClock=createServiceClock({clock,monotonic});
  let connectionWarm;
+ function cooling(action){
+  const entry=cooldown[action];if(!entry)return false;
+  // A wall-clock adjustment can shorten a retry delay, never lengthen it.
+  return Math.max(clock()-entry.wall,monotonic()-entry.mono)<30000;
+ }
  function cool(action,signal,current){
   if(!current())return;
-  const until=clock()+30000;checkCallerSignal(signal);
-  if(current())cooldown[action]=until;
+  const entry={wall:clock(),mono:monotonic()};checkCallerSignal(signal);
+  if(current())cooldown[action]=entry;
  }
- async function post(action,input,timeout,signal,current=()=>true){
+ async function post(action,input,timeout,signal,current=()=>true,{fresh=false}={}){
   checkCallerSignal(signal);
-  if(!base||clock()<cooldown[action])return null;
+  if(!base||cooling(action))return null;
   try{
+   const timeRequest=serviceClock.start(timeout),headers={'content-type':'application/json'};
+   if(timeRequest.nonce)headers[SERVICE_TIME_NONCE_HEADER]=timeRequest.nonce;
+   if(action==='quote'&&fresh)headers['x-fstswap-fresh']='1';
    const timeoutSignal=AbortSignal.timeout(timeout),activeSignal=signal?AbortSignal.any([signal,timeoutSignal]):timeoutSignal;
-   const r=await waitForSignal(fetchImpl(base+'/'+action,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input),signal:activeSignal,credentials:'omit',cache:'no-store'}),activeSignal);
+   const r=await waitForSignal(fetchImpl(base+'/'+action,{method:'POST',headers,body:JSON.stringify(input),signal:activeSignal,credentials:'omit',cache:'no-store'}),activeSignal);
    checkCallerSignal(signal);
    const text=await waitForSignal(r.text(),activeSignal);checkCallerSignal(signal);check(text.length<1024*1024);const data=parseWire(text);checkCallerSignal(signal);
    if(!r.ok){if(businessErrors.has(data?.error))throw Object.assign(new Error(data.error),{code:data.error,reason:data.reason,retryable:['data','stale','oracle'].includes(data.reason)});throw Error('SERVICE_UNAVAILABLE');}
+   const sample=serviceClock.measure(r.headers,timeRequest);checkCallerSignal(signal);
+   if(sample&&data&&typeof data==='object')responseTimes.set(data,sample);
    return data;
   }catch(e){checkCallerSignal(signal);if(businessErrors.has(e.code))throw e;cool(action,signal,current);return null;}
  }
@@ -205,15 +218,18 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
  async function loadQuote(entry,input,binding){
   const signal=entry.controller.signal,current=()=>pending.get(entry.key)===entry;
   try{
-   const data=await post('quote',input,quoteTimeout,signal,current);checkCallerSignal(signal);
+   const data=await post('quote',input,quoteTimeout,signal,current,{fresh:entry.fresh});checkCallerSignal(signal);
    if(data){
-    try{validateServiceQuote(data,input,binding);checkCallerSignal(signal);}
+    const sample=responseTimes.get(data),validation=sample?{...binding,timeBounds:()=>serviceClock.bounds(sample)}:binding;
+    try{validateServiceQuote(data,input,validation);checkCallerSignal(signal);}
     catch{checkCallerSignal(signal);cool('quote',signal,current);settle(entry,null,null);return;}
-    const completedAt=clock();checkCallerSignal(signal);
+    const completedAt=clock(),completedMono=monotonic();checkCallerSignal(signal);
     // A newer fresh request supersedes this entry even if it finishes first or
     // is canceled. An older completion must never replace the newer display.
     if(current()&&entry.subscribers.size){
-     completed.delete(entry.key);completed.set(entry.key,{data,completedAt});
+     if(sample)serviceClock.publish(sample,()=>current()&&entry.subscribers.size>0&&!signal.aborted);
+     checkCallerSignal(signal);
+     completed.delete(entry.key);completed.set(entry.key,{data,completedAt,completedMono,calibrated:Boolean(sample)});
      while(completed.size>QUOTE_CACHE_SIZE)completed.delete(completed.keys().next().value);
     }
    }
@@ -221,7 +237,10 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
   }catch(e){settle(entry,e,null);}
  }
  return{
-  available(){return !!base&&clock()>=cooldown.quote;},
+  available(){return !!base&&!cooling('quote');},
+  now:()=>serviceClock.now(),
+  timeBounds:()=>serviceClock.bounds(),
+  remainingUntil:expiresAt=>serviceClock.remainingUntil(expiresAt),
   warmConnection(){
    if(!base)return Promise.resolve(false);
    // A real simple GET establishes the connection while the page initializes.
@@ -241,7 +260,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
    // the private parsed DTO is retained; every consumer receives its own clone.
    const binding={router,adapters:structuredClone(adapters),clock,expectedVersion},key=quoteKey([input,lower(router),Object.entries(binding.adapters??{}),expectedVersion]);
    const now=clock();checkCallerSignal(signal);
-   if(!base||now<cooldown.quote)return null;
+   if(!base||cooling('quote'))return null;
    if(fresh)completed.delete(key);
    else{
     const saved=completed.get(key);
@@ -249,10 +268,10 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
      // Keep cancellation and the original deadlines effective until delivery,
      // including an abort immediately after this async method is called.
      await Promise.resolve();checkCallerSignal(signal);
-     const age=clock()-saved.completedAt;checkCallerSignal(signal);
-     if(age>=0&&age<QUOTE_CACHE_MS){
+     const age=clock()-saved.completedAt,monoAge=monotonic()-saved.completedMono;checkCallerSignal(signal);
+     if(age>=0&&age<QUOTE_CACHE_MS&&monoAge>=0&&monoAge<QUOTE_CACHE_MS){
       try{
-       validateServiceQuote(saved.data,input,binding);checkCallerSignal(signal);
+       validateServiceQuote(saved.data,input,saved.calibrated?{...binding,timeBounds:()=>serviceClock.bounds()}:binding);checkCallerSignal(signal);
        if(completed.get(key)===saved){completed.delete(key);completed.set(key,saved);}
        return structuredClone(saved.data);
       }catch{checkCallerSignal(signal);}
@@ -262,7 +281,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
     const existing=pending.get(key);
     if(existing){const data=await subscribe(existing,signal);checkCallerSignal(signal);return data;}
    }
-   const entry={key,controller:new AbortController(),subscribers:new Set(),done:false};
+   const entry={key,controller:new AbortController(),subscribers:new Set(),done:false,fresh};
    pending.set(key,entry);
    const result=subscribe(entry,signal);void loadQuote(entry,input,binding);
    const data=await result;checkCallerSignal(signal);return data;
@@ -274,14 +293,16 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
    const data=await post('balances',input,balanceTimeout,signal);checkCallerSignal(signal);if(!data)return null;
    try{
     check(data.schema===1&&data.chainId===56&&data.account===input.account&&HASH.test(data.blockHash)&&/^0x[0-9a-f]+$/i.test(data.blockNumber));
-    check(Number.isFinite(data.readAt)&&clock()-data.readAt<15000&&data.readAt<=clock()+2000);
+    const sample=responseTimes.get(data),bounds=sample?serviceClock.bounds(sample):null,now=bounds?.upper??clock(),earliest=bounds?.lower??now;
+    check(Number.isFinite(now)&&Number.isFinite(earliest)&&earliest<=now);
+    check(Number.isFinite(data.readAt)&&now-data.readAt<15000&&data.readAt<=earliest+2000);
     check(data.balances&&Array.isArray(data.failedTokens));
     check(Object.entries(data.balances).every(([k,v])=>input.tokens.includes(k)&&typeof v==='string'&&/^[0-9]{1,78}$/.test(v)&&BigInt(v)<(1n<<256n)));
     check(data.failedTokens.every(k=>input.tokens.includes(k)&&data.balances[k]==null));
     check(input.tokens.every(k=>data.balances[k]!=null||data.failedTokens.includes(k)));
     const result={balances:Object.fromEntries(tokens.filter(t=>data.balances[lower(t.address)]!=null).map(t=>[t.key,BigInt(data.balances[lower(t.address)])])),failed:tokens.filter(t=>data.failedTokens.includes(lower(t.address))).map(t=>t.key)};
-    checkCallerSignal(signal);return result;
-   }catch{checkCallerSignal(signal);cooldown.balances=clock()+30000;return null;}
+    checkCallerSignal(signal);if(sample)serviceClock.publish(sample,()=>!signal?.aborted);checkCallerSignal(signal);return result;
+   }catch{checkCallerSignal(signal);cool('balances',signal,()=>true);return null;}
   }
  };
 }
