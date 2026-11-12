@@ -1,0 +1,183 @@
+:root {
+  color-scheme: dark;
+  --ui-page: #212429;
+  --ui-panel: #191b1f;
+  --ui-raised: #2c2f36;
+  --ui-hover: #353841;
+  --ui-border: #40444f;
+  --ui-text: #ffffff;
+  --ui-muted: #c3c5cb;
+  --ui-subtle: #8f96ac;
+  --ui-soft: #b2b9d2;
+  --ui-icon: #565a69;
+  --ui-accent: #f3b71e;
+  --ui-chart: #000000;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ui-page: #f7f8fa;
+  --ui-panel: #ffffff;
+  --ui-raised: #edf0f5;
+  --ui-hover: #e4e8ef;
+  --ui-border: #d5dae3;
+  --ui-text: #202531;
+  --ui-muted: #51596a;
+  --ui-subtle: #626c7e;
+  --ui-soft: #626c7e;
+  --ui-icon: #8c96a7;
+  --ui-accent: #946600;
+  --ui-chart: #ffffff;
+}
+.dmxuPu > img { width: 40px; height: 40px; object-fit: contain; display: block; }
+#swap-page svg[stroke="#FFFFFF"] { stroke: var(--ui-text); }
+@media (max-width: 720px) { .dmxuPu > img { width: 32px; height: 32px; } }
+.fst-social-link { text-decoration: none; min-height: 42px; }
+.fst-social-link > span { display: inline-flex; align-items: center; gap: 10px; }
+.fst-social-link svg, .fst-theme-toggle svg { width: 18px; height: 18px; flex-shrink: 0; }
+.fst-social-link:focus-visible, .fst-theme-toggle:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 3px; border-radius: 4px; }
+.fst-market-status { padding: 8px 10px; font-size: 11px; line-height: 1.5; color: var(--ui-muted); }
+.fst-chart-wrap { background: var(--ui-chart) !important; }
+.fst-chart-wrap .hYtEsE span { color: var(--ui-muted); }
+.fst-chart-wrap .hYtEsE .active { color: var(--ui-accent); }
+.fst-chart-wrap .keaJxJ { color: var(--ui-text); background: var(--ui-chart); pointer-events: none; }
+.fst-trades-scroll { max-height: 500px; width: 100%; overflow: auto; margin-bottom: 20px; }
+.fst-trades-scroll table { width: 1020px; line-height: 35px; font-size: 0.8rem; border-collapse: collapse; }
+.fst-trades-scroll tr { border-bottom: 1px solid var(--ui-border); }
+
+/* Shared swap/liquidity picker: only the results scroll; header and footer stay visible. */
+.fst-token-dialog[data-reach-dialog-content] {
+  height: 80vh; height: 80dvh; min-height: 0; max-height: 80vh; max-height: 80dvh;
+  overflow: hidden;
+}
+.fst-token-dialog > .hWZtKW { min-height: 0; overflow: hidden; }
+.fst-token-dialog .kcbEdf, .fst-token-dialog .eDdLkf, .fst-token-dialog .jLNbCu { flex-shrink: 0; }
+.fst-token-results { flex: 1 1 0%; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.fst-token-results > div { padding-bottom: 8px; }
+.fst-token-results [role="button"] { min-height: 56px; height: auto; }
+.fst-token-results .css-8mokm4, .fst-token-results .css-165qfk5 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fst-token-results [role="button"] > .dkvoaW { min-width: 0; }
+.fst-common-tokens { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.fst-common-token {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 0;
+  padding: 8px 5px; border: 1px solid var(--ui-border); border-radius: 12px;
+  color: var(--ui-text); background: var(--ui-panel); cursor: pointer; font: inherit; font-size: 13px;
+}
+.fst-common-token > img, .fst-common-token > svg { width: 18px; height: 18px; flex-shrink: 0; }
+.fst-common-token:disabled { opacity: .45; cursor: default; }
+.fst-common-token:not(:disabled):hover { background: var(--ui-raised); }
+.fst-common-token:focus-visible, .fst-token-results [role="button"]:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
+@media (max-width: 480px) {
+  .fst-token-dialog .kcbEdf { padding: 16px; gap: 12px; }
+  .fst-token-dialog .eDdLkf { padding: 16px; }
+  .fst-common-token { font-size: 12px; gap: 4px; }
+}
+.fst-pool-status { padding: 8px 16px; }
+.fst-pool-status p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ui-subtle); }
+
+/* Keep the existing panel design; give the desktop swap card 5% more width. */
+@media (min-width: 961px) { .fst-swap-card { max-width: 504px; } }
+.fst-balance-row { flex-wrap: wrap; gap: 4px 0; height: auto !important; min-height: 17px; }
+.fst-balance-row .css-djrxae { overflow-wrap: anywhere; }
+.fst-balance-row .cfnxzr { white-space: nowrap; }
+.fst-balance-row .cfnxzr:disabled { opacity: 0.45; cursor: default; }
+.fst-balance-row .cfnxzr:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 3px; }
+
+/* Separate the amount fields from their balance and Max actions on the swap page. */
+.fst-swap-card #swap-page > .dcfnNF { grid-template-columns: minmax(0, 1fr); }
+.fst-swap-card #swap-page > .dcfnNF > * { min-width: 0; }
+.fst-swap-card #swap-page :is(#swap-currency-input, #swap-currency-output),
+.fst-swap-card #swap-page :is(#swap-currency-input, #swap-currency-output) > .jhmeqW {
+  background: transparent;
+  border: 0;
+}
+.fst-swap-card #swap-page .buISKp {
+  min-width: 0;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--ui-raised);
+  border-radius: 20px;
+  background: var(--ui-page);
+}
+.fst-swap-card #swap-page .buISKp:focus-within { border-color: var(--ui-border); }
+.fst-swap-card #swap-page .open-currency-select-button {
+  flex-shrink: 0;
+  max-width: 55%;
+  margin-right: 0;
+  font-size: 20px;
+}
+.fst-swap-card #swap-page .token-symbol-container { overflow: hidden; text-overflow: ellipsis; }
+.fst-swap-card #swap-page .cFosER { min-width: 0; gap: 8px; }
+.fst-swap-card #swap-page .cFosER > .iWJdVe { min-width: 0; }
+.fst-swap-card #swap-page .SzIbk { flex-shrink: 0; }
+.fst-swap-card #swap-page .token-amount-input { min-width: 0; font-variant-numeric: tabular-nums; }
+.fst-swap-card #swap-page .fNKPVt { padding: 6px 4px 0; }
+.fst-swap-card #swap-page .fst-balance-row { width: 100%; gap: 4px 12px; }
+.fst-swap-card #swap-page .fst-balance-row .css-djrxae { flex: 1 1 0; min-width: 0; font-size: 12px; line-height: 20px; }
+.fst-swap-card #swap-page .fst-balance-row .cfnxzr {
+  flex: 0 0 auto;
+  min-height: 28px;
+  margin: 0 0 0 auto;
+  padding: 4px 10px;
+  background: var(--ui-raised);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 20px;
+}
+.fst-swap-card #swap-page .hDVbXn { margin-top: 8px; margin-bottom: 8px; }
+.fst-swap-card #swap-page .open-currency-select-button:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 3px; }
+@media (max-width: 360px) {
+  .fst-swap-card #swap-page .buISKp { padding: 12px; gap: 8px; }
+  .fst-swap-card #swap-page .open-currency-select-button { font-size: 18px; }
+  .fst-swap-card #swap-page .token-amount-input { font-size: 22px; }
+}
+
+/* The live block link sits above the mobile navigation, including its safe area. */
+@media (max-width: 960px) {
+  .kStqaV {
+    display: flex;
+    right: 12px;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: var(--ui-page);
+    z-index: 2;
+  }
+  .kStqaV .gXlyCc { opacity: 0.85; }
+  .jkedYv { padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px)); }
+  .fIPKBG { margin-top: calc(7rem + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* Wallet choices remain scrollable at short heights. */
+.fst-wallet-dialog[data-reach-dialog-content]{max-height:calc(100dvh - 24px);overflow-y:auto}
+.fst-wallet-dialog .fvKtIt[hidden]{display:none}
+.fst-wallet-dialog button{min-height:56px}
+.fst-wallet-status{margin:10px 0 0;font-size:13px;line-height:1.5;color:var(--ui-subtle)}
+.fst-wallet-status:empty{display:none}
+.fst-wallet-qr{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:12px;background:#fff;border-radius:12px;min-height:240px;color:#111}
+.fst-wallet-qr canvas{max-width:100%;height:auto!important}
+.fst-wallet-open-app{color:#725000;text-decoration:underline}
+/* Use the visible viewport above a software keyboard, rather than layout vh. */
+.fst-token-dialog.fst-keyboard-open[data-reach-dialog-content]{height:calc(var(--fst-visible-height) - 16px);max-height:calc(var(--fst-visible-height) - 16px);margin:0}
+.fst-token-dialog.fst-keyboard-open .kcbEdf{padding:10px 14px;gap:8px}
+.fst-token-dialog.fst-keyboard-open .kcbEdf > .jmNfaf{display:none}
+.fst-token-dialog.fst-keyboard-open .fst-common-tokens{display:none}
+.fst-token-dialog.fst-keyboard-open #token-search-input{padding:10px 12px;font-size:16px}
+.fst-token-dialog.fst-keyboard-open .fst-token-results [role=button]{min-height:48px;padding-top:4px;padding-bottom:4px}
+.fst-token-dialog.fst-keyboard-open .eDdLkf{padding:8px 14px}
+.fst-token-dialog.fst-keyboard-open .fst-keyboard-dismiss{display:block}
+.fst-keyboard-dismiss{display:none;border:0;background:none;color:var(--ui-accent);padding:4px 8px;cursor:pointer;font:inherit}
+
+/* Center the original desktop navigation in the page viewport, even beside a wallet panel. */
+@media (min-width: 961px) {
+  .boqFeG, .gJyWFR {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+  .jkedYv { justify-self: center; }
+}
+/* Preserve balances and wallet controls when the desktop viewport narrows. */
+@media (min-width: 961px) and (max-width: 1100px) {
+  .hbURQO .APMAQ { padding-inline: 8px; margin-right: 6px; }
+  .hbURQO .falNtq { padding-left: 8px; padding-right: 4px; }
+  .hbURQO .fzBwMs { padding-inline: 6px; }
+  .hbURQO .gmWIYM { margin-left: 2px; margin-right: 6px; }
+}

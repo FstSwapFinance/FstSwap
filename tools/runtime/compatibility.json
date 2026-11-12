@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "previousRelease": {
+    "release": "45",
+    "sourceCommit": "1c7e01439d2e991444cfeebcc14a6c07de8401ee",
+    "sourceManifestSHA256": "ab64c9f6e79cadf71549a0b536a382c931d1afec8dfa160814f2af70081cc900",
+    "files": [
+      {
+        "path": "src/fst-runtime-app-R5MVX4TE.mjs",
+        "sha256": "9eeb1225bca06a9640023e63a1f189d1de972753afb9c13b1f4e478ff3743074",
+        "bytes": 1751
+      },
+      {
+        "path": "src/fst-runtime-boot-IWZ76Z7O.mjs",
+        "sha256": "c9b9ca6765437f6ed57e9aba9edc1db23dd6e77a36f3d601befb9eea94f8de64",
+        "bytes": 987
+      },
+      {
+        "path": "src/fst-runtime-chunk-BXGCM3QA.mjs",
+        "sha256": "aae99ba08d7004ec0eb8d6958d8564ad6433b56838380218c0db6b31883ca751",
+        "bytes": 225681
+      },
+      {
+        "path": "src/fst-runtime-chunk-EFBK2MBM.mjs",
+        "sha256": "f9c3a50c3deaf6dd2afa01c584978ce0102528b59965b90a574725da6d9d1ef2",
+        "bytes": 175
+      },
+      {
+        "path": "src/fst-runtime-chunk-MNOUKSMA.mjs",
+        "sha256": "cf2ece10833efeb57b6f77eb435b61960214be83a27df81cd16e261c310b2875",
+        "bytes": 26544
+      },
+      {
+        "path": "src/fst-runtime-chunk-NNSNZH3G.mjs",
+        "sha256": "ea7392f4af6a3f8038640b247e65d88137f7093b5e7bafaba14eda180334ad04",
+        "bytes": 1772
+      },
+      {
+        "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
+        "sha256": "ed55af36405c9a04a2c2e001ca9ebae8d7903b63657f9c6c6eedbb4f9e46b5a5",
+        "bytes": 1203
+      },
+      {
+        "path": "src/fst-runtime-chunk-QAXWFNBN.mjs",
+        "sha256": "08452839bb48a184ad1976db4f9d277b73b2fb91d0e5d4b703e82846feaf1f49",
+        "bytes": 4184
+      },
+      {
+        "path": "src/fst-runtime-chunk-VXK3OW3T.mjs",
+        "sha256": "dfe0aac6a0a5c0431873c432022fc1f36785cf27f7328825a0df159bba1f7a67",
+        "bytes": 368
+      },
+      {
+        "path": "src/fst-runtime-chunk-ZD2AVRFH.mjs",
+        "sha256": "39f3e68dd29adfc834ff05fc480f3464b7670f34ffeda0c562c8961cb0b26417",
+        "bytes": 83215
+      },
+      {
+        "path": "src/fst-runtime-chunk-ZKZJQJRX.mjs",
+        "sha256": "466c51bf37543abab6c05b699ad033a2bff802a3fed27ae588608922a65e5a80",
+        "bytes": 72617
+      },
+      {
+        "path": "src/fst-runtime-chunk-ZT6DWX57.mjs",
+        "sha256": "7ef6095a4e8a84a5de3c006d2e60d9f095df379a3ffdddbfdc112d41056befff",
+        "bytes": 20558
+      }
+    ]
+  }
+}

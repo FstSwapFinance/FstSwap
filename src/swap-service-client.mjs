@@ -1,7 +1,7 @@
-import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-45';
-import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261112-45';
-import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261112-45';
-import {createServiceClock,serviceMonotonic,SERVICE_TIME_NONCE_HEADER} from './swap-service-clock.mjs?v=mainnet-20261112-45';
+import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-46';
+import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261112-46';
+import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261112-46';
+import {createServiceClock,serviceMonotonic,SERVICE_TIME_NONCE_HEADER} from './swap-service-clock.mjs?v=mainnet-20261112-46';
 // Read-only API acceleration. Wallet requests and final transaction preflight stay local.
 const ZERO='0x'+'00'.repeat(20),ADDRESS=/^0x[0-9a-f]{40}$/i,HASH=/^0x[0-9a-f]{64}$/i;
 const businessErrors=new Set(['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY']);
@@ -157,6 +157,9 @@ export function validateServiceQuote(data,input,{router,adapters,clock=Date.now,
  return data;
 }
 export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Date.now,monotonic=serviceMonotonic,quoteTimeout=6500,balanceTimeout=3500,expectedVersion}={}){
+ // Same-origin reads can reuse the page's connection. Cross-origin reads and
+ // non-browser callers keep anonymous transport; never opt into global include.
+ const credentials=(()=>{try{const origin=globalThis.location?.origin;return origin&&new URL(base,origin).origin===origin?'same-origin':'omit';}catch{return'omit';}})();
  const cooldown={quote:null,balances:null},completed=new Map(),pending=new Map(),responseTimes=new WeakMap();
  const serviceClock=createServiceClock({clock,monotonic});
  let connectionWarm;
@@ -178,7 +181,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
    if(timeRequest.nonce)headers[SERVICE_TIME_NONCE_HEADER]=timeRequest.nonce;
    if(action==='quote'&&fresh)headers['x-fstswap-fresh']='1';
    const timeoutSignal=AbortSignal.timeout(timeout),activeSignal=signal?AbortSignal.any([signal,timeoutSignal]):timeoutSignal;
-   const r=await waitForSignal(fetchImpl(base+'/'+action,{method:'POST',headers,body:JSON.stringify(input),signal:activeSignal,credentials:'omit',cache:'no-store'}),activeSignal);
+   const r=await waitForSignal(fetchImpl(base+'/'+action,{method:'POST',headers,body:JSON.stringify(input),signal:activeSignal,credentials,cache:'no-store'}),activeSignal);
    checkCallerSignal(signal);
    const text=await waitForSignal(r.text(),activeSignal);checkCallerSignal(signal);check(text.length<1024*1024);const data=parseWire(text);checkCallerSignal(signal);
    if(!r.ok){if(businessErrors.has(data?.error))throw Object.assign(new Error(data.error),{code:data.error,reason:data.reason,retryable:['data','stale','oracle'].includes(data.reason)});throw Error('SERVICE_UNAVAILABLE');}
@@ -247,7 +250,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
    // It owns no quote, account, wallet RPC or service cooldown state.
    return connectionWarm??=(async()=>{
     try{
-     const signal=AbortSignal.timeout(2500),response=await waitForSignal(fetchImpl(base+'/health',{method:'GET',credentials:'omit',cache:'no-store',signal}),signal);
+     const signal=AbortSignal.timeout(2500),response=await waitForSignal(fetchImpl(base+'/health',{method:'GET',credentials,cache:'no-store',signal}),signal);
      const body=await waitForSignal(response.text(),signal);
      return response.ok&&body.length<1024*1024;
     }catch{return false;}

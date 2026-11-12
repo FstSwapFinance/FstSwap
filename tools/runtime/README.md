@@ -25,3 +25,16 @@ paths to `../tokens.json` and `../assets/` keep their meaning. WalletConnect, QR
 and chart vendors remain external dynamic imports. Early quote and UI entries
 share service, clock and balance modules; their original cache deadlines remain
 unchanged. Only generated hash assets receive immutable HTTP caching.
+
+`compatibility.json` approves the exact runtime files from the previous public
+release, with its commit and frontend-manifest SHA256. Keep those original bytes
+in `src/`: an already-open tab may still need a delayed dynamic import after a
+new deployment. The generator rejects missing or modified approved files, while
+removing unapproved intermediate chunks. The current manifest records this list
+as `compatibilityAssets`; current HTML, preloads and imports use only the new
+`files` graph. Update the one previous-release list deliberately after confirming
+which release was actually public; do not populate it from an unpublished build.
+
+The manifest also records byte-identical, content-addressed copies of the three
+stylesheets and ethers vendor. Original source URLs remain available for compatibility;
+only the hash copies use immutable caching. Their relative directory is preserved.

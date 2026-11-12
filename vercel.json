@@ -10,6 +10,14 @@
   ],
   "headers": [
     {
+      "source": "/assets/vendor/fst-ethers-:hash.js",
+      "headers": [{"key": "Cache-Control", "value": "public, max-age=31536000, immutable"}]
+    },
+    {
+      "source": "/src/fst-style-:file.css",
+      "headers": [{"key": "Cache-Control", "value": "public, max-age=31536000, immutable"}]
+    },
+    {
       "source": "/src/fst-runtime-:file.mjs",
       "headers": [{"key": "Cache-Control", "value": "public, max-age=31536000, immutable"}]
     },
