@@ -14,10 +14,10 @@ async function render() {
     closeModal();
     document.body.classList.remove("agg-scroll-lock");
     if (route === "swap") {
-      const { mountSwapView } = await import("./swap-view.mjs?v=mainnet-20261112-42");
+      const { mountSwapView } = await import("./swap-view.mjs?v=mainnet-20261112-43");
       if (ticket === rendering) await mountSwapView(root);
     } else if (route === "pool" || route === "add" || route === "remove") {
-      const { mountPoolPage } = await import("./swap-pool.mjs?v=mainnet-20261112-42");
+      const { mountPoolPage } = await import("./swap-pool.mjs?v=mainnet-20261112-43");
       if (ticket === rendering) await mountPoolPage(root, route);
     } else if (route === "analysis") {
       const { mountAnalysisPage } = await import("./swap-pages.mjs?v=mainnet-20261112-41");

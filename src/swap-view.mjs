@@ -439,7 +439,7 @@ export async function mountSwapView(root) {
         const approveBtn = next.querySelector("button:not(#swap-button)");
         const span = approveBtn.querySelector(":scope > div > span");
         const icon = span.querySelector("svg");
-        span.replaceChildren(...(icon ? [icon] : []), document.createTextNode(approving ? tr("批准中", "Approving") : tr("允许 Fstswap 调用您的 ", "Allow the Fstswap Protocol to use your ") + inT().symbol));
+        span.replaceChildren(...(icon ? [icon] : []), document.createTextNode(approving ? tr("批准中", "Approving") : tr("允许 Fstswap 调用 ", "Allow the Fstswap Protocol to use your ") + inT().symbol));
         applyTokenLogo(icon, inT());
         approveBtn.disabled = approving;
         if (!approving) approveBtn.addEventListener("click", approve);
