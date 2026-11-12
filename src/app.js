@@ -63,7 +63,6 @@ async function render() {
 }
 
 window.addEventListener("hashchange", render);
-window.addEventListener("pagehide", () => stopLibraryRecovery(), {once:true});
 render();
 // First paint and wallet interaction take priority over speculative RPC reads.
 const background = fn => setTimeout(() => fn().catch(() => {}), 0);

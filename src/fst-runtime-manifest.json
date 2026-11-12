@@ -3,13 +3,13 @@
   "esbuildVersion": "0.28.2",
   "entries": {
     "boot": "src/fst-runtime-boot-WZOWKVWM.mjs",
-    "app": "src/fst-runtime-app-OIQJGUF4.mjs"
+    "app": "src/fst-runtime-app-VOJ5AII3.mjs"
   },
   "files": [
     {
-      "path": "src/fst-runtime-app-OIQJGUF4.mjs",
-      "sha256": "e276334c1fffd8f3176175ac063164612337bea70c492d94ca60f3a6082b1073",
-      "bytes": 2442,
+      "path": "src/fst-runtime-app-VOJ5AII3.mjs",
+      "sha256": "69d06f967e02ded247dc1a9bbc406b9a5e7b62290334ea2e751a615c0a4a5e76",
+      "bytes": 2388,
       "imports": [
         {
           "path": "src/fst-runtime-chunk-RSEJRI4R.mjs",
@@ -445,7 +445,7 @@
     },
     {
       "path": "src/app.js",
-      "sha256": "4fee2f66c99b1879bb7cb7e23d4815191654d479f0738782b32f0b7a737a7377"
+      "sha256": "b4ff06edf43ce230f60f32d1ed2b971f20ade28e30aab291627d7fbbd60ee3d8"
     },
     {
       "path": "src/fstswap-config.mjs",
