@@ -1,13 +1,13 @@
 // 首页 / 币对分析（#/analysis/A/B，官方 pages/PoolAnalysis）与 我的（#/my，官方 pages/My）——
 // 界面逐节点复刻官方 DOM 模板；K 线使用官方同版本 TradingView Lightweight Charts v3.8.0（取自官方构建），
 // 数据：链上储备/余额/LP（RPC 池）+ GeckoTerminal OHLCV / 成交（官方 /api/Fst/* 接口在静态站点不可用）。
-import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261112-40";
-import { tr, T, tpl, part, html, mountFrame, useWallet, popup, getLanguage, hashParts, DEFAULT_ANALYSIS } from "./swap-shell.mjs?v=mainnet-20261112-40";
-import { discoverAnalysisPools, readAnalysisPool, analysisStats, analysisTrade, analysisKlinePath, analysisPrice, matchesAnalysisToken, isPoolAddress } from "./swap-analysis-data.mjs?v=mainnet-20261112-40";
+import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261112-41";
+import { tr, T, tpl, part, html, mountFrame, useWallet, popup, getLanguage, hashParts, DEFAULT_ANALYSIS } from "./swap-shell.mjs?v=mainnet-20261112-41";
+import { discoverAnalysisPools, readAnalysisPool, analysisStats, analysisTrade, analysisKlinePath, analysisPrice, matchesAnalysisToken, isPoolAddress } from "./swap-analysis-data.mjs?v=mainnet-20261112-41";
 import { marketData } from "./swap-market-data.mjs?v=review-20261110-3";
 import { getTheme, setTheme, SOCIAL_LINKS } from "./swap-ui.mjs?v=review-20261110-3";
 
-import { findActiveToken, refreshDefaultList, readToken } from "./swap-manage.mjs?v=mainnet-20261112-40";
+import { findActiveToken, refreshDefaultList, readToken } from "./swap-manage.mjs?v=mainnet-20261112-41";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
 
 const WBNB_FST = "0x0efb5FD2402A0967B92551d6AF54De148504A115";

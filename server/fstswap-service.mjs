@@ -3,8 +3,8 @@ import {pathToFileURL} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {isIP} from 'node:net';
 import {ethers} from 'ethers';
-import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261112-40';
-import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261112-40';
+import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261112-41';
+import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261112-41';
 import {readTokenBalances} from '../src/swap-balances.mjs';
 import {createReadPool} from './swap-read-pool.mjs';
 import {createRawSnapshot,snapshotReader} from './swap-snapshot-cache.mjs';
@@ -138,16 +138,21 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
   nodeSnapshots.set(snapshot.nodeId,snapshot);
  }
  const foregroundNode=()=>foregroundNodes.size===1?foregroundNodes.keys().next().value:null;
+ // New policies retain context()'s captured scope. Keep the previous entry's
+ // callbacks in their own scope so successive refreshes cannot form a chain.
+ function warmExistingContext(old,key,consumerSignal,nodeId){
+  return old.subscribe(consumerSignal).then(snapshot=>untilAborted(pool.run(async request=>{
+   const canonical=await request({method:'eth_getBlockByNumber',params:[snapshot.block.number,false]});assertRunning(consumerSignal);
+   if(canonical?.hash!==snapshot.block.hash){invalidateSnapshot(snapshot.snapshot);throw fail('STALE_BLOCK');}snapshot.policy.assertFresh();if(clock()>=snapshot.policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');old.warmed=true;return snapshot;
+  },consumerSignal,{operation:'warm',nodeId}),consumerSignal)).catch(error=>{if(contexts.get(key)===old)contexts.delete(key);throw error;});
+ }
  function context(input,consumerSignal,{warm=false,node}={}){
   const nodeId=node?.id||'primary',key=[nodeId,pairKey(input)].join(':'),old=contexts.get(key);
   // Prewarmed data is useful until the next refresh, while its original policy
   // deadline remains authoritative. Ordinary foreground reuse stays at 2.5 s.
   if(old&&!old.signal.aborted&&!invalidSnapshots.has(old.rawSnapshot)&&(!old.settled||clock()-old.completedAt<(warm?2500:old.warmed?warmOptions.intervalMs+2500:2500))){
    if(!warm||old.warmed)return old.subscribe(consumerSignal);
-   return old.subscribe(consumerSignal).then(snapshot=>untilAborted(pool.run(async request=>{
-    const canonical=await request({method:'eth_getBlockByNumber',params:[snapshot.block.number,false]});assertRunning(consumerSignal);
-    if(canonical?.hash!==snapshot.block.hash){invalidateSnapshot(snapshot.snapshot);throw fail('STALE_BLOCK');}snapshot.policy.assertFresh();if(clock()>=snapshot.policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');old.warmed=true;return snapshot;
-   },consumerSignal,{operation:'warm',nodeId}),consumerSignal)).catch(error=>{if(contexts.get(key)===old)contexts.delete(key);throw error;});
+   return warmExistingContext(old,key,consumerSignal,nodeId);
   }
   let entry;
   entry=sharedRead(signal=>pool.run(async request=>{
