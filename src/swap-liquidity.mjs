@@ -1,5 +1,6 @@
 // Pool admission policy. All reserves and oracle rounds are read at one BSC block.
-import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter, readSwapConfigFactory } from './swap-aggregator.mjs?v=mainnet-20261112-36';
+import { SWAP_ABI, SWAP_ADAPTERS, SWAP_TOKENS, swapActiveRouter, readSwapConfigFactory } from './swap-aggregator.mjs?v=mainnet-20261112-37';
+import {readCodec} from './swap-read-codec.mjs?v=mainnet-20261112-37';
 const ZERO='0x'+'00'.repeat(20),MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
 const lower=x=>String(x||ZERO).toLowerCase();
 const USDT=lower(SWAP_TOKENS.usdt.address),USDC='0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d';
@@ -94,8 +95,8 @@ export function createPoolPolicy(pools,prices,tokenIn,tokenOut,{tradeTokenIn=tok
 
 export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens=[],v3Mode='all',clock=Date.now,deferCanonical=false}){
  const now=clock();
- const E=globalThis.ethers,router=new E.Interface(SWAP_ABI);
- const iface=new E.Interface(['function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])',
+ const E=globalThis.ethers,router=readCodec(E.Interface,SWAP_ABI);
+ const iface=readCodec(E.Interface,['function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])',
   'function latestRoundData() view returns(uint80,int256,uint256,uint256,uint80)','function decimals() view returns(uint8)',
   'function factory() view returns(address)','function getPool(address,address,uint24) view returns(address)',
   'function slot0() view returns(uint160,int24,uint16,uint16,uint16,uint32,bool)','function liquidity() view returns(uint128)',

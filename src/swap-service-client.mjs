@@ -1,6 +1,6 @@
-import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-36';
-import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261112-36';
-import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261112-36';
+import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-37';
+import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261112-37';
+import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261112-37';
 // Read-only API acceleration. Wallet requests and final transaction preflight stay local.
 const ZERO='0x'+'00'.repeat(20),ADDRESS=/^0x[0-9a-f]{40}$/i,HASH=/^0x[0-9a-f]{64}$/i;
 const businessErrors=new Set(['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY']);
@@ -156,6 +156,7 @@ export function validateServiceQuote(data,input,{router,adapters,clock=Date.now,
 }
 export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Date.now,quoteTimeout=6500,balanceTimeout=3500,expectedVersion}={}){
  const cooldown={quote:0,balances:0},completed=new Map(),pending=new Map();
+ let connectionWarm;
  function cool(action,signal,current){
   if(!current())return;
   const until=clock()+30000;checkCallerSignal(signal);
@@ -221,6 +222,18 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
  }
  return{
   available(){return !!base&&clock()>=cooldown.quote;},
+  warmConnection(){
+   if(!base)return Promise.resolve(false);
+   // A real simple GET establishes the connection while the page initializes.
+   // It owns no quote, account, wallet RPC or service cooldown state.
+   return connectionWarm??=(async()=>{
+    try{
+     const signal=AbortSignal.timeout(2500),response=await waitForSignal(fetchImpl(base+'/health',{method:'GET',credentials:'omit',cache:'no-store',signal}),signal);
+     const body=await waitForSignal(response.text(),signal);
+     return response.ok&&body.length<1024*1024;
+    }catch{return false;}
+   })();
+  },
   async quote({tokenIn,tokenOut,amountIn,slippageBps,singleHop},{router,adapters,signal,fresh=false}={}){
    checkCallerSignal(signal);
    const input={chainId:56,tokenIn:lower(tokenIn),tokenOut:lower(tokenOut),amountIn:amountIn.toString(),slippageBps,singleHop};

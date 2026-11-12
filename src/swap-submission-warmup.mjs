@@ -11,7 +11,7 @@ export function createSubmissionWarmup({clock=Date.now,ttlMs=2000,maxRunMs=6000}
   start(identity,build,{signal}={}){
    if(signal?.aborted)return false;
    if(!identity||typeof identity.key!=='string'||!Number.isFinite(identity.expiresAt)||typeof build!=='function')return false;
-   if(current&&same(current.identity,identity))return false;
+   if(current&&same(current.identity,identity)&&(current.pending||clock()<current.expiresAt))return false;
    cancel();
    const controller=new AbortController(),entry={identity:{...identity},controller,pending:true,startedAt:clock()};current=entry;
    const abort=()=>{if(current===entry)cancel();};signal?.addEventListener('abort',abort,{once:true});entry.detach=()=>signal?.removeEventListener('abort',abort);

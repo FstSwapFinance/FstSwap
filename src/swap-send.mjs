@@ -1,4 +1,4 @@
-import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261112-36";
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261112-37";
 // Track submitted transactions; only a fresh user action may request another wallet transaction.
 const prefix='fstswap-wallet-intent-v1:56:';
 const fail=(code,message,intent)=>Object.assign(new Error(message),{code,pendingIntent:intent});
@@ -76,18 +76,22 @@ function archiveUnresolved(storage,account,intent) {
  storage.removeItem(key(account));
  return archiveKey;
 }
-export async function sendWalletOnce({provider,read,transaction,gasLimit,gasPrice,prepare,beforeSubmit,signal,walletTimeoutMs=90000,walletReadTimeoutMs=15000,storage=globalThis.localStorage,locks=globalThis.navigator?.locks}) {
+export async function sendWalletOnce({provider,read,transaction,gasLimit,gasPrice,prepare,beforeSubmit,signal,onTiming,walletTimeoutMs=90000,walletReadTimeoutMs=15000,storage=globalThis.localStorage,locks=globalThis.navigator?.locks}) {
  // Snapshot before the first await. Preparation may provide gas information,
  // never a replacement account, target, calldata, value or wallet provider.
  const requested={...transaction},account=requested.from,providerRequest=provider.request;
+ const timing=typeof onTiming==='function'?phase=>{try{onTiming(phase);}catch{/* Diagnostics are never transaction control. */}}:null;
  if(!locks?.request)throw fail('WALLET_LOCK_UNAVAILABLE','此浏览器不支持交易互斥锁，请使用最新版浏览器');
+ timing?.('lock_wait');
  return locks.request(key(account),{ifAvailable:true},async lock=>{
   if(!lock)throw fail('WALLET_BUSY','钱包中已有请求，请先完成或取消');
+  timing?.('lock_acquired');
   checkSignal(signal);
   await recoverLateLocked({read,account,storage});checkSignal(signal);
   let previous=JSON.parse(storage.getItem(key(account))||'null');
   if(previous?.hash){await recoverLocked({read,account,hash:previous.hash,storage});previous=null;}
   if(previous)archiveUnresolved(storage,account,previous);
+  timing?.('recovery_done');
   checkSignal(signal);
   const frozen=Object.freeze(walletTransaction(requested));
   const controller=new AbortController(),active=signal?AbortSignal.any([signal,controller.signal]):controller.signal;
@@ -99,17 +103,20 @@ export async function sendWalletOnce({provider,read,transaction,gasLimit,gasPric
   };
   try{
    const guard=async()=>{
+    timing?.('guard_start');
     const [chain,accounts,code,canonical]=await Promise.all([walletRead({method:'eth_chainId'}),walletRead({method:'eth_accounts'}),walletRead({method:'eth_getCode',params:[frozen.to,'latest']}),readHeader()]);
     if(BigInt(chain)!==56n||!same(accounts[0],account))throw fail('WALLET_CHANGED','钱包网络或账户已改变，请重新核对');
     if(!code||code==='0x')throw fail('TARGET_MISSING','当前网络没有目标合约');
+    timing?.('guard_done');
     return canonical;
    };
    const preparation=prepare==null?Promise.resolve(null):Promise.resolve().then(()=>{
     if(typeof prepare!=='function')throw fail('INVALID_PREPARATION','交易准备参数无效');
-    checkSignal(active);return prepare({signal:active,transaction:frozen});
+    checkSignal(active);timing?.('prepare_start');checkSignal(active);return prepare({signal:active,transaction:frozen});
    }).then(result=>{
     if(!result||typeof result!=='object'||Array.isArray(result)||['transaction','from','to','data','value','provider','nonce','chainId','quote','settings'].some(field=>Object.hasOwn(result,field))||result.needsApproval!=null&&typeof result.needsApproval!=='boolean')throw fail('INVALID_PREPARATION','交易准备结果无效');
     for(const field of ['gasLimit','gasPrice'])if(result[field]!=null){let value;try{value=BigInt(result[field]);}catch{throw fail('INVALID_PREPARATION','Gas 参数无效');}if(value<=0n)throw fail('INVALID_PREPARATION','Gas 参数无效');}
+    timing?.('prepare_done');
     return result;
    });
    // Both branches are observed immediately. A failure aborts the other branch;
@@ -117,12 +124,14 @@ export async function sendWalletOnce({provider,read,transaction,gasLimit,gasPric
    const [canonical,prepared]=await Promise.all([guard(),walletDeadline(preparation,walletReadTimeoutMs,active)]);
    checkSignal(active);unchanged();
    if(prepared?.needsApproval)return{needsApproval:true,preparation:prepared};
+   timing?.('final_guard_start');
    const [block,nonce,chain,accounts]=await Promise.all([
     walletRead({method:'eth_getBlockByNumber',params:[canonical.number,false]}),walletRead({method:'eth_getTransactionCount',params:[account,'pending']}),
     ...(prepare?[walletRead({method:'eth_chainId'}),walletRead({method:'eth_accounts'})]:[]),
    ]);
    if(prepare&&(BigInt(chain)!==56n||!same(accounts[0],account)))throw fail('WALLET_CHANGED','钱包网络或账户已改变，请重新核对');
    if(!block||!same(block.hash,canonical.hash))throw fail('WRONG_CHAIN','钱包网络与读链节点不一致');
+   timing?.('final_guard_done');
    checkSignal(active);unchanged();
    if(beforeSubmit&&!beforeSubmit())throw fail('REQUEST_CHANGED','当前选择已改变');
    checkSignal(active);unchanged();
@@ -135,6 +144,7 @@ export async function sendWalletOnce({provider,read,transaction,gasLimit,gasPric
    let archiveKey;
    try{
     const submitted=Promise.resolve(providerRequest.call(provider,{method:'eth_sendTransaction',params:[{...tx}]}));
+    timing?.('send_invoked');
     // Track late hashes independently so they cannot overwrite a newer active transaction.
     submitted.then(hash=>{
      if(!archiveKey||!/^0x[0-9a-f]{64}$/i.test(hash||''))return;
@@ -146,8 +156,10 @@ export async function sendWalletOnce({provider,read,transaction,gasLimit,gasPric
     const hash=await walletDeadline(submitted,walletTimeoutMs);
     if(!/^0x[0-9a-f]{64}$/i.test(hash||''))throw Error('钱包未返回有效交易哈希');
     intent.hash=hash;storage.setItem(key(account),JSON.stringify(intent));
+    timing?.('wallet_result');
     return {hash,transaction:expected,mev:false,...(prepared?{preparation:prepared}:{})};
    }catch(error){
+    timing?.('wallet_error');
     const diagnostic=walletDiagnostic(error);
     if([4001,4100,4200,-32601,-32602].includes(diagnostic.code)){
      storage.removeItem(key(account));
