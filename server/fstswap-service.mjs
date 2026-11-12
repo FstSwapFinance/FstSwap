@@ -3,8 +3,8 @@ import {pathToFileURL} from 'node:url';
 import {realpathSync} from 'node:fs';
 import {isIP} from 'node:net';
 import {ethers} from 'ethers';
-import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261112-44';
-import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261112-44';
+import {SWAP_TOKENS,SWAP_ADAPTERS,SWAP_RPC_ENDPOINTS,swapActiveRouter,readSwapConfig,swapFeePolicy,quoteSwap,v10BestAmountsOut,v10PlanFeeConversion,v10RouteImpact,swapBuyBudget,swapSellNet,assertQuoteSafety} from '../src/swap-aggregator.mjs?v=mainnet-20261112-45';
+import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswap.mjs?v=mainnet-20261112-45';
 import {readTokenBalances} from '../src/swap-balances.mjs';
 import {createReadPool} from './swap-read-pool.mjs';
 import {createRawSnapshot,snapshotReader} from './swap-snapshot-cache.mjs';
@@ -105,7 +105,7 @@ function sharedRead(start,{timeoutMs,onSettled,onAbandoned}={}){
  return entry;
 }
 export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=readSwapConfig,readPolicy=readFstPoolPolicy,calculate=computeQuote,readBalances=readTokenBalances,warmup={}}={}){
- const contexts=new Map(),inflight=new Map(),completedQuotes=new Map(),recentPairs=new Map(),nodeSnapshots=new Map(),invalidSnapshots=new WeakSet();
+ const contexts=new Map(),pendingWarmContexts=new Map(),inflight=new Map(),completedQuotes=new Map(),recentPairs=new Map(),nodeSnapshots=new Map(),invalidSnapshots=new WeakSet();
  const warmOptions={enabled:true,intervalMs:3000,activeTtlMs:60000,maxPairs:4,...warmup};
  warmOptions.intervalMs=Math.max(1000,Number(warmOptions.intervalMs)||3000);
  warmOptions.maxPairs=Math.max(1,Math.min(4,Number(warmOptions.maxPairs)||4));
@@ -146,6 +146,16 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
    if(canonical?.hash!==snapshot.block.hash){invalidateSnapshot(snapshot.snapshot);throw fail('STALE_BLOCK');}snapshot.policy.assertFresh();if(clock()>=snapshot.policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');old.warmed=true;return snapshot;
   },consumerSignal,{operation:'warm',nodeId}),consumerSignal)).catch(error=>{if(contexts.get(key)===old)contexts.delete(key);throw error;});
  }
+ function settleWarmContext(key,entry,error){
+  if(pendingWarmContexts.get(key)!==entry)return;
+  pendingWarmContexts.delete(key);
+  if(error||entry.signal.aborted||invalidSnapshots.has(entry.rawSnapshot))return;
+  const current=contexts.get(key);
+  // A refresh may replace a completed older snapshot, never a foreground read
+  // still in flight or a context captured after this warm began.
+  if(current&&(!current.settled||current.rawSnapshot?.capturedAt>entry.rawSnapshot.capturedAt))return;
+  try{boundedSet(contexts,key,entry,32);}catch{/* A full foreground map can decline background retention. */}
+ }
  function context(input,consumerSignal,{warm=false,node}={}){
   const nodeId=node?.id||'primary',key=[nodeId,pairKey(input)].join(':'),old=contexts.get(key);
   // Prewarmed data is useful until the next refresh, while its original policy
@@ -154,6 +164,8 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
    if(!warm||old.warmed)return old.subscribe(consumerSignal);
    return warmExistingContext(old,key,consumerSignal,nodeId);
   }
+  const pending=pendingWarmContexts.get(key);
+  if(pending&&!pending.signal.aborted)return pending.subscribe(consumerSignal);
   let entry;
   entry=sharedRead(signal=>pool.run(async request=>{
    const previous=nodeSnapshots.get(nodeId),age=previous?clock()-previous.capturedAt:Infinity;
@@ -174,9 +186,11 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
    if(warm){const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(signal);if(canonical?.hash!==block.hash){invalidateSnapshot(snapshot);throw fail('STALE_BLOCK');}policy.assertFresh();if(clock()>=policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');publishSnapshot(snapshot);}
    entry.completedAt=clock();entry.warmed=warm;return{block,config,policy,snapshot};
   },signal,{operation:warm?'warm':'config',nodeId}),{timeoutMs:18000,
-   onSettled:error=>{if(error&&contexts.get(key)===entry)contexts.delete(key);},
-   onAbandoned:()=>{if(contexts.get(key)===entry)contexts.delete(key);}});
-  try{boundedSet(contexts,key,entry,32);}catch(error){entry.controller.abort();return Promise.reject(error);}return entry.subscribe(consumerSignal);
+   onSettled:error=>{if(warm)settleWarmContext(key,entry,error);else if(error&&contexts.get(key)===entry)contexts.delete(key);},
+   onAbandoned:()=>{const target=warm?pendingWarmContexts:contexts;if(target.get(key)===entry)target.delete(key);}});
+  // Keep the previous completed context visible during a background refresh.
+  // Its existing age, oracle, snapshot and final canonical checks still apply.
+  try{boundedSet(warm?pendingWarmContexts:contexts,key,entry,32);}catch(error){entry.controller.abort();return Promise.reject(error);}return entry.subscribe(consumerSignal);
  }
  function assertCanonical(canonical,block){
   if(!/^0x[0-9a-f]+$/i.test(canonical?.number||'')||!/^0x[0-9a-f]{64}$/i.test(canonical?.hash||'')||!/^0x[0-9a-f]+$/i.test(canonical?.timestamp||'')||canonical.number!==block.number||canonical.hash!==block.hash)throw fail('STALE_BLOCK');

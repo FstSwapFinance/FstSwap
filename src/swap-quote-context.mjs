@@ -1,5 +1,5 @@
-import {readSwapConfig} from './swap-aggregator.mjs?v=mainnet-20261112-44';
-import {readPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261112-44';
+import {readSwapConfig} from './swap-aggregator.mjs?v=mainnet-20261112-45';
+import {readPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261112-45';
 
 // Read-only quote work can be shared while typing. Submission always calls the
 // uncached config/pool readers again; this cache never changes snapshot expiry.

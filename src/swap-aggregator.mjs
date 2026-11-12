@@ -1,6 +1,6 @@
-import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261112-44";
-import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261112-44";
-import { swapRpcWork } from "./swap-rpc-work.mjs?v=mainnet-20261112-44";
+import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261112-45";
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261112-45";
+import { swapRpcWork } from "./swap-rpc-work.mjs?v=mainnet-20261112-45";
 // 聚合路由 Swap 引擎（BSC 主网 56，FstSi aggregator-live v9「multi-pool」，合约 VERSION 1.01）。
 // 与 market-trade.mjs 相同的约束风格：全部函数只通过注入的 JSON-RPC
 // request 访问链上，返回精确的十进制字符串/大整数，浏览器与 Node 均可运行。
@@ -934,24 +934,46 @@ export function swapFormatUnits(value, decimals) {
 }
 
 let swapLibraryPromise;
+const markSwapLibraryState = event => {
+  event.currentTarget.dataset.fstLibraryState = event.type === "load" ? "loaded" : "error";
+};
 export function loadSwapLibrary() {
   if (globalThis.ethers?.Interface && typeof globalThis.ethers.parseUnits === "function") return Promise.resolve();
   if (swapLibraryPromise) return swapLibraryPromise;
   swapLibraryPromise = new Promise((resolve, reject) => {
     if (!globalThis.document?.head) { reject(error("SWAP_DEPENDENCY", "交易依赖未加载")); return; }
-    const script = document.createElement("script");
-    const timer = setTimeout(() => complete(false), 8000);
-    function complete(loaded) {
+    // The parser can fetch and execute ethers while application modules load.
+    // Reuse that task: evaluating the vendor twice can redeclare its globals.
+    let script = document.querySelector?.('script[data-fst-library="ethers"]');
+    if (script && ["error", "loaded"].includes(script.dataset?.fstLibraryState)) {
+      script.remove(); script = null;
+    }
+    const existing = Boolean(script);
+    script ||= document.createElement("script");
+    const timer = setTimeout(() => complete(false, true), 8000);
+    function onLoad() { complete(true); }
+    function onError() { complete(false); }
+    function complete(loaded, pending = false) {
       clearTimeout(timer);
-      script.onload = script.onerror = null;
-      script.remove();
+      script.removeEventListener("load", onLoad);
+      script.removeEventListener("error", onError);
+      // Removing a pending classic script does not reliably cancel evaluation.
+      // Keep its marker after a timeout so a retry joins it instead of adding
+      // another copy that can redeclare the vendor's top-level bindings.
+      if (!pending) script.remove();
       if (loaded && globalThis.ethers?.Interface && typeof globalThis.ethers.parseUnits === "function") resolve();
       else reject(error("SWAP_DEPENDENCY", "交易依赖未加载"));
     }
-    script.onload = () => complete(true);
-    script.onerror = () => complete(false);
-    script.src = new URL("../assets/vendor/ethers.umd.min.js", import.meta.url).href;
-    document.head.append(script);
+    script.addEventListener("load", onLoad, {once:true});
+    script.addEventListener("error", onError, {once:true});
+    if (!existing) {
+      script.async = true;
+      script.dataset.fstLibrary = "ethers";
+      script.addEventListener("load", markSwapLibraryState, {once:true});
+      script.addEventListener("error", markSwapLibraryState, {once:true});
+      script.src = new URL("../assets/vendor/ethers.umd.min.js", import.meta.url).href;
+      document.head.append(script);
+    }
   }).catch(err => { swapLibraryPromise = null; throw err; });
   return swapLibraryPromise;
 }

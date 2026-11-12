@@ -1,7 +1,7 @@
-import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-44';
-import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261112-44';
-import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261112-44';
-import {createServiceClock,serviceMonotonic,SERVICE_TIME_NONCE_HEADER} from './swap-service-clock.mjs?v=mainnet-20261112-44';
+import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261112-45';
+import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261112-45';
+import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261112-45';
+import {createServiceClock,serviceMonotonic,SERVICE_TIME_NONCE_HEADER} from './swap-service-clock.mjs?v=mainnet-20261112-45';
 // Read-only API acceleration. Wallet requests and final transaction preflight stay local.
 const ZERO='0x'+'00'.repeat(20),ADDRESS=/^0x[0-9a-f]{40}$/i,HASH=/^0x[0-9a-f]{64}$/i;
 const businessErrors=new Set(['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY']);
