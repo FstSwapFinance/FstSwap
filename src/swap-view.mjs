@@ -504,7 +504,7 @@ export async function mountSwapView(root) {
       const presets = [10, 20, 50, 100];
       slipBtns.forEach((b, i) => {
         b.className = b.className.replace(/\b(fpFSKc|jLxtdz)\b/, !settings.slippageAuto && settings.slippageBps === presets[i] ? "jLxtdz" : "fpFSKc");
-        b.addEventListener("click", () => { settings.slippageBps = presets[i]; settings.slippageAuto = false; state.customSlip = ""; saveSettings(settings); state.quote=null; renderSettings(); renderTrade(); scheduleQuote(0); });
+        b.addEventListener("click", () => { settings.slippageBps = presets[i]; settings.slippageAuto = false; state.customSlip = ""; saveSettings(settings); state.quote=null; renderSettings(); restartPairPrice(); scheduleQuote(0); });
       });
       // 官方 OptionCustom：用户自定义（非 auto）时高亮（lagkxn），输入框显示 toFixed(2)
       const slipInput = groups[0].querySelector("input"); const custom = slipInput.closest("button, .hQBzuZ, .lagkxn");
@@ -512,9 +512,9 @@ export async function mountSwapView(root) {
       slipInput.value = state.customSlip || (settings.slippageAuto ? "" : (settings.slippageBps / 100).toFixed(2)); slipInput.setAttribute("placeholder", (settings.slippageBps / 100).toFixed(2));
       slipInput.addEventListener("input", () => {
         state.customSlip = slipInput.value;
-        if (slipInput.value === "") { settings.slippageAuto = true; settings.slippageBps = 50; saveSettings(settings); state.quote=null; renderTrade(); scheduleQuote(0); return; }
+        if (slipInput.value === "") { settings.slippageAuto = true; settings.slippageBps = 50; saveSettings(settings); state.quote=null; restartPairPrice(); scheduleQuote(0); return; }
         const v = Math.floor(Number(slipInput.value) * 100);
-        if (Number.isSafeInteger(v) && v >= 0 && v <= 5000) { settings.slippageBps = v; settings.slippageAuto = false; saveSettings(settings); state.quote=null; renderTrade(); scheduleQuote(0);
+        if (Number.isSafeInteger(v) && v >= 0 && v <= 5000) { settings.slippageBps = v; settings.slippageAuto = false; saveSettings(settings); state.quote=null; restartPairPrice(); scheduleQuote(0);
           slipBtns.forEach((b, i) => { b.className = b.className.replace(/\b(fpFSKc|jLxtdz)\b/, v === presets[i] ? "jLxtdz" : "fpFSKc"); });
           if (custom) custom.className = custom.className.replace(/\b(hQBzuZ|lagkxn)\b/, "lagkxn"); }
       });
@@ -534,7 +534,7 @@ export async function mountSwapView(root) {
       };
       toggle("toggle-expert-mode-button", "expert");
       toggle("toggle-disable-multihop-button", "singleHop", () => {
-        state.quote = null; renderTrade(); renderBottom(); scheduleQuote(0);
+        state.quote = null; restartPairPrice(); renderBottom(); scheduleQuote(0);
       });
     }
     settingsWrap.replaceChildren(...fresh.childNodes);
@@ -623,30 +623,76 @@ export async function mountSwapView(root) {
     if (swapService.available?.()) return;
     if (main.isConnected && inT() && outT()) quoteContext.get(inT().address, outT().address).catch(() => {});
   }
-  let previewController = null, previewExpiryTimer = null;
+  let previewController = null, previewExpiryTimer = null, previewRetryTask = null, previewIdentity = null;
+  function pairPriceIdentity() {
+    const ti=inT(),to=outT();
+    return ti&&to?JSON.stringify([ti.address,to.address,ti.decimals,to.decimals,settings.slippageBps,settings.singleHop]):null;
+  }
+  function canReadPairPrice() {
+    return !state.amount && !state.transactionBusy && main.isConnected && !document.hidden && navigator.onLine!==false && Boolean(inT()&&outT());
+  }
   function stopPairPrice() {
     previewController?.abort(); previewController = null;
-    clearTimeout(previewExpiryTimer); previewExpiryTimer = null; state.preview = null;
+    clearTimeout(previewExpiryTimer); previewExpiryTimer = null;
+    if(previewRetryTask)clearTimeout(previewRetryTask.timer);
+    previewRetryTask = null; previewIdentity = null; state.preview = null;
   }
-  async function refreshPairPrice({reuse=false} = {}) {
-    if (reuse && (previewController || state.preview?.serviceExpiresAt > quoteNow(state.preview))) return;
+  function restartPairPrice() {
     stopPairPrice();
-    if (state.amount || state.transactionBusy || !main.isConnected || document.hidden || navigator.onLine === false || !swapService.available?.()) return;
-    const ti = inT(), to = outT(); if (!ti || !to) return;
+    if(main.isConnected)renderTrade();
+    void refreshPairPrice({fresh:true});
+  }
+  function retryPairPrice(delay=6000) {
+    if(previewRetryTask)clearTimeout(previewRetryTask.timer);
+    previewRetryTask = null;
+    if(!canReadPairPrice())return;
+    const task={identity:pairPriceIdentity(),timer:null};
+    task.timer=setTimeout(()=>{
+      if(previewRetryTask!==task)return;
+      previewRetryTask=null;
+      if(canReadPairPrice()&&pairPriceIdentity()===task.identity)void refreshPairPrice({fresh:true});
+    },delay);
+    previewRetryTask=task;
+  }
+  async function refreshPairPrice({reuse=false,fresh=false} = {}) {
+    const identity=pairPriceIdentity();
+    if (reuse && (previewRetryTask?.identity===identity || identity===previewIdentity && (previewController || state.preview?.serviceExpiresAt > quoteNow(state.preview)))) return;
+    const hadPreview=Boolean(state.preview);
+    stopPairPrice();
+    if(hadPreview&&main.isConnected)renderTrade();
+    if (!canReadPairPrice()) return;
+    // Cooldown is still enforced by the client. A later check owns no HTTP until
+    // that original window ends, and never keeps the failed/expired price visible.
+    if(!swapService.available?.()){retryPairPrice();return;}
+    const ti = inT(), to = outT();
     const tokenIn = ti.address, tokenOut = to.address;
-    const controller = new AbortController(); previewController = controller;
+    const controller = new AbortController(); previewController = controller; previewIdentity=identity;
+    let retry=false;
     try {
       const remote = await swapService.quote({tokenIn, tokenOut, amountIn:10n ** BigInt(ti.decimals),
         slippageBps:settings.slippageBps, singleHop:settings.singleHop},
-        {router:swapActiveRouter(), adapters:SWAP_ADAPTERS, signal:controller.signal});
-      if (!remote || controller.signal.aborted || previewController !== controller || !main.isConnected || state.amount || inT()?.address !== tokenIn || outT()?.address !== tokenOut || remote.expiresAt <= swapService.now()) return;
+        {router:swapActiveRouter(), adapters:SWAP_ADAPTERS, signal:controller.signal, fresh});
+      if(controller.signal.aborted || previewController!==controller || !canReadPairPrice() || pairPriceIdentity()!==identity)return;
+      if(!remote || remote.expiresAt<=swapService.now()){retry=true;return;}
       const preview = {...remote.quote, serviceMeta:remote, serviceExpiresAt:remote.expiresAt};
       state.preview = preview; renderTrade();
       previewExpiryTimer = setTimeout(() => {
-        if (state.preview === preview) { state.preview = null; if (main.isConnected) renderTrade(); }
+        if (state.preview === preview) {
+          state.preview = null; previewExpiryTimer=null;
+          if (main.isConnected)renderTrade();
+          if(canReadPairPrice()&&pairPriceIdentity()===identity)retryPairPrice(0);
+        }
       }, Math.max(0, remote.expiresAt - quoteNow(preview)));
-    } catch { /* Speculative reads never delay input or open an error modal. */ }
-    finally { if (previewController === controller) previewController = null; }
+    } catch(error) {
+      // Business rejections remain quiet; only transient reads recover in place.
+      retry=!['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY'].includes(error?.code)||Boolean(error?.retryable);
+    }
+    finally {
+      if (previewController === controller) {
+        previewController = null;
+        if(retry&&!controller.signal.aborted&&canReadPairPrice()&&pairPriceIdentity()===identity)retryPairPrice();
+      }
+    }
   }
   // —— 报价 ——
   let quoteExpiryTimer=null,lastTypedAt=0;
@@ -660,13 +706,15 @@ export async function mountSwapView(root) {
   });
   function resumeIdleReads() {
     if (!main.isConnected) return;
-    if (document.hidden || navigator.onLine === false) { otherBalances.pause(); stopPairPrice(); cancelSubmissionWarm(); return; }
-    otherBalances.schedule();
+    if (document.hidden || navigator.onLine === false) { otherBalances.pause(); stopPairPrice(); renderTrade(); cancelSubmissionWarm(); return; }
+    renderTrade(); otherBalances.schedule();
     if (!state.amount && !state.transactionBusy && !approvals.pending(approvalIdentity())) refreshPairPrice({reuse:true});
   }
   document.addEventListener('visibilitychange', resumeIdleReads);
   globalThis.addEventListener('online', resumeIdleReads);
+  globalThis.addEventListener('offline', resumeIdleReads);
   globalThis.addEventListener('pageshow', resumeIdleReads);
+  globalThis.addEventListener('pagehide', stopPairPrice);
   function scheduleQuote(ms=180) { cancelSubmissionWarm();activeWalletController?.abort(); activeSubmissionContext?.dispose(); otherBalances.pause(); ++state.seq;quoteFlow.schedule(ms); }
   function onAmountInput(e) {
     const hadQuote=!!state.quote,now=Date.now();
@@ -1171,10 +1219,12 @@ export async function mountSwapView(root) {
   const stopTokens=onTokensChanged(() => {
     if (!main.isConnected) return;
     if (selectedTokenIdentity() === selectedTokenSignature) { renderPanels(); renderTrade(); renderBottom(); return; }
+    stopPairPrice();
     state.quote=null; state.allowance=null; render(); scheduleQuote(0);
+    void refreshPairPrice({fresh:true});
   });
   const stopApprovals = approvals.subscribe(()=>{if(!main.isConnected)return false;renderBottom();});
-  globalThis.addEventListener('hashchange',()=>{cancelSubmissionWarm();stopWallet();stopTokens();stopApprovals();document.removeEventListener('click',closeSettings);document.removeEventListener('visibilitychange',resumeIdleReads);globalThis.removeEventListener('online',resumeIdleReads);globalThis.removeEventListener('pageshow',resumeIdleReads);clearTimeout(quoteExpiryTimer);quoteFlow.dispose();otherBalances.dispose();activeWalletController?.abort();activeSubmissionContext?.dispose();stopPairPrice();allowanceReader.invalidate();},{once:true});
+  globalThis.addEventListener('hashchange',()=>{cancelSubmissionWarm();stopWallet();stopTokens();stopApprovals();document.removeEventListener('click',closeSettings);document.removeEventListener('visibilitychange',resumeIdleReads);globalThis.removeEventListener('online',resumeIdleReads);globalThis.removeEventListener('offline',resumeIdleReads);globalThis.removeEventListener('pageshow',resumeIdleReads);globalThis.removeEventListener('pagehide',stopPairPrice);clearTimeout(quoteExpiryTimer);quoteFlow.dispose();otherBalances.dispose();activeWalletController?.abort();activeSubmissionContext?.dispose();stopPairPrice();allowanceReader.invalidate();},{once:true});
   renderSettings(); render();
   refreshDefaultList();
   if (wallet.account) { refreshBalances(false); restoreSubmittedTransaction(); }
