@@ -1,13 +1,14 @@
 import { balanceFraction, formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
+import { nativeBalanceFraction } from "./swap-native-max.mjs";
 // 流动池（#/pool、#/pool/v2/find）、注入流动资金（#/add/v2/A/B）、去除流动资金（#/remove/v2/A/B）——
 // 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css）；
 // 链上逻辑：直接调用 FstSwap 路由器（Pancake V2 fork，同官方授权对象 0x1B6C…ABC2d），所有启用列表中的代币，按 FstSwap factory 查询所选币对。
-import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261113-49";
-import { tr, T, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal, popup, refreshNativeBalance, hashParts } from "./swap-shell.mjs?v=mainnet-20261113-49";
-import { TOKENS, sigDown, tokenKeys, openTokenPicker } from "./swap-view.mjs?v=mainnet-20261113-49";
+import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261113-50";
+import { tr, T, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal, popup, refreshNativeBalance, hashParts } from "./swap-shell.mjs?v=mainnet-20261113-50";
+import { TOKENS, sigDown, tokenKeys, openTokenPicker } from "./swap-view.mjs?v=mainnet-20261113-50";
 
 import { discoverPool, reservesByToken } from "./swap-pool-data.mjs";
-import { refreshDefaultList } from "./swap-manage.mjs?v=mainnet-20261113-49";
+import { refreshDefaultList } from "./swap-manage.mjs?v=mainnet-20261113-50";
 import { tokenLogo, applyTokenLogo } from "./swap-token-logo.mjs";
 
 const FST_ROUTER = "0x1B6C9c20693afDE803B27F8782156c0f892ABC2d";
@@ -125,10 +126,23 @@ function txHelpers(wallet, request) {
     }
     throw new Error(tr("确认超时，请到浏览器查看", "Confirmation timeout"));
   }
-  async function send(tx, fallbackGas = 300000n) {
+  async function send(tx, fallbackGas = 300000n, { assertCurrent = () => {} } = {}) {
+    const account = wallet.account, provider = wallet.provider;
+    const current = () => {
+      assertCurrent();
+      if (!account || wallet.account !== account || wallet.provider !== provider || String(tx.from).toLowerCase() !== account.toLowerCase()) throw Object.assign(new Error(tr("当前选择已改变，请重试", "Selection changed; retry")), { code: "REQUEST_CHANGED" });
+    };
+    current();
     const light = swapPublicRpc(globalThis.fetch, undefined, { attempts: 2, timeoutMs: 8000 });
-    const est = await light({ method: "eth_estimateGas", params: [tx] }).then((v) => BigInt(v) * 13n / 10n).catch(() => fallbackGas);
-    return wallet.provider.request({ method: "eth_sendTransaction", params: [{ ...tx, gas: "0x" + est.toString(16) }] });
+    const [limit, price, balance] = await Promise.all([
+      light({ method: "eth_estimateGas", params: [tx] }).then(v => { const n = BigInt(v); if (n <= 0n) throw Error("Invalid gas estimate"); return (n * 13n + 9n) / 10n; }).catch(() => fallbackGas),
+      light({ method: "eth_gasPrice" }).then(v => BigInt(v)),
+      light({ method: "eth_getBalance", params: [account, "latest"] }).then(v => BigInt(v)),
+    ]);
+    current();
+    if (price <= 0n || limit <= 0n) throw new Error(tr("暂时无法估算 Gas，请重试", "Gas estimate unavailable; retry"));
+    if (BigInt(tx.value || "0x0") + limit * price > balance) throw new Error(tr("BNB 余额不足以支付数量和 Gas", "Insufficient BNB for amount and gas"));
+    return provider.request({ method: "eth_sendTransaction", params: [{ ...tx, gas: "0x" + limit.toString(16), gasPrice: "0x" + price.toString(16) }] });
   }
   async function approve(token, symbol, onDone) {
     const data = iface(ERC20_ABI).encodeFunctionData("approve", [FST_ROUTER, MAX_UINT]);
@@ -380,15 +394,30 @@ async function mountAdd(root, request, parts) {
   const pool = () => st.pool;
   const reserve = (k) => st.pr?.reserves[addrOf(k).toLowerCase()] ?? 0n;
 
-  const parsed = () => {
+  let nativeMaxJob = null;
+  const cancelNativeMax = () => { const job = nativeMaxJob; nativeMaxJob = null; job?.abort(); if (job && main.isConnected) render(); };
+  globalThis.addEventListener("hashchange", cancelNativeMax, { once: true });
+  main.addEventListener("input", cancelNativeMax, true);
+  main.addEventListener("click", e => { if (e.target.closest?.(".eWRqBu")) cancelNativeMax(); }, true);
+  const addIntent = () => JSON.stringify([wallet.account, st.a, st.b, st.field, st.typed, st.balances, st.allowance, readSettings()], (_, value) => typeof value === "bigint" ? value.toString() : value);
+  const parsed = (field = st.field, typed = st.typed) => {
     const ka = st.a, kb = st.b; const out = { a: 0n, b: 0n };
     if (!ka || !kb) return out;
-    const indep = st.field, dep = indep === "a" ? "b" : "a";
+    const indep = field, dep = indep === "a" ? "b" : "a";
     const ki = st[indep], kd = st[dep];
-    out[indep] = parseAmount(st.typed, TOKENS[ki].decimals);
+    out[indep] = parseAmount(typed, TOKENS[ki].decimals);
     if (out[indep] > 0n && st.pr && reserve(ki) > 0n) out[dep] = out[indep] * reserve(kd) / reserve(ki);
     return out;
   };
+
+  function supplyRequest(p, { account = wallet.account, settings = readSettings(), deadline = Math.floor(Date.now() / 1000) + settings.deadlineMinutes * 60 } = {}) {
+    const slip = BigInt(settings.slippageBps), min = value => value * (BPS - slip) / BPS;
+    if (st.a === "bnb" || st.b === "bnb") {
+      const tokenKey = st.a === "bnb" ? st.b : st.a, tokenAmt = st.a === "bnb" ? p.b : p.a, ethAmt = st.a === "bnb" ? p.a : p.b;
+      return { from: account, to: FST_ROUTER, value: "0x" + ethAmt.toString(16), data: iface(ROUTER_ABI).encodeFunctionData("addLiquidityETH", [TOKENS[tokenKey].address, tokenAmt, min(tokenAmt), min(ethAmt), account, deadline]) };
+    }
+    return { from: account, to: FST_ROUTER, value: "0x0", data: iface(ROUTER_ABI).encodeFunctionData("addLiquidity", [TOKENS[st.a].address, TOKENS[st.b].address, p.a, p.b, min(p.a), min(p.b), account, deadline]) };
+  }
 
   function panelEl(field) {
     const k = st[field];
@@ -405,11 +434,11 @@ async function mountAdd(root, request, parts) {
       btn.replaceWith(empty);
     }
     const target = el.querySelector(".open-currency-select-button");
-    target.addEventListener("click", () => openTokenPicker({ selected: k, other: st[field === "a" ? "b" : "a"], balances: st.balances, onPick: (nk) => {
+    target.addEventListener("click", () => { cancelNativeMax(); openTokenPicker({ selected: k, other: st[field === "a" ? "b" : "a"], balances: st.balances, onPick: (nk) => {
       const o = field === "a" ? "b" : "a"; if (st[o] === nk) st[o] = k; st[field] = nk;
       const id = (x) => (x ? (x === "bnb" ? "BNB" : TOKENS[x].address) : "");
       location.hash = "#/add/v2/" + [id(st.a), id(st.b)].filter(Boolean).join("/");
-    } }));
+    } }); });
     const input = el.querySelector("input.token-amount-input");
     const p = parsed();
     const v = st.field === field ? st.typed : (p[field] > 0n ? formatAmountInput(p[field], TOKENS[k].decimals) : "");
@@ -427,19 +456,46 @@ async function mountAdd(root, request, parts) {
     left.querySelector("button.cfnxzr")?.remove();
     const actions = document.createElement("span"); actions.className = "fst-balance-actions";
     actions.setAttribute("role", "group"); actions.setAttribute("aria-label", tr("余额快捷选择", "Balance shortcuts"));
-    const setFraction = (percent) => {
+    const setFraction = async (percent) => {
       if (!account || wallet.account !== account || !k || st[field] !== k || st.balances[k] !== bal || typeof bal !== "bigint" || bal <= 0n) return;
-      const value = balanceFraction(bal, percent, k === "bnb" ? 10n ** 16n : 0n);
-      if (value === 0n) return;
-      st.field = field; st.typed = swapFormatUnits(value, TOKENS[k].decimals); render();
-      main.querySelector((field === "a" ? "#add-liquidity-input-tokena" : "#add-liquidity-input-tokenb") + ' .fst-balance-actions [data-percent="' + percent + '"]')?.focus({ preventScroll: true });
+      cancelNativeMax();
+      let controller;
+      try {
+        let value;
+        if (k !== "bnb") value = balanceFraction(bal, percent);
+        else {
+          if (!st.pr || !pool()) throw new Error(tr("流动池读取完成后重试", "Retry once the pool is loaded"));
+          const provider = wallet.provider, providerRequest = provider?.request, identity = addIntent(), reserves = st.pr;
+          controller = new AbortController(); nativeMaxJob = controller; render();
+          const assertCurrent = () => {
+            if (controller.signal.aborted || nativeMaxJob !== controller || !main.isConnected || wallet.provider !== provider || provider?.request !== providerRequest || st.pr !== reserves || addIntent() !== identity) throw new DOMException("Native amount selection changed", "AbortError");
+          };
+          const amounts = parsed(field, swapFormatUnits(bal, TOKENS[k].decimals));
+          const approvals = ["a", "b"].filter(f => st[f] !== "bnb" && (st.allowance[st[f]] == null || st.allowance[st[f]] < amounts[f]));
+          const selectedSettings = readSettings(), deadline = Math.floor(Date.now() / 1000) + selectedSettings.deadlineMinutes * 60;
+          const read = (payload, { signal } = {}) => swapPublicRpc(globalThis.fetch, signal, { attempts: 2, timeoutMs: 3000 })(payload);
+          const result = await nativeBalanceFraction({ balance: bal, percent, fallbackGasLimit: 400000n, extraGasLimit: BigInt(approvals.length) * 150000n, allowEstimateFallback: approvals.length > 0, signal: controller.signal, assertCurrent,
+            readGasPrice: options => read({ method: "eth_gasPrice" }, options),
+            buildTransaction: amount => supplyRequest(parsed(field, swapFormatUnits(amount, TOKENS[k].decimals)), { account, settings: selectedSettings, deadline }),
+            estimate: (transaction, options) => read({ method: "eth_estimateGas", params: [transaction] }, options),
+          });
+          assertCurrent(); value = result.amount; nativeMaxJob = null;
+        }
+        if (value === 0n) return;
+        st.field = field; st.typed = swapFormatUnits(value, TOKENS[k].decimals); render();
+        main.querySelector((field === "a" ? "#add-liquidity-input-tokena" : "#add-liquidity-input-tokenb") + ' .fst-balance-actions [data-percent="' + percent + '"]')?.focus({ preventScroll: true });
+      } catch (error) {
+        if (error?.name !== "AbortError" && main.isConnected) popup({ summary: error?.message || tr("暂时无法估算 Gas，请重试", "Gas estimate unavailable; retry"), success: false });
+      } finally {
+        if (controller && nativeMaxJob === controller) { nativeMaxJob = null; if (main.isConnected) render(); }
+      }
     };
     for (const percent of [25, 50, 75, 100]) {
       const action = document.createElement("button");
       action.type = "button"; action.className = "fst-balance-action" + (percent === 100 ? " cfnxzr" : "");
       action.dataset.percent = String(percent); action.textContent = percent === 100 ? "Max" : percent + "%";
       action.setAttribute("aria-label", percent + "% " + tr("可用余额", "available balance") + (k ? " " + TOKENS[k].symbol : ""));
-      action.disabled = !account || typeof bal !== "bigint" || bal <= 0n || balanceFraction(bal, percent, k === "bnb" ? 10n ** 16n : 0n) === 0n;
+      action.disabled = !account || typeof bal !== "bigint" || bal <= 0n || k === "bnb" && Boolean(nativeMaxJob) || balanceFraction(bal, percent) === 0n;
       action.addEventListener("click", () => setFraction(percent)); actions.append(action);
     }
     left.append(actions);
@@ -518,6 +574,7 @@ async function mountAdd(root, request, parts) {
   }
   let accountSeq = 0, loadedAccount;
   async function loadAccount() {
+    cancelNativeMax();
     const account = wallet.account, seq = ++accountSeq;
     if (account !== loadedAccount) {
       st.balances = {}; st.allowance = {}; st.approving = {}; loadedAccount = account;
@@ -541,6 +598,7 @@ async function mountAdd(root, request, parts) {
         if (st.approving[k] !== job || wallet.account !== account) return;
         st.approving[k] = false;
         st.allowance[k] = actual;
+        if (ok) { await loadAccount(); refreshNativeBalance({ fresh: true }); }
         if (main.isConnected) render();
       });
     } catch (err) {
@@ -554,25 +612,19 @@ async function mountAdd(root, request, parts) {
     const sa = TOKENS[st.a].symbol, sb = TOKENS[st.b].symbol;
     const ta = sigDown(p.a, TOKENS[st.a].decimals, 6), tb = sigDown(p.b, TOKENS[st.b].decimals, 6);
     pendingModal(tr("正在供应 " + ta + " " + sa + " 和 " + tb + " " + sb, "Supplying " + ta + " " + sa + " and " + tb + " " + sb));
-    const s = readSettings(); const slip = BigInt(s.slippageBps);
-    const min = (x) => x * (BPS - slip) / BPS;
-    const deadline = Math.floor(Date.now() / 1000) + s.deadlineMinutes * 60;
+    cancelNativeMax();
+    const account = wallet.account, provider = wallet.provider, identity = addIntent();
+    const assertCurrent = () => { if (!main.isConnected || wallet.account !== account || wallet.provider !== provider || addIntent() !== identity) throw Object.assign(new Error(tr("当前选择已改变，请重试", "Selection changed; retry")), { code: "REQUEST_CHANGED" }); };
     try {
-      let txReq;
-      if (st.a === "bnb" || st.b === "bnb") {
-        const tokenKey = st.a === "bnb" ? st.b : st.a; const tokenAmt = st.a === "bnb" ? p.b : p.a; const ethAmt = st.a === "bnb" ? p.a : p.b;
-        txReq = { from: wallet.account, to: FST_ROUTER, value: "0x" + ethAmt.toString(16), data: iface(ROUTER_ABI).encodeFunctionData("addLiquidityETH", [TOKENS[tokenKey].address, tokenAmt, min(tokenAmt), min(ethAmt), wallet.account, deadline]) };
-      } else {
-        txReq = { from: wallet.account, to: FST_ROUTER, value: "0x0", data: iface(ROUTER_ABI).encodeFunctionData("addLiquidity", [TOKENS[st.a].address, TOKENS[st.b].address, p.a, p.b, min(p.a), min(p.b), wallet.account, deadline]) };
-      }
-      const hash = await tx.send(txReq, 400000n);
+      const txReq = supplyRequest(p);
+      const hash = await tx.send(txReq, 400000n, { assertCurrent });
       const summary = "Add " + sigDown(p.a, TOKENS[st.a].decimals, 3) + " " + sa + " and " + sigDown(p.b, TOKENS[st.b].decimals, 3) + " " + sb;
       submittedModal(hash); popup({ summary, hash });
       st.typed = ""; render();
       tx.waitReceipt(hash).then(async () => { rememberPool(pl); await Promise.all([loadPool(), loadAccount()]); refreshNativeBalance({fresh: true}); if (main.isConnected) render(); })
         .catch((err) => popup({ summary: summary + " — " + (err?.message || ""), hash, success: false }));
     } catch (err) {
-      errorModal(isReject(err) ? T("交易被拒绝。") : (err?.message || tr("交易失败", "Transaction failed")));
+      if (main.isConnected) errorModal(isReject(err) ? T("交易被拒绝。") : (err?.message || tr("交易失败", "Transaction failed")));
     }
   }
   void settings;

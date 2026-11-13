@@ -1,21 +1,21 @@
-import { createReceiptReadScope } from './swap-receipt-read.mjs?v=mainnet-20261113-49';
-import { createIdleRead } from './swap-idle-read.mjs?v=mainnet-20261113-49';
-import { swapRpcWork } from './swap-rpc-work.mjs?v=mainnet-20261113-49';
-import { recheckSwapQuote, createSubmissionReadContext, prepareSwapSubmission, prepareGasOptions } from './swap-preflight.mjs?v=mainnet-20261113-49';
-import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261113-49';
-import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261113-49';
-import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261113-49';
-import { createSubmissionWarmup } from './swap-submission-warmup.mjs?v=mainnet-20261113-49';
-import { createWalletTiming, timeWalletPhase, walletTimingFailure } from './swap-wallet-timing.mjs?v=mainnet-20261113-49';
-import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261113-49';
-import { readWalletBalances } from './swap-balances.mjs?v=mainnet-20261113-49';
-import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261113-49";
+import { createReceiptReadScope } from './swap-receipt-read.mjs?v=mainnet-20261113-50';
+import { createIdleRead } from './swap-idle-read.mjs?v=mainnet-20261113-50';
+import { swapRpcWork } from './swap-rpc-work.mjs?v=mainnet-20261113-50';
+import { recheckSwapQuote, createSubmissionReadContext, prepareSwapSubmission, prepareGasOptions } from './swap-preflight.mjs?v=mainnet-20261113-50';
+import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261113-50';
+import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261113-50';
+import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261113-50';
+import { createSubmissionWarmup } from './swap-submission-warmup.mjs?v=mainnet-20261113-50';
+import { createWalletTiming, timeWalletPhase, walletTimingFailure } from './swap-wallet-timing.mjs?v=mainnet-20261113-50';
+import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261113-50';
+import { readWalletBalances } from './swap-balances.mjs?v=mainnet-20261113-50';
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261113-50";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261113-49";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261113-50";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
@@ -23,16 +23,17 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261113-49";
+} from "./swap-aggregator.mjs?v=mainnet-20261113-50";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261113-49";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261113-50";
 import { balanceFraction, formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
+import {nativeBalanceFraction} from "./swap-native-max.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261113-49";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261113-50";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261113-49";
-import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261113-49";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261113-50";
+import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261113-50";
 
 const approvals = createApprovalTracker();
 const sharedQuoteContext = createQuoteContext(swapPublicRpc());
@@ -280,7 +281,7 @@ export async function mountSwapView(root) {
   let activeWalletController = null;
   const submissionWarmup=createSubmissionWarmup({clock:()=>quoteNow(state.quote)});
   const walletTiming=createWalletTiming();
-  let submissionWarmTimer=null,walletSubmissionEpoch=0,activeBalanceReads=0;
+  let submissionWarmTimer=null,walletSubmissionEpoch=0,activeBalanceReads=0,nativeMaxJob=null;
   const $ = (s) => main.querySelector(s);
   const settingsWrap = $(".eWRqBu");
   const swapPage = $("#swap-page");
@@ -348,7 +349,7 @@ export async function mountSwapView(root) {
             action.type="button";action.className="fst-balance-action"+(percent===100?" cfnxzr":"");
             action.dataset.percent=String(percent);action.textContent=percent===100?"Max":percent+"%";
             action.setAttribute("aria-label",percent+"% "+tr("可用余额","available balance")+" "+tk.symbol);
-            action.disabled=!account||typeof bal!=="bigint"||bal<=0n||Boolean(state.balanceErrors[tk.key])||balanceFraction(bal,percent,tk.key==="bnb"?10n**16n:0n)===0n;
+            action.disabled=!account||typeof bal!=="bigint"||bal<=0n||Boolean(state.balanceErrors[tk.key])||(tk.key==="bnb"?Boolean(state.nativeMaxBusy):balanceFraction(bal,percent)===0n);
             action.addEventListener("click",()=>{
               if(wallet.account!==account||inT()?.key!==tk.key||state.balances[tk.key]!==bal)return;
               setBalanceFraction(percent);
@@ -641,7 +642,7 @@ export async function mountSwapView(root) {
     return ti&&to?JSON.stringify([ti.address,to.address,ti.decimals,to.decimals,settings.slippageBps,settings.singleHop]):null;
   }
   function canReadPairPrice() {
-    return !state.amount && !state.transactionBusy && main.isConnected && !document.hidden && navigator.onLine!==false && Boolean(inT()&&outT());
+    return !state.amount && !state.transactionBusy && !state.nativeMaxBusy && main.isConnected && !document.hidden && navigator.onLine!==false && Boolean(inT()&&outT());
   }
   function stopPairPrice() {
     previewController?.abort(); previewController = null;
@@ -710,10 +711,10 @@ export async function mountSwapView(root) {
   let quoteExpiryTimer=null,lastTypedAt=0;
   const quoteFlow=createQuoteRefresh({run:options=>refreshQuote(options),
     ready:()=>main.isConnected && !document.hidden && navigator.onLine!==false && !!inT() && !!outT() && Number(state.amount)>0,
-    blocked:()=>!!state.transactionBusy || Boolean(approvals.pending(approvalIdentity()))});
+    blocked:()=>!!state.transactionBusy || !!state.nativeMaxBusy || Boolean(approvals.pending(approvalIdentity()))});
   const otherBalances = createIdleRead({
     ready:() => main.isConnected && Boolean(wallet.account) && !document.hidden && navigator.onLine !== false,
-    blocked:() => Boolean(previewController) || state.transactionBusy || quoteFlow.running() || submissionWarmup.pending() || Boolean(approvals.pending(approvalIdentity())),
+    blocked:() => Boolean(previewController) || state.transactionBusy || state.nativeMaxBusy || quoteFlow.running() || submissionWarmup.pending() || Boolean(approvals.pending(approvalIdentity())),
     run:({signal}) => loadBalances(ORDER.filter(key => key !== page.inKey && key !== page.outKey), false, {signal}),
   });
   function resumeIdleReads() {
@@ -727,7 +728,7 @@ export async function mountSwapView(root) {
   globalThis.addEventListener('offline', resumeIdleReads);
   globalThis.addEventListener('pageshow', resumeIdleReads);
   globalThis.addEventListener('pagehide', stopPairPrice);
-  function scheduleQuote(ms=180) { cancelSubmissionWarm();activeWalletController?.abort(); activeSubmissionContext?.dispose(); otherBalances.pause(); ++state.seq;quoteFlow.schedule(ms); }
+  function scheduleQuote(ms=180) { cancelNativeMax();cancelSubmissionWarm();activeWalletController?.abort(); activeSubmissionContext?.dispose(); otherBalances.pause(); ++state.seq;quoteFlow.schedule(ms); }
   function onAmountInput(e) {
     const hadQuote=!!state.quote,now=Date.now();
     const v = limitAmountDecimals(e.target.value.replace(/,/g, "."));
@@ -740,15 +741,61 @@ export async function mountSwapView(root) {
     scheduleQuote(hadQuote || now-lastTypedAt<400 ? 100 : 0);lastTypedAt=now;
     if (!Number(v)) { refreshPairPrice(); otherBalances.schedule(); }
   }
+  function applyBalanceAmount(value,percent,decimals) {
+    stopPairPrice();state.amount=swapFormatUnits(value,decimals);
+    state.quote=null;state.quoteError="";state.quoteErrorReason="";state.refocus=false;render();scheduleQuote(0);
+    main.querySelector('#swap-currency-input .fst-balance-actions [data-percent="'+percent+'"]')?.focus({preventScroll:true});
+  }
+  function cancelNativeMax() {
+    const pending=nativeMaxJob;pending?.controller.abort();nativeMaxJob=null;state.nativeMaxBusy=false;
+    if(pending&&main.isConnected){const bal=state.balances.bnb;main.querySelectorAll('#swap-currency-input .fst-balance-action').forEach(button=>{button.disabled=!wallet.account||typeof bal!=="bigint"||bal<=0n||Boolean(state.balanceErrors.bnb)||balanceFraction(bal,Number(button.dataset.percent))===0n;});}
+  }
+  async function readNativeMaxTransaction(amount,{signal}) {
+    const ti=inT(),to=outT();if(!ti||ti.key!=="bnb"||!to)throw Error(tr("请先选择币对","Select a token pair first"));
+    const input={tokenIn:ti.address,tokenOut:to.address,amountIn:amount,slippageBps:settings.slippageBps,singleHop:settings.singleHop};
+    const remote=await swapService.quote(input,{router:swapActiveRouter(),adapters:SWAP_ADAPTERS,signal});
+    let q;
+    if(remote){q={...remote.quote,serviceMeta:{...remote},serviceExpiresAt:remote.expiresAt};delete q.serviceMeta.quote;}
+    else{
+      const config=await quoteContext.config();
+      if(!['2.0.0','2.1.0'].includes(config.version))throw missing();
+      q=await quoteFstSwap((payload)=>transactionRead(payload,{signal}),{...input,config});
+    }
+    if(q.amountIn!==amount)throw Object.assign(Error("Native quote amount changed"),{code:"UNSAFE_QUOTE"});
+    assertQuoteSafety({tokenIn:ti.address,tokenOut:to.address,amountIn:q.maxIn||q.amountIn,amountOut:minOut(q),impact:q.impact,quotedAmountIn:q.amountIn,quotedAmountOut:q.out});
+    return swapTransaction(q,Math.floor(quoteNow(q)/1000)+settings.deadlineMinutes*60,wallet.account);
+  }
+  async function setNativeBalanceFraction(percent) {
+    cancelNativeMax();
+    const account=wallet.account,provider=wallet.provider,providerRequest=provider?.request,balance=state.balances.bnb;
+    const originalAmount=state.amount,epoch=state.balanceEpoch,identity=selectedTokenIdentity(),options=JSON.stringify(settings);
+    if(!account||inT()?.key!=="bnb"||typeof balance!=="bigint"||balance<=0n||state.balanceErrors.bnb)return;
+    const controller=new AbortController(),job={controller};nativeMaxJob=job;
+    const assertCurrent=()=>{if(nativeMaxJob!==job||!main.isConnected||wallet.account!==account||wallet.provider!==provider||provider?.request!==providerRequest||selectedTokenIdentity()!==identity||state.amount!==originalAmount||state.balanceEpoch!==epoch||state.balances.bnb!==balance||state.balanceErrors.bnb||JSON.stringify(settings)!==options)throw new DOMException('Native amount changed','AbortError');};
+    state.nativeMaxBusy=true;cancelSubmissionWarm();otherBalances.pause();quoteFlow.pause();++state.seq;clearTimeout(quoteExpiryTimer);stopPairPrice();
+    state.quote=null;state.quoteError="";state.quoteErrorReason="";renderPanels();renderTrade();renderBottom();
+    try{
+      const result=await nativeBalanceFraction({balance,percent,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(30000)]),assertCurrent,
+        readGasPrice:({signal})=>transactionRead({method:'eth_gasPrice'},{signal}),
+        buildTransaction:readNativeMaxTransaction,
+        estimate:(transaction,{signal})=>transactionRead({method:'eth_estimateGas',params:[transaction]},{signal})});
+      assertCurrent();nativeMaxJob=null;state.nativeMaxBusy=false;
+      applyBalanceAmount(result.amount,percent,18);
+    }catch(error){
+      if(nativeMaxJob===job){
+        let current=true;try{assertCurrent();}catch{current=false;}
+        nativeMaxJob=null;state.nativeMaxBusy=false;
+        if(main.isConnected){renderPanels();if(current&&!controller.signal.aborted){popup({summary:tr("无法计算 BNB 可用余额，请稍后重试","Cannot calculate spendable BNB; try again"),success:false});if(state.amount)scheduleQuote(0);else void refreshPairPrice({fresh:true});}}
+      }
+    }finally{controller.abort();if(main.isConnected)otherBalances.schedule();}
+  }
   function setBalanceFraction(percent) {
     const token=inT(),bal=state.balances[page.inKey];
     if(!wallet.account||!token||typeof bal!=="bigint"||bal<=0n||state.balanceErrors[token.key])return;
-    const MIN_BNB = 10n ** 16n; // 官方 maxAmountSpend：原生币预留 0.01
-    const value=balanceFraction(bal,percent,token.key==="bnb"?MIN_BNB:0n);
+    if(token.key==="bnb"){void setNativeBalanceFraction(percent);return;}
+    cancelNativeMax();const value=balanceFraction(bal,percent);
     if(value===0n)return;
-    stopPairPrice();state.amount=swapFormatUnits(value,token.decimals);
-    state.quote=null;state.quoteError="";state.quoteErrorReason="";state.refocus=false;render();scheduleQuote(0);
-    main.querySelector('#swap-currency-input .fst-balance-actions [data-percent="'+percent+'"]')?.focus({preventScroll:true});
+    applyBalanceAmount(value,percent,token.decimals);
   }
   const missing = () => Object.assign(new Error(SWAP_V10_MISSING.zh), { code: SWAP_V10_MISSING.code });
   // FstSwap 报价：v10 经聚合路由 getAmountsOutVia(FstSwap 适配器)；不直连 FstSwap 路由器
@@ -1140,6 +1187,10 @@ export async function mountSwapView(root) {
             gasPrice:({signal})=>swapPublicRpc(globalThis.fetch,signal,{priority:"foreground",attempts:2,timeoutMs:8000})({method:"eth_gasPrice"}),
           });
           if(prepared.needsApproval)return prepared;
+          if(BigInt(preparedTx.value||0)>0n){
+            const balance=BigInt(await read({method:'eth_getBalance',params:[submittedAccount,'latest']}));
+            if(balance<BigInt(preparedTx.value)+prepared.gasLimit*prepared.gasPrice)throw Object.assign(Error(tr("BNB 余额不足以支付当前 Gas，请重新选择 Max","BNB cannot cover current gas; select Max again")),{code:'NATIVE_GAS_BALANCE'});
+          }
           freshPolicy=prepared.policy;
           if(inT()?.key!=="bnb"&&state.allowance==null)throw new Error(tr("暂时无法读取授权额度，请稍后重试", "Cannot read approval; please try again"));
           freshPolicy.assert(q.first,q.second);freshPolicy.assertValue(q.maxIn || q.amountIn,min);
@@ -1223,7 +1274,7 @@ export async function mountSwapView(root) {
   const stopWallet=wallet.subscribe(() => {
     if (initialWalletNotification) return;
     if (!main.isConnected) return;
-    walletSubmissionEpoch++;cancelSubmissionWarm();
+    walletSubmissionEpoch++;cancelNativeMax();cancelSubmissionWarm();
     otherBalances.pause();
     if (wallet.account && !page.connectedDefaults) applyDefaults();
     allowanceReader.invalidate();state.allowance=null;state.allowanceIdentity=null;
@@ -1239,7 +1290,7 @@ export async function mountSwapView(root) {
     void refreshPairPrice({fresh:true});
   });
   const stopApprovals = approvals.subscribe(()=>{if(!main.isConnected)return false;renderBottom();});
-  globalThis.addEventListener('hashchange',()=>{cancelSubmissionWarm();stopWallet();stopTokens();stopApprovals();document.removeEventListener('click',closeSettings);document.removeEventListener('visibilitychange',resumeIdleReads);globalThis.removeEventListener('online',resumeIdleReads);globalThis.removeEventListener('offline',resumeIdleReads);globalThis.removeEventListener('pageshow',resumeIdleReads);globalThis.removeEventListener('pagehide',stopPairPrice);clearTimeout(quoteExpiryTimer);quoteFlow.dispose();otherBalances.dispose();activeWalletController?.abort();activeSubmissionContext?.dispose();stopPairPrice();allowanceReader.invalidate();},{once:true});
+  globalThis.addEventListener('hashchange',()=>{cancelNativeMax();cancelSubmissionWarm();stopWallet();stopTokens();stopApprovals();document.removeEventListener('click',closeSettings);document.removeEventListener('visibilitychange',resumeIdleReads);globalThis.removeEventListener('online',resumeIdleReads);globalThis.removeEventListener('offline',resumeIdleReads);globalThis.removeEventListener('pageshow',resumeIdleReads);globalThis.removeEventListener('pagehide',stopPairPrice);clearTimeout(quoteExpiryTimer);quoteFlow.dispose();otherBalances.dispose();activeWalletController?.abort();activeSubmissionContext?.dispose();stopPairPrice();allowanceReader.invalidate();},{once:true});
   renderSettings(); render();
   refreshDefaultList();
   if (wallet.account) { refreshBalances(false); restoreSubmittedTransaction(); }

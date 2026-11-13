@@ -16,7 +16,7 @@ const fileExists=async file=>{try{return await readFile(file);}catch(error){if(e
 const approvedPath=value=>/^(?:src\/fst-runtime-(?:app|boot|chunk)-[A-Z0-9]{8}\.mjs|src\/fst-style-(?:official|manage|ui)-[A-F0-9]{16}\.css|assets\/vendor\/fst-ethers-[A-F0-9]{16}\.js)$/.test(value||'');
 async function approvedCompatibility(root) {
   const source=JSON.parse(await readFile(path.join(root,'tools/runtime/compatibility.json'),'utf8'));
-  if(source.schema!==2||!Array.isArray(source.retainedReleases)||source.retainedReleases.length>3)throw Error('Invalid runtime compatibility metadata');
+  if(source.schema!==2||!Array.isArray(source.retainedReleases)||source.retainedReleases.length>4)throw Error('Invalid runtime compatibility metadata');
   const releases=[source.previousRelease,...source.retainedReleases],seenReleases=new Set(),assets=new Map();
   for(const release of releases){
     const files=release?.files;
