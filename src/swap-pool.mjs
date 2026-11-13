@@ -1,13 +1,13 @@
-import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
+import { balanceFraction, formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 // 流动池（#/pool、#/pool/v2/find）、注入流动资金（#/add/v2/A/B）、去除流动资金（#/remove/v2/A/B）——
 // 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css）；
 // 链上逻辑：直接调用 FstSwap 路由器（Pancake V2 fork，同官方授权对象 0x1B6C…ABC2d），所有启用列表中的代币，按 FstSwap factory 查询所选币对。
-import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261113-48";
-import { tr, T, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal, popup, refreshNativeBalance, hashParts } from "./swap-shell.mjs?v=mainnet-20261113-48";
-import { TOKENS, sigDown, tokenKeys, openTokenPicker } from "./swap-view.mjs?v=mainnet-20261113-48";
+import { SWAP_TOKENS, swapPublicRpc, loadSwapLibrary, swapFormatUnits } from "./swap-aggregator.mjs?v=mainnet-20261113-49";
+import { tr, T, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal, popup, refreshNativeBalance, hashParts } from "./swap-shell.mjs?v=mainnet-20261113-49";
+import { TOKENS, sigDown, tokenKeys, openTokenPicker } from "./swap-view.mjs?v=mainnet-20261113-49";
 
 import { discoverPool, reservesByToken } from "./swap-pool-data.mjs";
-import { refreshDefaultList } from "./swap-manage.mjs?v=mainnet-20261113-48";
+import { refreshDefaultList } from "./swap-manage.mjs?v=mainnet-20261113-49";
 import { tokenLogo, applyTokenLogo } from "./swap-token-logo.mjs";
 
 const FST_ROUTER = "0x1B6C9c20693afDE803B27F8782156c0f892ABC2d";
@@ -420,16 +420,30 @@ async function mountAdd(root, request, parts) {
       st.field = field; st.typed = raw; render(field);
     });
     const left = el.querySelector(".fNKPVt .jmNfaf > .iWJdVe");
-    if (!wallet.account || !k) left.replaceWith(document.createElement("span"));
-    else {
-      const bal = st.balances[k];
-      const text = left.querySelector(".css-djrxae");
-      text.textContent = bal == null ? "" : tr("余额：", "Balance: ") + formatBalance(bal, TOKENS[k]) + " " + TOKENS[k].symbol;
-      const max = left.querySelector("button.cfnxzr");
-      const setMax = () => { if (!bal) return; const m = k === "bnb" ? (bal > 10n ** 16n ? bal - 10n ** 16n : 0n) : bal; st.field = field; st.typed = swapFormatUnits(m, TOKENS[k].decimals); render(); };
-      if (!bal || bal === 0n || (st.field === field && parseAmount(st.typed, TOKENS[k].decimals) === bal)) max.remove(); else max.addEventListener("click", setMax);
-      text.addEventListener("click", setMax);
+    const account = wallet.account, bal = account && k ? st.balances[k] : null;
+    left.classList.add("fst-balance-row");
+    const text = left.querySelector(".css-djrxae");
+    text.textContent = tr("余额：", "Balance: ") + (bal == null ? "—" : formatBalance(bal, TOKENS[k]) + " " + TOKENS[k].symbol);
+    left.querySelector("button.cfnxzr")?.remove();
+    const actions = document.createElement("span"); actions.className = "fst-balance-actions";
+    actions.setAttribute("role", "group"); actions.setAttribute("aria-label", tr("余额快捷选择", "Balance shortcuts"));
+    const setFraction = (percent) => {
+      if (!account || wallet.account !== account || !k || st[field] !== k || st.balances[k] !== bal || typeof bal !== "bigint" || bal <= 0n) return;
+      const value = balanceFraction(bal, percent, k === "bnb" ? 10n ** 16n : 0n);
+      if (value === 0n) return;
+      st.field = field; st.typed = swapFormatUnits(value, TOKENS[k].decimals); render();
+      main.querySelector((field === "a" ? "#add-liquidity-input-tokena" : "#add-liquidity-input-tokenb") + ' .fst-balance-actions [data-percent="' + percent + '"]')?.focus({ preventScroll: true });
+    };
+    for (const percent of [25, 50, 75, 100]) {
+      const action = document.createElement("button");
+      action.type = "button"; action.className = "fst-balance-action" + (percent === 100 ? " cfnxzr" : "");
+      action.dataset.percent = String(percent); action.textContent = percent === 100 ? "Max" : percent + "%";
+      action.setAttribute("aria-label", percent + "% " + tr("可用余额", "available balance") + (k ? " " + TOKENS[k].symbol : ""));
+      action.disabled = !account || typeof bal !== "bigint" || bal <= 0n || balanceFraction(bal, percent, k === "bnb" ? 10n ** 16n : 0n) === 0n;
+      action.addEventListener("click", () => setFraction(percent)); actions.append(action);
     }
+    left.append(actions);
+    text.addEventListener("click", () => setFraction(100));
     return el;
   }
 
@@ -505,7 +519,10 @@ async function mountAdd(root, request, parts) {
   let accountSeq = 0, loadedAccount;
   async function loadAccount() {
     const account = wallet.account, seq = ++accountSeq;
-    if (account !== loadedAccount) { st.balances = {}; st.allowance = {}; st.approving = {}; loadedAccount = account; }
+    if (account !== loadedAccount) {
+      st.balances = {}; st.allowance = {}; st.approving = {}; loadedAccount = account;
+      main.querySelectorAll(".fst-balance-actions button").forEach(button => { button.disabled = true; });
+    }
     if (!account) return;
     const keys = [...new Set([st.a, st.b].filter(Boolean))];
     await Promise.all(keys.map(async k => {
@@ -635,7 +652,11 @@ async function mountRemove(root, request, parts) {
   }
   const setPct = (v) => { st.pct = Math.max(0, Math.min(100, Math.round(v))); render(); };
   slider.addEventListener("input", () => setPct(Number(slider.value)));
-  main.querySelectorAll("button.GhknT").forEach((b, i) => b.addEventListener("click", () => setPct([25, 50, 75, 100][i])));
+  main.querySelectorAll("button.GhknT").forEach((b, i) => {
+    const percent = [25, 50, 75, 100][i]; b.type = "button"; b.dataset.percent = String(percent);
+    b.setAttribute("aria-label", percent + "% " + tr("流动池份额", "liquidity position"));
+    b.addEventListener("click", () => setPct(percent));
+  });
 
   let loadSeq = 0, loadedAccount;
   async function load() {

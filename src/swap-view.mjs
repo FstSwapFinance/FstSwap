@@ -1,21 +1,21 @@
-import { createReceiptReadScope } from './swap-receipt-read.mjs?v=mainnet-20261113-48';
-import { createIdleRead } from './swap-idle-read.mjs?v=mainnet-20261113-48';
-import { swapRpcWork } from './swap-rpc-work.mjs?v=mainnet-20261113-48';
-import { recheckSwapQuote, createSubmissionReadContext, prepareSwapSubmission, prepareGasOptions } from './swap-preflight.mjs?v=mainnet-20261113-48';
-import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261113-48';
-import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261113-48';
-import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261113-48';
-import { createSubmissionWarmup } from './swap-submission-warmup.mjs?v=mainnet-20261113-48';
-import { createWalletTiming, timeWalletPhase, walletTimingFailure } from './swap-wallet-timing.mjs?v=mainnet-20261113-48';
-import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261113-48';
-import { readWalletBalances } from './swap-balances.mjs?v=mainnet-20261113-48';
-import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261113-48";
+import { createReceiptReadScope } from './swap-receipt-read.mjs?v=mainnet-20261113-49';
+import { createIdleRead } from './swap-idle-read.mjs?v=mainnet-20261113-49';
+import { swapRpcWork } from './swap-rpc-work.mjs?v=mainnet-20261113-49';
+import { recheckSwapQuote, createSubmissionReadContext, prepareSwapSubmission, prepareGasOptions } from './swap-preflight.mjs?v=mainnet-20261113-49';
+import { resolveFeeAsset } from './swap-fee-assets.mjs?v=mainnet-20261113-49';
+import { createQuoteRefresh } from './swap-quote-refresh.mjs?v=mainnet-20261113-49';
+import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261113-49';
+import { createSubmissionWarmup } from './swap-submission-warmup.mjs?v=mainnet-20261113-49';
+import { createWalletTiming, timeWalletPhase, walletTimingFailure } from './swap-wallet-timing.mjs?v=mainnet-20261113-49';
+import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261113-49';
+import { readWalletBalances } from './swap-balances.mjs?v=mainnet-20261113-49';
+import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261113-49";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
 //  - v10（SWAP_MAINNET.routerV10 已配置）：BNB⇄FIST 多 DEX 聚合 + 通用币对 V2 多 DEX 比价；
 //    授权对象统一为 v10 路由器；报价走 v10 getAmountsOutVia。
 //  - v10 未配置：仅 BNB⇄FIST 走已部署的 v9（0x0b31…3FD2）；其余币对显示「聚合合约未部署」，不回退。
-import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261113-48";
+import { sendWalletOnce, recoverWalletIntent } from "./swap-send.mjs?v=mainnet-20261113-49";
 import {
   SWAP_MAINNET, SWAP_TOKENS, SWAP_ADAPTERS, SWAP_ABI, swapUnits, swapFormatUnits,
   swapFeePolicy, v10PlanFeeConversion, readV10Receipt,
@@ -23,16 +23,16 @@ import {
   quoteSwap, preflightSwap, swapApproveRequest, readSwapReceipt, describeRoute, readSwapConfig, swapRouteSpenders,
   loadSwapLibrary, swapPublicRpc,
   swapV10Ready, swapActiveRouter, SWAP_V10_MISSING, v10AmountsOut, v10Request, swapBuyBudget, swapSellNet,
-} from "./swap-aggregator.mjs?v=mainnet-20261113-48";
+} from "./swap-aggregator.mjs?v=mainnet-20261113-49";
 import { tr, T, getLanguage, tpl, part, html, mountFrame, useWallet, openWalletModal, openModal, closeModal,
-  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261113-48";
-import { formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
+  popup, significant, refreshNativeBalance } from "./swap-shell.mjs?v=mainnet-20261113-49";
+import { balanceFraction, formatAmountInput, limitAmountDecimals } from "./swap-amount.mjs";
 import { applyTokenLogo } from "./swap-token-logo.mjs";
-import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261113-48";
+import { refreshDefaultList, openManageView, onTokensChanged, activeTokenEntries, findActiveToken, readToken, isAddress, searchImportRow } from "./swap-manage.mjs?v=mainnet-20261113-49";
 
 import { createApprovalTracker, waitForApprovalReceipt } from "./swap-approval.mjs";
-import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261113-48";
-import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261113-48";
+import { readPoolPolicy } from "./swap-liquidity.mjs?v=mainnet-20261113-49";
+import { createQuoteContext } from "./swap-quote-context.mjs?v=mainnet-20261113-49";
 
 const approvals = createApprovalTracker();
 const sharedQuoteContext = createQuoteContext(swapPublicRpc());
@@ -338,12 +338,24 @@ export async function mountSwapView(root) {
           balText.title = !wallet.account ? tr("连接钱包后查看余额", "Connect a wallet to view your balance") : "";
         }
         const max = left.querySelector("button.cfnxzr");
-        if (max && !showMax) max.remove();
-        if (max && showMax) {
-          max.type = "button";
-          max.textContent = tr("最大值", "MAX");
-          max.disabled = !wallet.account || bal == null || Boolean(state.balanceErrors[tk.key]) || bal === 0n;
-          max.addEventListener("click", () => setMax());
+        max?.remove();
+        if (showMax) {
+          const account=wallet.account,actions=document.createElement("span");
+          actions.className="fst-balance-actions";actions.setAttribute("role","group");
+          actions.setAttribute("aria-label",tr("余额快捷比例","Balance shortcuts"));
+          for(const percent of [25,50,75,100]){
+            const action=document.createElement("button");
+            action.type="button";action.className="fst-balance-action"+(percent===100?" cfnxzr":"");
+            action.dataset.percent=String(percent);action.textContent=percent===100?"Max":percent+"%";
+            action.setAttribute("aria-label",percent+"% "+tr("可用余额","available balance")+" "+tk.symbol);
+            action.disabled=!account||typeof bal!=="bigint"||bal<=0n||Boolean(state.balanceErrors[tk.key])||balanceFraction(bal,percent,tk.key==="bnb"?10n**16n:0n)===0n;
+            action.addEventListener("click",()=>{
+              if(wallet.account!==account||inT()?.key!==tk.key||state.balances[tk.key]!==bal)return;
+              setBalanceFraction(percent);
+            });
+            actions.append(action);
+          }
+          left.append(actions);
         }
       } else { left.replaceWith(document.createElement("span")); }
     }
@@ -728,12 +740,15 @@ export async function mountSwapView(root) {
     scheduleQuote(hadQuote || now-lastTypedAt<400 ? 100 : 0);lastTypedAt=now;
     if (!Number(v)) { refreshPairPrice(); otherBalances.schedule(); }
   }
-  function setMax() {
-    stopPairPrice();
-    const bal = state.balances[page.inKey]; if (bal == null || !inT()) return;
+  function setBalanceFraction(percent) {
+    const token=inT(),bal=state.balances[page.inKey];
+    if(!wallet.account||!token||typeof bal!=="bigint"||bal<=0n||state.balanceErrors[token.key])return;
     const MIN_BNB = 10n ** 16n; // 官方 maxAmountSpend：原生币预留 0.01
-    const max = inT().key === "bnb" ? (bal > MIN_BNB ? bal - MIN_BNB : 0n) : bal;
-    state.amount = swapFormatUnits(max, inT().decimals);  state.quote = null; render(); scheduleQuote(0);
+    const value=balanceFraction(bal,percent,token.key==="bnb"?MIN_BNB:0n);
+    if(value===0n)return;
+    stopPairPrice();state.amount=swapFormatUnits(value,token.decimals);
+    state.quote=null;state.quoteError="";state.quoteErrorReason="";state.refocus=false;render();scheduleQuote(0);
+    main.querySelector('#swap-currency-input .fst-balance-actions [data-percent="'+percent+'"]')?.focus({preventScroll:true});
   }
   const missing = () => Object.assign(new Error(SWAP_V10_MISSING.zh), { code: SWAP_V10_MISSING.code });
   // FstSwap 报价：v10 经聚合路由 getAmountsOutVia(FstSwap 适配器)；不直连 FstSwap 路由器

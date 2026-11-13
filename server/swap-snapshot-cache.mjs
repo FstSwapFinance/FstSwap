@@ -1,5 +1,5 @@
 import {ethers} from 'ethers';
-import {SWAP_ABI,SWAP_ADAPTERS,swapActiveRouter} from '../src/swap-aggregator.mjs?v=mainnet-20261113-48';
+import {SWAP_ABI,SWAP_ADAPTERS,swapActiveRouter} from '../src/swap-aggregator.mjs?v=mainnet-20261113-49';
 
 const MULTICALL='0xca11bde05977b3631167028862be2a173976ca11';
 const abi=new ethers.Interface(['function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])']);

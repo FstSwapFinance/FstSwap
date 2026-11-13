@@ -123,6 +123,29 @@
   font-size: 12px;
   line-height: 20px;
 }
+.fst-balance-row { display: flex; align-items: center; width: 100%; gap: 4px 8px; }
+.fst-balance-row > .css-djrxae { flex: 1 1 120px; min-width: 0; font-size: 12px; line-height: 20px; }
+.fst-balance-actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; margin-left: auto; white-space: nowrap; }
+.fst-balance-actions .fst-balance-action,
+.fst-swap-card #swap-page .fst-balance-row .fst-balance-actions .fst-balance-action {
+  appearance: none;
+  flex: 0 0 auto;
+  min-height: 28px;
+  margin: 0;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--ui-raised);
+  color: var(--ui-accent);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  cursor: pointer;
+}
+.fst-balance-actions .fst-balance-action:enabled:hover { border-color: var(--ui-accent); }
+.fst-balance-actions .fst-balance-action:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+.fst-balance-actions .fst-balance-action:disabled { opacity: 0.45; cursor: default; }
 .fst-swap-card #swap-page .hDVbXn { margin-top: 8px; margin-bottom: 8px; }
 .fst-swap-card #swap-page .open-currency-select-button:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 3px; }
 @media (max-width: 360px) {

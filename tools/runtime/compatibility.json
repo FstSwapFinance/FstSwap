@@ -1,54 +1,44 @@
 {
   "schema": 2,
   "previousRelease": {
-    "release": "47",
-    "sourceCommit": "bf7594819c31ddb39d7c491bc2b315eef3efd174",
-    "sourceManifestSHA256": "c5905b456a4856ddfe2c4ed6a9c96af8ab827b92f71008582d5c138a7ecbcf3c",
+    "release": "48",
+    "sourceCommit": "d3507a30243ff243cd91dafbc30ada2f0fb02b6f",
+    "sourceManifestSHA256": "82b36712ca1bcf9eafee4530ab5ef0213bacd6d00eb9b8fee1416e94235edc65",
     "files": [
       {
-        "path": "src/fst-runtime-app-CU5VH6NM.mjs",
-        "sha256": "f9c9a72fb749dc567cbbfa8e367960ec3434aa41033e7448b4547ded6796ace7",
+        "path": "src/fst-runtime-app-GSBT5E2H.mjs",
+        "sha256": "58ad2bfc412a008e4a1130208c8f2c9a484dd64aaa00b99e9324f58067402b82",
         "bytes": 2388
       },
       {
-        "path": "src/fst-runtime-boot-CPIMF2EE.mjs",
-        "sha256": "f1f2446c6f6d8b12c1ae2c3540449aaaa739e8c964affad98a80c7695bd1f426",
+        "path": "src/fst-runtime-boot-RE6LOQ7C.mjs",
+        "sha256": "0accf3abd6733f63435ee53fdcebe72ba8b12c45504fe0f7f7a8eebdddba226d",
         "bytes": 987
       },
       {
-        "path": "src/fst-runtime-chunk-4522GLHG.mjs",
-        "sha256": "f8d74d7d3f0a7334c587598b4e04a3b18d5bf6e50b79130429d92fb85bfbea24",
-        "bytes": 175
-      },
-      {
-        "path": "src/fst-runtime-chunk-4S4DE3MB.mjs",
-        "sha256": "4b97279f4efac96a5d7d2169c4534954d900793ee553fb00572dbd0c2500303a",
-        "bytes": 225681
-      },
-      {
-        "path": "src/fst-runtime-chunk-BMYVYPL3.mjs",
-        "sha256": "32c3aa9bb70a7a3a4b5a5ece3245643b60604bb090d93945d6a009a3ba29487a",
-        "bytes": 26544
-      },
-      {
-        "path": "src/fst-runtime-chunk-GQUP3XIK.mjs",
-        "sha256": "7db6b73a5dba1ed45e89ce965115bd5bcff2497bf11268dcc59964d6a124d7ae",
-        "bytes": 4184
-      },
-      {
-        "path": "src/fst-runtime-chunk-IFG5XESZ.mjs",
-        "sha256": "79ceb97906eea0769c5040c9157ca669c3393598b9be192b323e77e68841e569",
-        "bytes": 73585
-      },
-      {
-        "path": "src/fst-runtime-chunk-LLJAWI2B.mjs",
-        "sha256": "b6d51377f7504bd0f87182d13c962d303a13b91ed650bf346c6b6e2901fa365e",
+        "path": "src/fst-runtime-chunk-66LDUY6G.mjs",
+        "sha256": "6ed85f1cb04620614eeae6117ba14eddb6a53f19a700bd74c71384583c0e627a",
         "bytes": 368
       },
       {
-        "path": "src/fst-runtime-chunk-NJPEA5BU.mjs",
-        "sha256": "94245a8ef4aeb1461f03c34090a7734ef5a56e2ef9cd5d3a546f052e36e65d76",
-        "bytes": 83337
+        "path": "src/fst-runtime-chunk-A5S3Y4JX.mjs",
+        "sha256": "282212136cbfc5908faf8b5f60f8ac50956ce7a36b5330d044235fb592f42467",
+        "bytes": 26544
+      },
+      {
+        "path": "src/fst-runtime-chunk-IMNUNOEO.mjs",
+        "sha256": "060a48dc4a4b154fcd467c6ba9267628c2a20bb82f33619ad644335c10588ec1",
+        "bytes": 4184
+      },
+      {
+        "path": "src/fst-runtime-chunk-MVT7LKP3.mjs",
+        "sha256": "410d40b212b51660ce1b44788513d38a079dbc30e007db7fc5447052d13f697e",
+        "bytes": 175
+      },
+      {
+        "path": "src/fst-runtime-chunk-MVWXNQSH.mjs",
+        "sha256": "d35f33a914e177f317810309825372dc51666dbef40dfe647749b6fb322acdcb",
+        "bytes": 20558
       },
       {
         "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
@@ -56,14 +46,24 @@
         "bytes": 1203
       },
       {
-        "path": "src/fst-runtime-chunk-RAGUF2ZT.mjs",
-        "sha256": "79c1391300462b4da9d6f5282191dea96047ef2bfe375d3254b98a3154b0e062",
-        "bytes": 20558
+        "path": "src/fst-runtime-chunk-VPHNVD46.mjs",
+        "sha256": "95eafda265c80df8e2ae2bdf645961e5d64c487676df379fdebc5d23926589d2",
+        "bytes": 1772
       },
       {
-        "path": "src/fst-runtime-chunk-V5LGIZZC.mjs",
-        "sha256": "9c910139b2ee3c070a073f8ae1ba08a0f87998689b9db751f196b3d9be3078a0",
-        "bytes": 1772
+        "path": "src/fst-runtime-chunk-WTU7XOX3.mjs",
+        "sha256": "3a109374dde850818ae28f6d4248c8087d123cd1c2bf42237a879080b6d02183",
+        "bytes": 225681
+      },
+      {
+        "path": "src/fst-runtime-chunk-YGHGFNX3.mjs",
+        "sha256": "fa459bb13761383d40887daed1af65574668f0786c94e3c314562737dc861ce8",
+        "bytes": 83392
+      },
+      {
+        "path": "src/fst-runtime-chunk-YNXL2PH5.mjs",
+        "sha256": "eb0915348e1069aa45e08dc3b96fd88c6d799915a4214d21ccb4f6be496aa280",
+        "bytes": 73585
       },
       {
         "path": "assets/vendor/fst-ethers-AC8C3F0501B5B74B.js",
@@ -88,6 +88,93 @@
     ]
   },
   "retainedReleases": [
+    {
+      "release": "47",
+      "sourceCommit": "bf7594819c31ddb39d7c491bc2b315eef3efd174",
+      "sourceManifestSHA256": "c5905b456a4856ddfe2c4ed6a9c96af8ab827b92f71008582d5c138a7ecbcf3c",
+      "files": [
+        {
+          "path": "src/fst-runtime-app-CU5VH6NM.mjs",
+          "sha256": "f9c9a72fb749dc567cbbfa8e367960ec3434aa41033e7448b4547ded6796ace7",
+          "bytes": 2388
+        },
+        {
+          "path": "src/fst-runtime-boot-CPIMF2EE.mjs",
+          "sha256": "f1f2446c6f6d8b12c1ae2c3540449aaaa739e8c964affad98a80c7695bd1f426",
+          "bytes": 987
+        },
+        {
+          "path": "src/fst-runtime-chunk-4522GLHG.mjs",
+          "sha256": "f8d74d7d3f0a7334c587598b4e04a3b18d5bf6e50b79130429d92fb85bfbea24",
+          "bytes": 175
+        },
+        {
+          "path": "src/fst-runtime-chunk-4S4DE3MB.mjs",
+          "sha256": "4b97279f4efac96a5d7d2169c4534954d900793ee553fb00572dbd0c2500303a",
+          "bytes": 225681
+        },
+        {
+          "path": "src/fst-runtime-chunk-BMYVYPL3.mjs",
+          "sha256": "32c3aa9bb70a7a3a4b5a5ece3245643b60604bb090d93945d6a009a3ba29487a",
+          "bytes": 26544
+        },
+        {
+          "path": "src/fst-runtime-chunk-GQUP3XIK.mjs",
+          "sha256": "7db6b73a5dba1ed45e89ce965115bd5bcff2497bf11268dcc59964d6a124d7ae",
+          "bytes": 4184
+        },
+        {
+          "path": "src/fst-runtime-chunk-IFG5XESZ.mjs",
+          "sha256": "79ceb97906eea0769c5040c9157ca669c3393598b9be192b323e77e68841e569",
+          "bytes": 73585
+        },
+        {
+          "path": "src/fst-runtime-chunk-LLJAWI2B.mjs",
+          "sha256": "b6d51377f7504bd0f87182d13c962d303a13b91ed650bf346c6b6e2901fa365e",
+          "bytes": 368
+        },
+        {
+          "path": "src/fst-runtime-chunk-NJPEA5BU.mjs",
+          "sha256": "94245a8ef4aeb1461f03c34090a7734ef5a56e2ef9cd5d3a546f052e36e65d76",
+          "bytes": 83337
+        },
+        {
+          "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
+          "sha256": "ed55af36405c9a04a2c2e001ca9ebae8d7903b63657f9c6c6eedbb4f9e46b5a5",
+          "bytes": 1203
+        },
+        {
+          "path": "src/fst-runtime-chunk-RAGUF2ZT.mjs",
+          "sha256": "79c1391300462b4da9d6f5282191dea96047ef2bfe375d3254b98a3154b0e062",
+          "bytes": 20558
+        },
+        {
+          "path": "src/fst-runtime-chunk-V5LGIZZC.mjs",
+          "sha256": "9c910139b2ee3c070a073f8ae1ba08a0f87998689b9db751f196b3d9be3078a0",
+          "bytes": 1772
+        },
+        {
+          "path": "assets/vendor/fst-ethers-AC8C3F0501B5B74B.js",
+          "sha256": "ac8c3f0501b5b74bde475efc7380c249edfd91c803609ad95123e6a0f715ab53",
+          "bytes": 64895
+        },
+        {
+          "path": "src/fst-style-official-18C307AA4B0169AD.css",
+          "sha256": "18c307aa4b0169ad465ba6acc6d1e3945b281d21defb3dcb9167d3a1d6547b8d",
+          "bytes": 77440
+        },
+        {
+          "path": "src/fst-style-manage-290228132083803C.css",
+          "sha256": "290228132083803c2ca41f0a8998f5c612ec60bcf087367b4df6578817ec6df3",
+          "bytes": 15342
+        },
+        {
+          "path": "src/fst-style-ui-BB12D14350DD2CA3.css",
+          "sha256": "bb12d14350dd2ca3524b0b38076241cb81d77d872cedbed2e1b9dde8b7417644",
+          "bytes": 9205
+        }
+      ]
+    },
     {
       "release": "46",
       "sourceCommit": "43e2a07b5999e26c8e05693643a4d19dd3cf79ff",
