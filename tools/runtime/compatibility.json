@@ -1,39 +1,34 @@
 {
-  "schema": 1,
+  "schema": 2,
   "previousRelease": {
-    "release": "45",
-    "sourceCommit": "1c7e01439d2e991444cfeebcc14a6c07de8401ee",
-    "sourceManifestSHA256": "ab64c9f6e79cadf71549a0b536a382c931d1afec8dfa160814f2af70081cc900",
+    "release": "46",
+    "sourceCommit": "43e2a07b5999e26c8e05693643a4d19dd3cf79ff",
+    "sourceManifestSHA256": "a7d9a9cc557c76b62801e6a78a0126e572b0231d06ee4bccd2b1f5c7169dde96",
     "files": [
       {
-        "path": "src/fst-runtime-app-R5MVX4TE.mjs",
-        "sha256": "9eeb1225bca06a9640023e63a1f189d1de972753afb9c13b1f4e478ff3743074",
-        "bytes": 1751
+        "path": "src/fst-runtime-app-VOJ5AII3.mjs",
+        "sha256": "69d06f967e02ded247dc1a9bbc406b9a5e7b62290334ea2e751a615c0a4a5e76",
+        "bytes": 2388
       },
       {
-        "path": "src/fst-runtime-boot-IWZ76Z7O.mjs",
-        "sha256": "c9b9ca6765437f6ed57e9aba9edc1db23dd6e77a36f3d601befb9eea94f8de64",
+        "path": "src/fst-runtime-boot-WZOWKVWM.mjs",
+        "sha256": "b3984cc2d1ef72d793d6a98a19ba2343985767cd50899d12fbf65f466e1fea37",
         "bytes": 987
       },
       {
-        "path": "src/fst-runtime-chunk-BXGCM3QA.mjs",
-        "sha256": "aae99ba08d7004ec0eb8d6958d8564ad6433b56838380218c0db6b31883ca751",
-        "bytes": 225681
+        "path": "src/fst-runtime-chunk-56QFSLB6.mjs",
+        "sha256": "777d1a520ba90c3c3991cceb767873b5c15e62d8a68d543571939ff19c3b7ecc",
+        "bytes": 72617
       },
       {
-        "path": "src/fst-runtime-chunk-EFBK2MBM.mjs",
-        "sha256": "f9c3a50c3deaf6dd2afa01c584978ce0102528b59965b90a574725da6d9d1ef2",
-        "bytes": 175
+        "path": "src/fst-runtime-chunk-ALXNCBXX.mjs",
+        "sha256": "79f6cc89e75756c0b7ff828960c9b6889cd3bb96169478d0339137960c57f00c",
+        "bytes": 20558
       },
       {
-        "path": "src/fst-runtime-chunk-MNOUKSMA.mjs",
-        "sha256": "cf2ece10833efeb57b6f77eb435b61960214be83a27df81cd16e261c310b2875",
-        "bytes": 26544
-      },
-      {
-        "path": "src/fst-runtime-chunk-NNSNZH3G.mjs",
-        "sha256": "ea7392f4af6a3f8038640b247e65d88137f7093b5e7bafaba14eda180334ad04",
-        "bytes": 1772
+        "path": "src/fst-runtime-chunk-DRR5LLQ2.mjs",
+        "sha256": "d2628baec7767a43e4a5de7726ff2c0fd5de30668dc5a1f41fd9f52ea9ce2f50",
+        "bytes": 368
       },
       {
         "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
@@ -41,30 +36,124 @@
         "bytes": 1203
       },
       {
-        "path": "src/fst-runtime-chunk-QAXWFNBN.mjs",
-        "sha256": "08452839bb48a184ad1976db4f9d277b73b2fb91d0e5d4b703e82846feaf1f49",
+        "path": "src/fst-runtime-chunk-PW7FA4JF.mjs",
+        "sha256": "99bf61f2ebec92771fd8aedc92e8a51c70bed82dc537b58ac10535931e13ece8",
+        "bytes": 175
+      },
+      {
+        "path": "src/fst-runtime-chunk-RSEJRI4R.mjs",
+        "sha256": "6e3854f5fff3d2d4744ddf9e07b3d6932dc4f2435545af2fbd2370ea6cd5d19b",
+        "bytes": 1772
+      },
+      {
+        "path": "src/fst-runtime-chunk-SQ2QOUG5.mjs",
+        "sha256": "ce0932ca33e572a104ea0c49e3a3b88189a651afa2ead9e7308c6f3e1e7b6e1e",
         "bytes": 4184
       },
       {
-        "path": "src/fst-runtime-chunk-VXK3OW3T.mjs",
-        "sha256": "dfe0aac6a0a5c0431873c432022fc1f36785cf27f7328825a0df159bba1f7a67",
-        "bytes": 368
+        "path": "src/fst-runtime-chunk-VYK7QDBF.mjs",
+        "sha256": "49ccca2531b86979b5e6c3294f8f0a7cb8939d780c4539404edb7107e04aa1f9",
+        "bytes": 225681
       },
       {
-        "path": "src/fst-runtime-chunk-ZD2AVRFH.mjs",
-        "sha256": "39f3e68dd29adfc834ff05fc480f3464b7670f34ffeda0c562c8961cb0b26417",
-        "bytes": 83215
+        "path": "src/fst-runtime-chunk-W7U34OMN.mjs",
+        "sha256": "c06886e8f9ebfea3796e63cd7d58c5de96065635b43e54a4a3d31c39689075e0",
+        "bytes": 26544
       },
       {
-        "path": "src/fst-runtime-chunk-ZKZJQJRX.mjs",
-        "sha256": "466c51bf37543abab6c05b699ad033a2bff802a3fed27ae588608922a65e5a80",
-        "bytes": 72617
+        "path": "src/fst-runtime-chunk-ZJH42AFB.mjs",
+        "sha256": "e73ca71db5791c92f0a1962a20ac0ca3b0c3455ded7d58a1c2fda8a4b0337c13",
+        "bytes": 83330
       },
       {
-        "path": "src/fst-runtime-chunk-ZT6DWX57.mjs",
-        "sha256": "7ef6095a4e8a84a5de3c006d2e60d9f095df379a3ffdddbfdc112d41056befff",
-        "bytes": 20558
+        "path": "assets/vendor/fst-ethers-FCFD9597005606EA.js",
+        "sha256": "fcfd9597005606eabed524ed9f97df69dbc5cac461119a9bb8a4c6b280cfa3f1",
+        "bytes": 517486
+      },
+      {
+        "path": "src/fst-style-official-18C307AA4B0169AD.css",
+        "sha256": "18c307aa4b0169ad465ba6acc6d1e3945b281d21defb3dcb9167d3a1d6547b8d",
+        "bytes": 77440
+      },
+      {
+        "path": "src/fst-style-manage-290228132083803C.css",
+        "sha256": "290228132083803c2ca41f0a8998f5c612ec60bcf087367b4df6578817ec6df3",
+        "bytes": 15342
+      },
+      {
+        "path": "src/fst-style-ui-BB12D14350DD2CA3.css",
+        "sha256": "bb12d14350dd2ca3524b0b38076241cb81d77d872cedbed2e1b9dde8b7417644",
+        "bytes": 9205
       }
     ]
-  }
+  },
+  "retainedReleases": [
+    {
+      "release": "45",
+      "sourceCommit": "1c7e01439d2e991444cfeebcc14a6c07de8401ee",
+      "sourceManifestSHA256": "ab64c9f6e79cadf71549a0b536a382c931d1afec8dfa160814f2af70081cc900",
+      "files": [
+        {
+          "path": "src/fst-runtime-app-R5MVX4TE.mjs",
+          "sha256": "9eeb1225bca06a9640023e63a1f189d1de972753afb9c13b1f4e478ff3743074",
+          "bytes": 1751
+        },
+        {
+          "path": "src/fst-runtime-boot-IWZ76Z7O.mjs",
+          "sha256": "c9b9ca6765437f6ed57e9aba9edc1db23dd6e77a36f3d601befb9eea94f8de64",
+          "bytes": 987
+        },
+        {
+          "path": "src/fst-runtime-chunk-BXGCM3QA.mjs",
+          "sha256": "aae99ba08d7004ec0eb8d6958d8564ad6433b56838380218c0db6b31883ca751",
+          "bytes": 225681
+        },
+        {
+          "path": "src/fst-runtime-chunk-EFBK2MBM.mjs",
+          "sha256": "f9c3a50c3deaf6dd2afa01c584978ce0102528b59965b90a574725da6d9d1ef2",
+          "bytes": 175
+        },
+        {
+          "path": "src/fst-runtime-chunk-MNOUKSMA.mjs",
+          "sha256": "cf2ece10833efeb57b6f77eb435b61960214be83a27df81cd16e261c310b2875",
+          "bytes": 26544
+        },
+        {
+          "path": "src/fst-runtime-chunk-NNSNZH3G.mjs",
+          "sha256": "ea7392f4af6a3f8038640b247e65d88137f7093b5e7bafaba14eda180334ad04",
+          "bytes": 1772
+        },
+        {
+          "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
+          "sha256": "ed55af36405c9a04a2c2e001ca9ebae8d7903b63657f9c6c6eedbb4f9e46b5a5",
+          "bytes": 1203
+        },
+        {
+          "path": "src/fst-runtime-chunk-QAXWFNBN.mjs",
+          "sha256": "08452839bb48a184ad1976db4f9d277b73b2fb91d0e5d4b703e82846feaf1f49",
+          "bytes": 4184
+        },
+        {
+          "path": "src/fst-runtime-chunk-VXK3OW3T.mjs",
+          "sha256": "dfe0aac6a0a5c0431873c432022fc1f36785cf27f7328825a0df159bba1f7a67",
+          "bytes": 368
+        },
+        {
+          "path": "src/fst-runtime-chunk-ZD2AVRFH.mjs",
+          "sha256": "39f3e68dd29adfc834ff05fc480f3464b7670f34ffeda0c562c8961cb0b26417",
+          "bytes": 83215
+        },
+        {
+          "path": "src/fst-runtime-chunk-ZKZJQJRX.mjs",
+          "sha256": "466c51bf37543abab6c05b699ad033a2bff802a3fed27ae588608922a65e5a80",
+          "bytes": 72617
+        },
+        {
+          "path": "src/fst-runtime-chunk-ZT6DWX57.mjs",
+          "sha256": "7ef6095a4e8a84a5de3c006d2e60d9f095df379a3ffdddbfdc112d41056befff",
+          "bytes": 20558
+        }
+      ]
+    }
+  ]
 }

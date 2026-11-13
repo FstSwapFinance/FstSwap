@@ -1,6 +1,6 @@
-import {SWAP_TOKENS,SWAP_ADAPTERS,swapActiveRouter,swapPublicRpc} from './swap-aggregator.mjs?v=mainnet-20261112-46';
-import {swapService} from './swap-service-client.mjs?v=mainnet-20261112-46';
-import {readWalletBalances} from './swap-balances.mjs?v=mainnet-20261112-46';
+import {SWAP_TOKENS,SWAP_ADAPTERS,swapActiveRouter,swapPublicRpc} from './swap-aggregator.mjs?v=mainnet-20261113-47';
+import {swapService} from './swap-service-client.mjs?v=mainnet-20261113-47';
+import {readWalletBalances} from './swap-balances.mjs?v=mainnet-20261113-47';
 
 const DEFAULT_TOKENS=[
   {...SWAP_TOKENS.usdt,key:'usdt',decimals:18},

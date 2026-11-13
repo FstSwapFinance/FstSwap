@@ -2,57 +2,57 @@
   "schema": 1,
   "esbuildVersion": "0.28.2",
   "entries": {
-    "boot": "src/fst-runtime-boot-WZOWKVWM.mjs",
-    "app": "src/fst-runtime-app-VOJ5AII3.mjs"
+    "boot": "src/fst-runtime-boot-CPIMF2EE.mjs",
+    "app": "src/fst-runtime-app-TKT5BSUB.mjs"
   },
   "files": [
     {
-      "path": "src/fst-runtime-app-VOJ5AII3.mjs",
-      "sha256": "69d06f967e02ded247dc1a9bbc406b9a5e7b62290334ea2e751a615c0a4a5e76",
+      "path": "src/fst-runtime-app-TKT5BSUB.mjs",
+      "sha256": "5bb6421af7d2039df896287d899163da71ae1974d1dfffd4c6c5647b1ae490f9",
       "bytes": 2388,
       "imports": [
         {
-          "path": "src/fst-runtime-chunk-RSEJRI4R.mjs",
+          "path": "src/fst-runtime-chunk-V5LGIZZC.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-VYK7QDBF.mjs",
+          "path": "src/fst-runtime-chunk-4S4DE3MB.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-SQ2QOUG5.mjs",
+          "path": "src/fst-runtime-chunk-GQUP3XIK.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-ZJH42AFB.mjs",
+          "path": "src/fst-runtime-chunk-NJPEA5BU.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-DRR5LLQ2.mjs",
+          "path": "src/fst-runtime-chunk-4MZJTOT2.mjs",
           "kind": "dynamic-import",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-W7U34OMN.mjs",
+          "path": "src/fst-runtime-chunk-6T77ND5C.mjs",
           "kind": "dynamic-import",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-ALXNCBXX.mjs",
+          "path": "src/fst-runtime-chunk-RAGUF2ZT.mjs",
           "kind": "dynamic-import",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-ALXNCBXX.mjs",
+          "path": "src/fst-runtime-chunk-RAGUF2ZT.mjs",
           "kind": "dynamic-import",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-PW7FA4JF.mjs",
+          "path": "src/fst-runtime-chunk-4522GLHG.mjs",
           "kind": "dynamic-import",
           "external": false
         }
@@ -63,22 +63,22 @@
       "entryPoint": "src/app.js"
     },
     {
-      "path": "src/fst-runtime-boot-WZOWKVWM.mjs",
-      "sha256": "b3984cc2d1ef72d793d6a98a19ba2343985767cd50899d12fbf65f466e1fea37",
+      "path": "src/fst-runtime-boot-CPIMF2EE.mjs",
+      "sha256": "f1f2446c6f6d8b12c1ae2c3540449aaaa739e8c964affad98a80c7695bd1f426",
       "bytes": 987,
       "imports": [
         {
-          "path": "src/fst-runtime-chunk-RSEJRI4R.mjs",
+          "path": "src/fst-runtime-chunk-V5LGIZZC.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-SQ2QOUG5.mjs",
+          "path": "src/fst-runtime-chunk-GQUP3XIK.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-ZJH42AFB.mjs",
+          "path": "src/fst-runtime-chunk-NJPEA5BU.mjs",
           "kind": "import-statement",
           "external": false
         }
@@ -89,179 +89,60 @@
       "entryPoint": "src/swap-boot.mjs"
     },
     {
-      "path": "src/fst-runtime-chunk-56QFSLB6.mjs",
-      "sha256": "777d1a520ba90c3c3991cceb767873b5c15e62d8a68d543571939ff19c3b7ecc",
-      "bytes": 72617,
-      "imports": [
-        {
-          "path": "src/fst-runtime-chunk-VYK7QDBF.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-SQ2QOUG5.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-ZJH42AFB.mjs",
-          "kind": "import-statement",
-          "external": false
-        }
-      ],
-      "inputs": [
-        "src/swap-allowance.mjs?v=mainnet-20261112-46",
-        "src/swap-amount.mjs",
-        "src/swap-approval.mjs",
-        "src/swap-fee-assets.mjs?v=mainnet-20261112-46",
-        "src/swap-idle-read.mjs?v=mainnet-20261112-46",
-        "src/swap-preflight.mjs?v=mainnet-20261112-46",
-        "src/swap-quote-context.mjs?v=mainnet-20261112-46",
-        "src/swap-quote-refresh.mjs?v=mainnet-20261112-46",
-        "src/swap-receipt-read.mjs?v=mainnet-20261112-46",
-        "src/swap-send.mjs?v=mainnet-20261112-46",
-        "src/swap-submission-warmup.mjs?v=mainnet-20261112-46",
-        "src/swap-view.mjs?v=mainnet-20261112-46",
-        "src/swap-wallet-timing.mjs?v=mainnet-20261112-46"
-      ]
-    },
-    {
-      "path": "src/fst-runtime-chunk-ALXNCBXX.mjs",
-      "sha256": "79f6cc89e75756c0b7ff828960c9b6889cd3bb96169478d0339137960c57f00c",
-      "bytes": 20558,
-      "imports": [
-        {
-          "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-VYK7QDBF.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-SQ2QOUG5.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-ZJH42AFB.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "../assets/official/vendor/lightweight-charts.esm.production.js",
-          "kind": "dynamic-import",
-          "external": true
-        }
-      ],
-      "inputs": [
-        "src/swap-analysis-data.mjs?v=mainnet-20261112-46",
-        "src/swap-market-data.mjs?v=review-20261110-3",
-        "src/swap-pages.mjs?v=mainnet-20261112-46"
-      ],
-      "entryPoint": "src/swap-pages.mjs?v=mainnet-20261112-46"
-    },
-    {
-      "path": "src/fst-runtime-chunk-DRR5LLQ2.mjs",
-      "sha256": "d2628baec7767a43e4a5de7726ff2c0fd5de30668dc5a1f41fd9f52ea9ce2f50",
-      "bytes": 368,
-      "imports": [
-        {
-          "path": "src/fst-runtime-chunk-56QFSLB6.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-VYK7QDBF.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-SQ2QOUG5.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-ZJH42AFB.mjs",
-          "kind": "import-statement",
-          "external": false
-        }
-      ],
-      "inputs": [],
-      "entryPoint": "src/swap-view.mjs?v=mainnet-20261112-46"
-    },
-    {
-      "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
-      "sha256": "ed55af36405c9a04a2c2e001ca9ebae8d7903b63657f9c6c6eedbb4f9e46b5a5",
-      "bytes": 1203,
-      "imports": [],
-      "inputs": [
-        "src/swap-pool-data.mjs"
-      ]
-    },
-    {
-      "path": "src/fst-runtime-chunk-PW7FA4JF.mjs",
-      "sha256": "99bf61f2ebec92771fd8aedc92e8a51c70bed82dc537b58ac10535931e13ece8",
+      "path": "src/fst-runtime-chunk-4522GLHG.mjs",
+      "sha256": "f8d74d7d3f0a7334c587598b4e04a3b18d5bf6e50b79130429d92fb85bfbea24",
       "bytes": 175,
       "imports": [
         {
-          "path": "src/fst-runtime-chunk-ZJH42AFB.mjs",
+          "path": "src/fst-runtime-chunk-NJPEA5BU.mjs",
           "kind": "import-statement",
           "external": false
         }
       ],
       "inputs": [],
-      "entryPoint": "src/swap-service-client.mjs?v=mainnet-20261112-46"
+      "entryPoint": "src/swap-service-client.mjs?v=mainnet-20261113-47"
     },
     {
-      "path": "src/fst-runtime-chunk-RSEJRI4R.mjs",
-      "sha256": "6e3854f5fff3d2d4744ddf9e07b3d6932dc4f2435545af2fbd2370ea6cd5d19b",
-      "bytes": 1772,
+      "path": "src/fst-runtime-chunk-4MZJTOT2.mjs",
+      "sha256": "70b3cb2dbecc244a3e1c2eefb8e6a5a60aa7ca12d1f980e1bdef8b72a9a70f1c",
+      "bytes": 368,
       "imports": [
         {
-          "path": "src/fst-runtime-chunk-SQ2QOUG5.mjs",
+          "path": "src/fst-runtime-chunk-OL2LZQZR.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-ZJH42AFB.mjs",
+          "path": "src/fst-runtime-chunk-4S4DE3MB.mjs",
           "kind": "import-statement",
           "external": false
-        }
-      ],
-      "inputs": [
-        "src/swap-startup.mjs?v=mainnet-20261112-46"
-      ]
-    },
-    {
-      "path": "src/fst-runtime-chunk-SQ2QOUG5.mjs",
-      "sha256": "ce0932ca33e572a104ea0c49e3a3b88189a651afa2ead9e7308c6f3e1e7b6e1e",
-      "bytes": 4184,
-      "imports": [
+        },
         {
-          "path": "src/fst-runtime-chunk-ZJH42AFB.mjs",
+          "path": "src/fst-runtime-chunk-GQUP3XIK.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-NJPEA5BU.mjs",
           "kind": "import-statement",
           "external": false
         }
       ],
-      "inputs": [
-        "src/swap-balances.mjs?v=mainnet-20261112-46"
-      ]
+      "inputs": [],
+      "entryPoint": "src/swap-view.mjs?v=mainnet-20261113-47"
     },
     {
-      "path": "src/fst-runtime-chunk-VYK7QDBF.mjs",
-      "sha256": "49ccca2531b86979b5e6c3294f8f0a7cb8939d780c4539404edb7107e04aa1f9",
+      "path": "src/fst-runtime-chunk-4S4DE3MB.mjs",
+      "sha256": "4b97279f4efac96a5d7d2169c4534954d900793ee553fb00572dbd0c2500303a",
       "bytes": 225681,
       "imports": [
         {
-          "path": "src/fst-runtime-chunk-SQ2QOUG5.mjs",
+          "path": "src/fst-runtime-chunk-GQUP3XIK.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-ZJH42AFB.mjs",
+          "path": "src/fst-runtime-chunk-NJPEA5BU.mjs",
           "kind": "import-statement",
           "external": false
         },
@@ -280,24 +161,24 @@
         "src/swap-default-tokens.mjs",
         "src/swap-jazzicon.mjs?v=official-20261109",
         "src/swap-manage-tpl.mjs?v=fstsi-v10-20261110",
-        "src/swap-manage.mjs?v=mainnet-20261112-46",
+        "src/swap-manage.mjs?v=mainnet-20261113-47",
         "src/swap-official-tpl.mjs?v=official-20261112-41",
-        "src/swap-shell.mjs?v=mainnet-20261112-46",
+        "src/swap-shell.mjs?v=mainnet-20261113-47",
         "src/swap-token-lists.mjs?v=manage-20261110-1",
         "src/swap-token-logo-cache.mjs",
         "src/swap-token-logo.mjs",
         "src/swap-ui.mjs?v=review-20261110-3",
-        "src/swap-wallet.mjs?v=mainnet-20261112-46",
+        "src/swap-wallet.mjs?v=mainnet-20261113-47",
         "src/token-catalog.mjs"
       ]
     },
     {
-      "path": "src/fst-runtime-chunk-W7U34OMN.mjs",
-      "sha256": "c06886e8f9ebfea3796e63cd7d58c5de96065635b43e54a4a3d31c39689075e0",
+      "path": "src/fst-runtime-chunk-6T77ND5C.mjs",
+      "sha256": "6ce330813f4f6ffa4321d4f8e91b8995ae51d4b23d7455501c5deae04dd39bfe",
       "bytes": 26544,
       "imports": [
         {
-          "path": "src/fst-runtime-chunk-56QFSLB6.mjs",
+          "path": "src/fst-runtime-chunk-OL2LZQZR.mjs",
           "kind": "import-statement",
           "external": false
         },
@@ -307,50 +188,181 @@
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-VYK7QDBF.mjs",
+          "path": "src/fst-runtime-chunk-4S4DE3MB.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-SQ2QOUG5.mjs",
+          "path": "src/fst-runtime-chunk-GQUP3XIK.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-ZJH42AFB.mjs",
+          "path": "src/fst-runtime-chunk-NJPEA5BU.mjs",
           "kind": "import-statement",
           "external": false
         }
       ],
       "inputs": [
-        "src/swap-pool.mjs?v=mainnet-20261112-46"
+        "src/swap-pool.mjs?v=mainnet-20261113-47"
       ],
-      "entryPoint": "src/swap-pool.mjs?v=mainnet-20261112-46"
+      "entryPoint": "src/swap-pool.mjs?v=mainnet-20261113-47"
     },
     {
-      "path": "src/fst-runtime-chunk-ZJH42AFB.mjs",
-      "sha256": "e73ca71db5791c92f0a1962a20ac0ca3b0c3455ded7d58a1c2fda8a4b0337c13",
-      "bytes": 83330,
+      "path": "src/fst-runtime-chunk-GQUP3XIK.mjs",
+      "sha256": "7db6b73a5dba1ed45e89ce965115bd5bcff2497bf11268dcc59964d6a124d7ae",
+      "bytes": 4184,
+      "imports": [
+        {
+          "path": "src/fst-runtime-chunk-NJPEA5BU.mjs",
+          "kind": "import-statement",
+          "external": false
+        }
+      ],
+      "inputs": [
+        "src/swap-balances.mjs?v=mainnet-20261113-47"
+      ]
+    },
+    {
+      "path": "src/fst-runtime-chunk-NJPEA5BU.mjs",
+      "sha256": "94245a8ef4aeb1461f03c34090a7734ef5a56e2ef9cd5d3a546f052e36e65d76",
+      "bytes": 83337,
       "imports": [],
       "inputs": [
-        "src/fstswap-config.mjs?v=mainnet-20261112-46",
-        "src/swap-aggregator.mjs?v=mainnet-20261112-46",
-        "src/swap-fstswap.mjs?v=mainnet-20261112-46",
-        "src/swap-liquidity.mjs?v=mainnet-20261112-46",
-        "src/swap-read-codec.mjs?v=mainnet-20261112-46",
-        "src/swap-receipt.mjs?v=mainnet-20261112-46",
-        "src/swap-rpc-work.mjs?v=mainnet-20261112-46",
-        "src/swap-service-client.mjs?v=mainnet-20261112-46",
-        "src/swap-service-clock.mjs?v=mainnet-20261112-46"
+        "src/fstswap-config.mjs?v=mainnet-20261113-47",
+        "src/swap-aggregator.mjs?v=mainnet-20261113-47",
+        "src/swap-fstswap.mjs?v=mainnet-20261113-47",
+        "src/swap-liquidity.mjs?v=mainnet-20261113-47",
+        "src/swap-read-codec.mjs?v=mainnet-20261113-47",
+        "src/swap-receipt.mjs?v=mainnet-20261113-47",
+        "src/swap-rpc-work.mjs?v=mainnet-20261113-47",
+        "src/swap-service-client.mjs?v=mainnet-20261113-47",
+        "src/swap-service-clock.mjs?v=mainnet-20261113-47"
+      ]
+    },
+    {
+      "path": "src/fst-runtime-chunk-OL2LZQZR.mjs",
+      "sha256": "6bdd3165d1a800af06732359dab0141a16743c5dd5e80c61570e1ba095f40ce6",
+      "bytes": 72617,
+      "imports": [
+        {
+          "path": "src/fst-runtime-chunk-4S4DE3MB.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-GQUP3XIK.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-NJPEA5BU.mjs",
+          "kind": "import-statement",
+          "external": false
+        }
+      ],
+      "inputs": [
+        "src/swap-allowance.mjs?v=mainnet-20261113-47",
+        "src/swap-amount.mjs",
+        "src/swap-approval.mjs",
+        "src/swap-fee-assets.mjs?v=mainnet-20261113-47",
+        "src/swap-idle-read.mjs?v=mainnet-20261113-47",
+        "src/swap-preflight.mjs?v=mainnet-20261113-47",
+        "src/swap-quote-context.mjs?v=mainnet-20261113-47",
+        "src/swap-quote-refresh.mjs?v=mainnet-20261113-47",
+        "src/swap-receipt-read.mjs?v=mainnet-20261113-47",
+        "src/swap-send.mjs?v=mainnet-20261113-47",
+        "src/swap-submission-warmup.mjs?v=mainnet-20261113-47",
+        "src/swap-view.mjs?v=mainnet-20261113-47",
+        "src/swap-wallet-timing.mjs?v=mainnet-20261113-47"
+      ]
+    },
+    {
+      "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
+      "sha256": "ed55af36405c9a04a2c2e001ca9ebae8d7903b63657f9c6c6eedbb4f9e46b5a5",
+      "bytes": 1203,
+      "imports": [],
+      "inputs": [
+        "src/swap-pool-data.mjs"
+      ]
+    },
+    {
+      "path": "src/fst-runtime-chunk-RAGUF2ZT.mjs",
+      "sha256": "79c1391300462b4da9d6f5282191dea96047ef2bfe375d3254b98a3154b0e062",
+      "bytes": 20558,
+      "imports": [
+        {
+          "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-4S4DE3MB.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-GQUP3XIK.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-NJPEA5BU.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "../assets/official/vendor/lightweight-charts.esm.production.js",
+          "kind": "dynamic-import",
+          "external": true
+        }
+      ],
+      "inputs": [
+        "src/swap-analysis-data.mjs?v=mainnet-20261113-47",
+        "src/swap-market-data.mjs?v=review-20261110-3",
+        "src/swap-pages.mjs?v=mainnet-20261113-47"
+      ],
+      "entryPoint": "src/swap-pages.mjs?v=mainnet-20261113-47"
+    },
+    {
+      "path": "src/fst-runtime-chunk-V5LGIZZC.mjs",
+      "sha256": "9c910139b2ee3c070a073f8ae1ba08a0f87998689b9db751f196b3d9be3078a0",
+      "bytes": 1772,
+      "imports": [
+        {
+          "path": "src/fst-runtime-chunk-GQUP3XIK.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-NJPEA5BU.mjs",
+          "kind": "import-statement",
+          "external": false
+        }
+      ],
+      "inputs": [
+        "src/swap-startup.mjs?v=mainnet-20261113-47"
       ]
     }
   ],
   "cacheAssets": [
     {
-      "source": "assets/vendor/ethers.umd.min.js",
-      "path": "assets/vendor/fst-ethers-FCFD9597005606EA.js",
-      "sha256": "fcfd9597005606eabed524ed9f97df69dbc5cac461119a9bb8a4c6b280cfa3f1",
-      "bytes": 517486
+      "kind": "generated-ethers",
+      "source": "tools/runtime/ethers-entry.mjs",
+      "package": "ethers",
+      "version": "6.15.0",
+      "exports": [
+        "Interface",
+        "AbiCoder",
+        "getAddress",
+        "parseUnits",
+        "formatUnits",
+        "decodeBytes32String"
+      ],
+      "path": "assets/vendor/fst-ethers-AC8C3F0501B5B74B.js",
+      "sha256": "ac8c3f0501b5b74bde475efc7380c249edfd91c803609ad95123e6a0f715ab53",
+      "bytes": 64895,
+      "license": "assets/vendor/ethers-6.15.0-fst.LICENSE.txt"
     },
     {
       "source": "src/swap-official.css",
@@ -371,12 +383,207 @@
       "bytes": 9205
     }
   ],
+  "mutableAssets": [
+    {
+      "kind": "generated-ethers-alias",
+      "source": "tools/runtime/ethers-entry.mjs",
+      "path": "assets/vendor/ethers-6.15.0-fst.min.js",
+      "sha256": "ac8c3f0501b5b74bde475efc7380c249edfd91c803609ad95123e6a0f715ab53",
+      "bytes": 64895
+    },
+    {
+      "kind": "generated-ethers-license",
+      "path": "assets/vendor/ethers-6.15.0-fst.LICENSE.txt",
+      "sha256": "39474ad9b2bcc0992a26469546f18267bd4b08f160099df48de6a28286dfa50f",
+      "bytes": 2596,
+      "packages": [
+        {
+          "name": "@noble/hashes",
+          "version": "1.3.2",
+          "license": "MIT",
+          "source": "tools/runtime/node_modules/@noble/hashes/LICENSE",
+          "sha256": "4f221aee6e072336700c408c68ab3b96a3fc09f6aebe6f48f1bd99e5ef13faec"
+        },
+        {
+          "name": "ethers",
+          "version": "6.15.0",
+          "license": "MIT",
+          "source": "tools/runtime/node_modules/ethers/LICENSE.md",
+          "sha256": "44eea86637405118248327fbe9d9fa95d04c7a57221c7e8c155f736db9f1b612"
+        }
+      ]
+    }
+  ],
+  "routePreloads": {
+    "swap": [
+      "src/fst-runtime-chunk-NJPEA5BU.mjs",
+      "src/fst-runtime-chunk-GQUP3XIK.mjs",
+      "src/fst-runtime-chunk-V5LGIZZC.mjs",
+      "src/fst-runtime-boot-CPIMF2EE.mjs",
+      "src/fst-runtime-chunk-4S4DE3MB.mjs",
+      "src/fst-runtime-app-TKT5BSUB.mjs",
+      "src/fst-runtime-chunk-4522GLHG.mjs",
+      "src/fst-runtime-chunk-OL2LZQZR.mjs",
+      "src/fst-runtime-chunk-4MZJTOT2.mjs"
+    ],
+    "analysis": [
+      "src/fst-runtime-chunk-NJPEA5BU.mjs",
+      "src/fst-runtime-chunk-GQUP3XIK.mjs",
+      "src/fst-runtime-chunk-V5LGIZZC.mjs",
+      "src/fst-runtime-boot-CPIMF2EE.mjs",
+      "src/fst-runtime-chunk-4S4DE3MB.mjs",
+      "src/fst-runtime-app-TKT5BSUB.mjs",
+      "src/fst-runtime-chunk-4522GLHG.mjs",
+      "src/fst-runtime-chunk-POGXVOZ4.mjs",
+      "src/fst-runtime-chunk-RAGUF2ZT.mjs"
+    ],
+    "my": [
+      "src/fst-runtime-chunk-NJPEA5BU.mjs",
+      "src/fst-runtime-chunk-GQUP3XIK.mjs",
+      "src/fst-runtime-chunk-V5LGIZZC.mjs",
+      "src/fst-runtime-boot-CPIMF2EE.mjs",
+      "src/fst-runtime-chunk-4S4DE3MB.mjs",
+      "src/fst-runtime-app-TKT5BSUB.mjs",
+      "src/fst-runtime-chunk-4522GLHG.mjs",
+      "src/fst-runtime-chunk-POGXVOZ4.mjs",
+      "src/fst-runtime-chunk-RAGUF2ZT.mjs"
+    ],
+    "pool": [
+      "src/fst-runtime-chunk-NJPEA5BU.mjs",
+      "src/fst-runtime-chunk-GQUP3XIK.mjs",
+      "src/fst-runtime-chunk-V5LGIZZC.mjs",
+      "src/fst-runtime-boot-CPIMF2EE.mjs",
+      "src/fst-runtime-chunk-4S4DE3MB.mjs",
+      "src/fst-runtime-app-TKT5BSUB.mjs",
+      "src/fst-runtime-chunk-4522GLHG.mjs",
+      "src/fst-runtime-chunk-OL2LZQZR.mjs",
+      "src/fst-runtime-chunk-POGXVOZ4.mjs",
+      "src/fst-runtime-chunk-6T77ND5C.mjs"
+    ],
+    "add": [
+      "src/fst-runtime-chunk-NJPEA5BU.mjs",
+      "src/fst-runtime-chunk-GQUP3XIK.mjs",
+      "src/fst-runtime-chunk-V5LGIZZC.mjs",
+      "src/fst-runtime-boot-CPIMF2EE.mjs",
+      "src/fst-runtime-chunk-4S4DE3MB.mjs",
+      "src/fst-runtime-app-TKT5BSUB.mjs",
+      "src/fst-runtime-chunk-4522GLHG.mjs",
+      "src/fst-runtime-chunk-OL2LZQZR.mjs",
+      "src/fst-runtime-chunk-POGXVOZ4.mjs",
+      "src/fst-runtime-chunk-6T77ND5C.mjs"
+    ],
+    "remove": [
+      "src/fst-runtime-chunk-NJPEA5BU.mjs",
+      "src/fst-runtime-chunk-GQUP3XIK.mjs",
+      "src/fst-runtime-chunk-V5LGIZZC.mjs",
+      "src/fst-runtime-boot-CPIMF2EE.mjs",
+      "src/fst-runtime-chunk-4S4DE3MB.mjs",
+      "src/fst-runtime-app-TKT5BSUB.mjs",
+      "src/fst-runtime-chunk-4522GLHG.mjs",
+      "src/fst-runtime-chunk-OL2LZQZR.mjs",
+      "src/fst-runtime-chunk-POGXVOZ4.mjs",
+      "src/fst-runtime-chunk-6T77ND5C.mjs"
+    ]
+  },
+  "preloadPriority": [
+    "src/fst-runtime-chunk-NJPEA5BU.mjs",
+    "src/fst-runtime-chunk-GQUP3XIK.mjs",
+    "src/fst-runtime-chunk-V5LGIZZC.mjs",
+    "src/fst-runtime-boot-CPIMF2EE.mjs"
+  ],
   "compatibility": {
-    "release": "45",
-    "sourceCommit": "1c7e01439d2e991444cfeebcc14a6c07de8401ee",
-    "sourceManifestSHA256": "ab64c9f6e79cadf71549a0b536a382c931d1afec8dfa160814f2af70081cc900"
+    "release": "46",
+    "sourceCommit": "43e2a07b5999e26c8e05693643a4d19dd3cf79ff",
+    "sourceManifestSHA256": "a7d9a9cc557c76b62801e6a78a0126e572b0231d06ee4bccd2b1f5c7169dde96",
+    "retainedReleases": [
+      {
+        "release": "45",
+        "sourceCommit": "1c7e01439d2e991444cfeebcc14a6c07de8401ee",
+        "sourceManifestSHA256": "ab64c9f6e79cadf71549a0b536a382c931d1afec8dfa160814f2af70081cc900"
+      }
+    ]
   },
   "compatibilityAssets": [
+    {
+      "path": "src/fst-runtime-app-VOJ5AII3.mjs",
+      "sha256": "69d06f967e02ded247dc1a9bbc406b9a5e7b62290334ea2e751a615c0a4a5e76",
+      "bytes": 2388
+    },
+    {
+      "path": "src/fst-runtime-boot-WZOWKVWM.mjs",
+      "sha256": "b3984cc2d1ef72d793d6a98a19ba2343985767cd50899d12fbf65f466e1fea37",
+      "bytes": 987
+    },
+    {
+      "path": "src/fst-runtime-chunk-56QFSLB6.mjs",
+      "sha256": "777d1a520ba90c3c3991cceb767873b5c15e62d8a68d543571939ff19c3b7ecc",
+      "bytes": 72617
+    },
+    {
+      "path": "src/fst-runtime-chunk-ALXNCBXX.mjs",
+      "sha256": "79f6cc89e75756c0b7ff828960c9b6889cd3bb96169478d0339137960c57f00c",
+      "bytes": 20558
+    },
+    {
+      "path": "src/fst-runtime-chunk-DRR5LLQ2.mjs",
+      "sha256": "d2628baec7767a43e4a5de7726ff2c0fd5de30668dc5a1f41fd9f52ea9ce2f50",
+      "bytes": 368
+    },
+    {
+      "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
+      "sha256": "ed55af36405c9a04a2c2e001ca9ebae8d7903b63657f9c6c6eedbb4f9e46b5a5",
+      "bytes": 1203
+    },
+    {
+      "path": "src/fst-runtime-chunk-PW7FA4JF.mjs",
+      "sha256": "99bf61f2ebec92771fd8aedc92e8a51c70bed82dc537b58ac10535931e13ece8",
+      "bytes": 175
+    },
+    {
+      "path": "src/fst-runtime-chunk-RSEJRI4R.mjs",
+      "sha256": "6e3854f5fff3d2d4744ddf9e07b3d6932dc4f2435545af2fbd2370ea6cd5d19b",
+      "bytes": 1772
+    },
+    {
+      "path": "src/fst-runtime-chunk-SQ2QOUG5.mjs",
+      "sha256": "ce0932ca33e572a104ea0c49e3a3b88189a651afa2ead9e7308c6f3e1e7b6e1e",
+      "bytes": 4184
+    },
+    {
+      "path": "src/fst-runtime-chunk-VYK7QDBF.mjs",
+      "sha256": "49ccca2531b86979b5e6c3294f8f0a7cb8939d780c4539404edb7107e04aa1f9",
+      "bytes": 225681
+    },
+    {
+      "path": "src/fst-runtime-chunk-W7U34OMN.mjs",
+      "sha256": "c06886e8f9ebfea3796e63cd7d58c5de96065635b43e54a4a3d31c39689075e0",
+      "bytes": 26544
+    },
+    {
+      "path": "src/fst-runtime-chunk-ZJH42AFB.mjs",
+      "sha256": "e73ca71db5791c92f0a1962a20ac0ca3b0c3455ded7d58a1c2fda8a4b0337c13",
+      "bytes": 83330
+    },
+    {
+      "path": "assets/vendor/fst-ethers-FCFD9597005606EA.js",
+      "sha256": "fcfd9597005606eabed524ed9f97df69dbc5cac461119a9bb8a4c6b280cfa3f1",
+      "bytes": 517486
+    },
+    {
+      "path": "src/fst-style-official-18C307AA4B0169AD.css",
+      "sha256": "18c307aa4b0169ad465ba6acc6d1e3945b281d21defb3dcb9167d3a1d6547b8d",
+      "bytes": 77440
+    },
+    {
+      "path": "src/fst-style-manage-290228132083803C.css",
+      "sha256": "290228132083803c2ca41f0a8998f5c612ec60bcf087367b4df6578817ec6df3",
+      "bytes": 15342
+    },
+    {
+      "path": "src/fst-style-ui-BB12D14350DD2CA3.css",
+      "sha256": "bb12d14350dd2ca3524b0b38076241cb81d77d872cedbed2e1b9dde8b7417644",
+      "bytes": 9205
+    },
     {
       "path": "src/fst-runtime-app-R5MVX4TE.mjs",
       "sha256": "9eeb1225bca06a9640023e63a1f189d1de972753afb9c13b1f4e478ff3743074",
@@ -408,11 +615,6 @@
       "bytes": 1772
     },
     {
-      "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
-      "sha256": "ed55af36405c9a04a2c2e001ca9ebae8d7903b63657f9c6c6eedbb4f9e46b5a5",
-      "bytes": 1203
-    },
-    {
       "path": "src/fst-runtime-chunk-QAXWFNBN.mjs",
       "sha256": "08452839bb48a184ad1976db4f9d277b73b2fb91d0e5d4b703e82846feaf1f49",
       "bytes": 4184
@@ -440,12 +642,8 @@
   ],
   "sources": [
     {
-      "path": "assets/vendor/ethers.umd.min.js",
-      "sha256": "fcfd9597005606eabed524ed9f97df69dbc5cac461119a9bb8a4c6b280cfa3f1"
-    },
-    {
       "path": "src/app.js",
-      "sha256": "b4ff06edf43ce230f60f32d1ed2b971f20ade28e30aab291627d7fbbd60ee3d8"
+      "sha256": "6b8a083ca1c061f19598a846cd3f0c5454b480fc18dc470639f688edcc7edb01"
     },
     {
       "path": "src/fstswap-config.mjs",
@@ -453,7 +651,7 @@
     },
     {
       "path": "src/swap-aggregator.mjs",
-      "sha256": "4d8bd7bde4d88550e43a6ef0a872ccb4b9f0876bdb9160062d98cf3629097cff"
+      "sha256": "987eb302ddb2c66e4af7a7c2a9b1e1b544ba9dbeb429c07420a02a13f77f3e5a"
     },
     {
       "path": "src/swap-allowance.mjs",
@@ -473,11 +671,11 @@
     },
     {
       "path": "src/swap-balances.mjs",
-      "sha256": "5050fbce3a7dc37a35ab888013e12151491c36c5181af5d0dab32bcfef16f5cb"
+      "sha256": "3888586433fd5e64e01bc9f1f6d017a2e3023f33d3decfc2a4709baff333d81b"
     },
     {
       "path": "src/swap-boot.mjs",
-      "sha256": "aa3539b77257874e26320c8c6d65863619bc0493735a94026193a7924245ac77"
+      "sha256": "d0907845ad135bd0185dc06290d464c40ca21a8fd525bede17943f601ed1b8e2"
     },
     {
       "path": "src/swap-default-tokens.mjs",
@@ -489,7 +687,7 @@
     },
     {
       "path": "src/swap-fstswap.mjs",
-      "sha256": "57be9d87a7e987d522fa6dff176ffe916461d4d2a29cc545c45c6f131153a144"
+      "sha256": "2b7d2e323db8e84a1204ff0328ad1cec4f6dcb2eaac67974733848bfcb7d4bec"
     },
     {
       "path": "src/swap-idle-read.mjs",
@@ -501,7 +699,7 @@
     },
     {
       "path": "src/swap-liquidity.mjs",
-      "sha256": "32cd531913c2816edd93d0ba7d794d3f4839ee5f1b006421a7715e162dcef0ec"
+      "sha256": "45a95dbeb22bff6775418a536d33a83f2b3c75197f2ea68821c767a097070462"
     },
     {
       "path": "src/swap-manage-tpl.mjs",
@@ -513,7 +711,7 @@
     },
     {
       "path": "src/swap-manage.mjs",
-      "sha256": "0fd449778fedb48e6b9c8883d21e4135abbe2659243fc729c896fe1ea6ef3001"
+      "sha256": "991cc660b97a49f503eeec3577ddc4211cfc8b8fcab033e0fe8c8a61f66ac1a2"
     },
     {
       "path": "src/swap-market-data.mjs",
@@ -529,7 +727,7 @@
     },
     {
       "path": "src/swap-pages.mjs",
-      "sha256": "9c9e092e3eed45495c37f9f9a1d3acceadfea1df77bfed48da41415fb2298e1f"
+      "sha256": "9ed560779ff144ed7de8bb35e577ee9e02712e5cff0af17513e2203d229f89dd"
     },
     {
       "path": "src/swap-pool-data.mjs",
@@ -537,7 +735,7 @@
     },
     {
       "path": "src/swap-pool.mjs",
-      "sha256": "24749d74145b3d052e6739db223fc828e7fb358d967775a02390355f2d691718"
+      "sha256": "657f84b7c65bc84ac1f08f0c06a514732ed310afa0486ee6248f581f7cee589e"
     },
     {
       "path": "src/swap-preflight.mjs",
@@ -545,7 +743,7 @@
     },
     {
       "path": "src/swap-quote-context.mjs",
-      "sha256": "e8ee0138496aefab8a8ebc13432daca9efe8527cebb1dba828b8eb5cfdd22846"
+      "sha256": "b85ee1df5ee4a27e30d8815b2d34992af771bb7536b6bb5f18bbad9506b555d9"
     },
     {
       "path": "src/swap-quote-refresh.mjs",
@@ -569,11 +767,11 @@
     },
     {
       "path": "src/swap-send.mjs",
-      "sha256": "28cf42bc3927e6e77221a581a604917ae9be6b0fc2672d2f9c1a33bab53c17c4"
+      "sha256": "a091bab3e15c52dc121442789d781855eb4a19bcdd52adedb2f94e83ff892f0e"
     },
     {
       "path": "src/swap-service-client.mjs",
-      "sha256": "1d4324818429a9188e3c35d0bdcb4d928997acd83a82bf381ca575b6823858d2"
+      "sha256": "8240083bf56d503dc9ec5072db90064390b6f448c0dcbacdf82d7c0ec9a4ba5f"
     },
     {
       "path": "src/swap-service-clock.mjs",
@@ -581,11 +779,11 @@
     },
     {
       "path": "src/swap-shell.mjs",
-      "sha256": "ae0a91ba679a1f5672f5a47d2c4e1fb416e61cdfa582cddd2e584e5293e6b6b7"
+      "sha256": "18f7df573f4e38d33dd9fd7a7d1b7a998d6759d23507f441198148f21b90cb3c"
     },
     {
       "path": "src/swap-startup.mjs",
-      "sha256": "fb3d66cab6efd33702646ebdf4792cbfc6e95b5cf1f516575a010007e5962907"
+      "sha256": "d0fbd99d0fc2e04018bfbb294f65e09792a97feebdd6e657b97db8fe36c1b18b"
     },
     {
       "path": "src/swap-submission-warmup.mjs",
@@ -613,7 +811,7 @@
     },
     {
       "path": "src/swap-view.mjs",
-      "sha256": "33b20b122d69c83a9915e471189fb0f2f66bce23b019ff5ec04a728989d03c96"
+      "sha256": "2bc260de41b0553ce4ae198e5b667a537808f810b4292bcb78f8023b30c17acd"
     },
     {
       "path": "src/swap-wallet-timing.mjs",
@@ -629,19 +827,627 @@
     },
     {
       "path": "tools/runtime/build.mjs",
-      "sha256": "a920a715ec6472aa95084ff017889ae4f954583523a1a8bf3f47e2c2cf4347c9"
+      "sha256": "c1b83ef1fe83c957ba25d277310e7f4abdce20e3eedc85485ed72ca5d45bddba"
     },
     {
       "path": "tools/runtime/compatibility.json",
-      "sha256": "464837ced0fbe3f6405fa5d7a92840111c8f5d04e77756f7a8d2bd46b02d5153"
+      "sha256": "d0fc0a3eafc56e56964c85b66738a76278c4e3a8d03bf2629460c46304d01975"
+    },
+    {
+      "path": "tools/runtime/ethers-entry.mjs",
+      "sha256": "03d2d7ebee18657e23c4ab9a4c1af136a0d3441d337573ff81f308213053c74a"
+    },
+    {
+      "path": "tools/runtime/node_modules/@adraffy/ens-normalize/dist/index.mjs",
+      "sha256": "5981d1d7e7014029a5c6326343ee3506768e299c205e31229fefd6e5df52e4d9"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/curves/esm/_shortw_utils.js",
+      "sha256": "320767dbeaae6c29d59a457fcbd3952a04133374b01d92efb5729b6451535b90"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/curves/esm/abstract/curve.js",
+      "sha256": "0f67d7a6780bee1bf53ca27107292795275f29e373f4810e7403c674e5399b10"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/curves/esm/abstract/hash-to-curve.js",
+      "sha256": "e02fe9ff8304188d9e82073747a6f97b219a43a26039e28ba2f540ff256c56f6"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/curves/esm/abstract/modular.js",
+      "sha256": "33b756ce7b13dba500aa3a6f2f1a2c32797199fff874e6b30219ace87a4199fd"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/curves/esm/abstract/utils.js",
+      "sha256": "84c4708891bbf3421c0dd9e166596b9062cef8f8080b3f2c46f980295f9f46e0"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/curves/esm/abstract/weierstrass.js",
+      "sha256": "67f8391371032c777aefc4aa2bf470d600387b4a19b579b9ea0c4c4aa74bace9"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/curves/esm/secp256k1.js",
+      "sha256": "8567fd1232aeec0783f65b08f479922457da4affe7a95ea87ce22938105bf6ad"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/hashes/LICENSE",
+      "sha256": "4f221aee6e072336700c408c68ab3b96a3fc09f6aebe6f48f1bd99e5ef13faec"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/hashes/esm/_assert.js",
+      "sha256": "bd2a0bc5053296f825380b684bdd0d1ee1df149c179cdc53a4442a10838547d8"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/hashes/esm/_sha2.js",
+      "sha256": "f931b0c98e9415f0395a606fdc205b85e3a76d2594b43ea9e445765e8cbead60"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/hashes/esm/_u64.js",
+      "sha256": "25a28c13f59b354b981f44c647a35e69df7775fbae5e549d966f7b1d519ea22e"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/hashes/esm/crypto.js",
+      "sha256": "9211d026c5d21e60e0126dd6f01150d87da5ba7261b8f468215c1264372ff5a5"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/hashes/esm/hmac.js",
+      "sha256": "ffbf43710421711022d8f7eb3bafb44218213b80f089fdbce9a45234668fd70d"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/hashes/esm/pbkdf2.js",
+      "sha256": "a25ac3ab56ecd13bdb9e44ffd90a8dca232077dd25d8a8aa363daf024f4bb3db"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/hashes/esm/ripemd160.js",
+      "sha256": "0046014fc7ded5c22fb1c4c5ecce1f0276ca6a2ff559f1b5c80ab4c2b3fd4851"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/hashes/esm/scrypt.js",
+      "sha256": "1854736ae150446016532d6c422ee21d1c7996636ba6b12bcf4d0ead4d953b82"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/hashes/esm/sha256.js",
+      "sha256": "128cebb45b79080e430be04f2294f51137f46dcde542e28a32dcbf00ec7d5d3c"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/hashes/esm/sha3.js",
+      "sha256": "e4325043339b35faea049b15e96f4901f99eae31b7c66c81f6ae06ff703f3ff4"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/hashes/esm/sha512.js",
+      "sha256": "ab5dcde87022d3b8abc409333fa78967169596adc59b510a281ff0428bd80deb"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/hashes/esm/utils.js",
+      "sha256": "513e1b94a89bfae285d872da84d3f07a790f2873af0c2d21b5e37ebd0053f0cd"
+    },
+    {
+      "path": "tools/runtime/node_modules/@noble/hashes/package.json",
+      "sha256": "8d8203c66e91a9e6ee510facf378a2c7420b27139360132a257010c2e5f091bc"
+    },
+    {
+      "path": "tools/runtime/node_modules/aes-js/lib.esm/aes.js",
+      "sha256": "edc317a2d274b8665c99ea04755e7b46d5547cfd578e684375c882644d679b37"
+    },
+    {
+      "path": "tools/runtime/node_modules/aes-js/lib.esm/index.js",
+      "sha256": "ca1609b8d1743da0ea2288b87a1b61bc6138cfc838f6f549ff42aab8763ff75f"
+    },
+    {
+      "path": "tools/runtime/node_modules/aes-js/lib.esm/mode-cbc.js",
+      "sha256": "e86560b723b3507cd267a4bf981bde3012662b3e5b3123b41e6c577883b8bb4d"
+    },
+    {
+      "path": "tools/runtime/node_modules/aes-js/lib.esm/mode-cfb.js",
+      "sha256": "5ebca2a4b68599a4fb475faacf72c4f4f20df8f7d9c04067027bf367597a0b71"
+    },
+    {
+      "path": "tools/runtime/node_modules/aes-js/lib.esm/mode-ctr.js",
+      "sha256": "405da551eec6f72a81efb8277c6afa0b3292a2145df174a00814624530ef78cb"
+    },
+    {
+      "path": "tools/runtime/node_modules/aes-js/lib.esm/mode-ecb.js",
+      "sha256": "0a3b1ad8e811208a18b50e8e0a17af053feb32d6d88d0397bfc0ff0589ebc58e"
+    },
+    {
+      "path": "tools/runtime/node_modules/aes-js/lib.esm/mode-ofb.js",
+      "sha256": "456990e5da201d2f342afc999c6fb1c2e3ef7308d80734ec9f44bd8dd6fe2e4e"
+    },
+    {
+      "path": "tools/runtime/node_modules/aes-js/lib.esm/mode.js",
+      "sha256": "a6a9b9e08fec5e9de056beafdcd41989c4ffbd7c7d9dcfcd145dadda70110bc5"
+    },
+    {
+      "path": "tools/runtime/node_modules/aes-js/lib.esm/padding.js",
+      "sha256": "dbd6aeba8e614c2308e797bcf506585e6e7ed227dc1da07c9dddda32a17a28bd"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/LICENSE.md",
+      "sha256": "44eea86637405118248327fbe9d9fa95d04c7a57221c7e8c155f736db9f1b612"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/_version.js",
+      "sha256": "95cd646dad74d62413544acd59edc847367aecc7f4b905d76f0266fc1c4eec35"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/abi-coder.js",
+      "sha256": "c9f607051d4d742691addac8aee1e847377d1e13650a904d55621fa4cbffe842"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/bytes32.js",
+      "sha256": "b98ff37ea9e1ec7e6b574c9bb8e2803adac128a2ca1ca5a9c26fc57edb8be6cf"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/coders/abstract-coder.js",
+      "sha256": "0942faf6b3b328ffe5ba427ec04a9382b0695aab0618ccf9ba2efacd307f4242"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/coders/address.js",
+      "sha256": "2686db1e32d9e2fe65f2d65191d58cccdbe0d59b6f625be154cb44a50ca0600d"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/coders/anonymous.js",
+      "sha256": "7e5d64424b8a3fe73252d94f8fa2430837ce634e80285e31db56f9ca795a5f84"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/coders/array.js",
+      "sha256": "6135fe17fe2d94bb1dbf4df0f4822bcc242945b71946685bef271ad21721b8b8"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/coders/boolean.js",
+      "sha256": "5cd44b4e193672d17dbb29d991f3a0383ac9a1543df72ae1b120c51923ae6046"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/coders/bytes.js",
+      "sha256": "e8d2ef8828e11c52fc79e6ccca2111220af60ae1ec58ee5a342cd62dd7259614"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/coders/fixed-bytes.js",
+      "sha256": "79891f6d1167980eef43c5cecc4023a60b4d3b6be30bc88ece8dc06feb5f2855"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/coders/null.js",
+      "sha256": "c952925f628b8695f884fdc2404d2f066ffeb857b901843fb5aac2f14c3f3263"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/coders/number.js",
+      "sha256": "e3dd3faeb0029d46f42ac084197c3a1fb3ea2e5ba487fd10714999d16a07c3dd"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/coders/string.js",
+      "sha256": "f4d3601ee44a7a9d66ea0d78124e35039c93bdbab4d455c329c4e5d0bdffd4bb"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/coders/tuple.js",
+      "sha256": "0642b1548d9a9a0635b23e5ab3e5cff59a28a493adba0f82fae811a506df8591"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/fragments.js",
+      "sha256": "e6afebdc2fd739899dd27f2ba7ed0944bad72706893a29bc1cb9bb99147ac636"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/index.js",
+      "sha256": "55582f8e8bb4b4623b03b290e5ca5c566a42d4bc42a2bd0355bebd80c16b3078"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/interface.js",
+      "sha256": "000167889c4ff9660119e0a64f23fbe39074d1f19b5ed99b3edb9cf195eb58bc"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/abi/typed.js",
+      "sha256": "c9517b9980f400b0849a61de736e0b58f34ab7b6c642cd31d948128e35e9c327"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/address/address.js",
+      "sha256": "7a98077a0803a7c95fb5f94c4bf9e1e6bf24757e0a0813d89f121851ca1cb5bd"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/address/checks.js",
+      "sha256": "d7638bb0c5898dfd767cf0334321ea4652231ebf5b2df494a4b16c0ec99ae3e2"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/address/contract-address.js",
+      "sha256": "b8b0a667a65843a134ca22819d906e154c5eaf24e2d7f132badd15a134988d40"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/address/index.js",
+      "sha256": "9fc86d21b1924360ad50fd196fff1b6d0c23af5f0651fc5d13cbd4dab98f3b5e"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/constants/addresses.js",
+      "sha256": "83f56033efe31568796ffd09aae24370777ff5237fc4ef6ad2cf325060b14d1b"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/constants/hashes.js",
+      "sha256": "4751e9c2e65ee78cb8e5bc569d8746d20dc92c93647a7957d46c70742f84b7ea"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/constants/index.js",
+      "sha256": "e1bb0f3242683ccc9eefb81260e24863b7e929625ca9790e5f99b6e2492e602e"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/constants/numbers.js",
+      "sha256": "70e5abfd7b83a6484c59b2eb73cb1372f9aaa29bb68f53891ba836071b8f99c2"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/constants/strings.js",
+      "sha256": "f14874782cf44e9171a59404bf01812fb77f91927aa9c08ec5f7d0df34099a3b"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/contract/contract.js",
+      "sha256": "3f7822ec685d87adc89e7737dea0126d9488a0493651178cfaf70a47ec0265df"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/contract/factory.js",
+      "sha256": "ef64ecd778244c804c393de74e41441a912f6fdaa9d553672bcf524d5c29bafe"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/contract/index.js",
+      "sha256": "7981dd126eb08e21ee0171c09a4ac5a5e6394f709cd1bf8f6e468529246e69b1"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/contract/wrappers.js",
+      "sha256": "03449896a0cdc15f22f2efb3369470e2263e43f1e846d055ec819e90b74bee1f"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/crypto/crypto-browser.js",
+      "sha256": "852a5c2a8dabc17292c4d70a77fd1f58c176128cd5e930d69d0257b396eff348"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/crypto/hmac.js",
+      "sha256": "25ae819f85ec77b008b9d64080d3e8335ea4f929eea78ed82ce13caae70b5690"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/crypto/index.js",
+      "sha256": "0c3d5863e62cfd2a78f916a760dd8844a444507bc11a14a47e7369c70f200600"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/crypto/keccak.js",
+      "sha256": "1cfaac25ce63f98e3e8433d5600fd20dc7272bb6aeba3ffa0fca8ee134b6b942"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/crypto/pbkdf2.js",
+      "sha256": "1f347fcd2a4d200ded8edbbb67d8b7a3278e4442476f5b10123f04c8a62b918f"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/crypto/random.js",
+      "sha256": "45799cc6f169ab89c3cfea83f1168e762205a03e556940f53e13579804b022dc"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/crypto/ripemd160.js",
+      "sha256": "b924076297b89c0f97999c453cb58ec93047fd78986415a343b2717a0de5847b"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/crypto/scrypt.js",
+      "sha256": "c284dc987b53e2c1fb421905ff3f97970dccc697f1a9c42fe6abc886b12f62e8"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/crypto/sha2.js",
+      "sha256": "714fad2ddcba6933a6660219cced4173e6fa0fd2ee6d13db40a9f26d2ef60d15"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/crypto/signature.js",
+      "sha256": "2dd9b4e85e964b972f2998d1ffce16261d1bd482e9f1981345dfdaad7f5be383"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/crypto/signing-key.js",
+      "sha256": "4da3d51e128b5a6483337a06b3ac726c7552fa504ebf285dba8680bad458905d"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/ethers.js",
+      "sha256": "525a528bd289c9b4d62698c2f25fb7a91b79c437e6580cc60119e13e5df311a3"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/hash/authorization.js",
+      "sha256": "ced5131c482564642ff2e89ecca58e4ae300ea6ebec39d886b8748ecaa2fb009"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/hash/id.js",
+      "sha256": "7a28acc94288ef163644ce8865923751d0b91123550ebae9929c2331b4d9d04b"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/hash/index.js",
+      "sha256": "74bbc0bacebe045a58b084f5025296bc69a9b56cadea31aa0114e3288cf904e9"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/hash/message.js",
+      "sha256": "3112146f1efad6cb62d32acb6582303cc51720bd8854f39e9822713b6e18c140"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/hash/namehash.js",
+      "sha256": "7dac6f5befc952c85b3664567150874f5b954a31762096bd139dca496362916f"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/hash/solidity.js",
+      "sha256": "68861bf3779de30d93227ea49c888adb6129d9345f6bc452d506ee1c648ab2ba"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/hash/typed-data.js",
+      "sha256": "507dacd1218da8dc2a7a08395900c9d6b095aa2f429f62de1f5c0d06dae8fcfb"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/index.js",
+      "sha256": "586bc08ce4c6bdb64f2972f9284f9eca568b7211f33c387d5b83f63887ffc468"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/abstract-provider.js",
+      "sha256": "ea895314255501e52ef267e0a4c90a8e29bc038f1a2aeaba49278eea92dcc3f9"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/abstract-signer.js",
+      "sha256": "5e831e65e18725a695d27e992e4f6dd0b0ab577107dd9e3c3724c763bb9ebcc6"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/community.js",
+      "sha256": "787664bfd59ff9cd78e2258403658adf4bdcfb070b27c1ccbf0fe6df0e977312"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/default-provider.js",
+      "sha256": "6769d5785ac205e0e9ef9d4ca7c23d23ced021130ec8fda3e5f0d5ad12b0925d"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/ens-resolver.js",
+      "sha256": "a4affa97c7b90f98dfff5a586053f5f4600aac9b7c789f197f3c5601e08dda8e"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/format.js",
+      "sha256": "bfb1bdc4eb3af0ed208cd8d10f59d79c3d99a90a65855d6e19e30d9b45cfb876"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/index.js",
+      "sha256": "0065587459d8419bc1395b95ceec6366e5674b0eaea35bcf25acb2f72fa50c26"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/network.js",
+      "sha256": "bc67d1030d08f40dfee25e65da09c35c77c6fbc0d6bb0281270c94c30d7b37e2"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/plugins-network.js",
+      "sha256": "fb220d6f07af4f79c05cd57d903e6fccf20deb0baf18cfd811767d7d3e3c5144"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-alchemy.js",
+      "sha256": "9a1ce1cb97e94f693b47e8319fe5b35e509599e8545264d28b2d1b94aadb6295"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-ankr.js",
+      "sha256": "779871cbc91dc593a0f44a5c27fe317a6e8cf9912638f1603439b51f5c396ef1"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-blockscout.js",
+      "sha256": "668ed2af45ea3b3df4ef1692781d1f3e9fe200cd045970aedecafe6d2e756a57"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-browser.js",
+      "sha256": "1be5ee01fb6d23cc496c5e7fc06db9c78a2143198f427ded3f729191f79066b2"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-chainstack.js",
+      "sha256": "93f509da5bde5d93ba78b6eb99372dcf68730e36df22461abb8adfc4ff3d0f45"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-cloudflare.js",
+      "sha256": "5186c4ccb61eb3b7e3f199a8d8b2e62fcd5fb25bfeab141c8d49f1815532e42d"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-etherscan.js",
+      "sha256": "54aeb4afd276c97b3fda6f06c25f6ba628145c58c8a1ebbafb85ad3c07e4d8cf"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-fallback.js",
+      "sha256": "448caf257ac70f1d0546cc4f1c6f59227e8e44baa239c7d0126345cb85817a73"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-infura.js",
+      "sha256": "a660b7a1d453639be72d0d12571d01d0a10c16842232672fe49fd575e34efb4a"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-ipcsocket-browser.js",
+      "sha256": "43a8be3998f5cb33bb42f7608e1e988d916f75c99998cb7c8e5642b4c7b1fdc8"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-jsonrpc.js",
+      "sha256": "6a6a0bf4db927e18f61c4b565514b4255ec3659156bf586caff21ce852ea0942"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-pocket.js",
+      "sha256": "1f94874c1174d5e5b04a32f9294333c014bea76550e2b358399a72a65d6f1641"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-quicknode.js",
+      "sha256": "07783d3b60afb7566a683a43f51cd63508dc38269a2944fa8c1a73e7ec84f81b"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-socket.js",
+      "sha256": "992b28fcb1fdba4e7f6781d8e5d9bd5fcf2bd7973403767087687a5c42f57f63"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider-websocket.js",
+      "sha256": "910f31287518f3ab0bea8c94ee9a3a9820a796d4b52118dbaa733edc28c84ffe"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/provider.js",
+      "sha256": "1fc7dee793a3ce344f2e7341d4da2c36cd602b93a376c4a4a53578cb5247d660"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/signer-noncemanager.js",
+      "sha256": "87e6543d44dab83c9d4598b425927423b510f8f4fca542f7e97b4df17acaf329"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/subscriber-filterid.js",
+      "sha256": "ea742cde1e757624f71bbdad26d376d5cf924685a57be72a1be50942d3981f0a"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/subscriber-polling.js",
+      "sha256": "5a51b23bcc553333e4e62bc2afa520fa82b22787ac8c0b75d51781f15a4352be"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/providers/ws-browser.js",
+      "sha256": "bc09b548e2eec4f696b7a60c9ea9f34f42d0543f2ff341f4ca6ae77fe9d93f60"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/transaction/accesslist.js",
+      "sha256": "7dcfa9df4861fa918bf1437f0efc6d42ac778d1ab3269152a785ae74f30f750c"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/transaction/address.js",
+      "sha256": "6caca4ca24eb2cd2b8b420ca978fb787d82476507c211fd4547f0a8ac1d27a68"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/transaction/authorization.js",
+      "sha256": "5a201be0e8f1bb96a7141ceecb8d9f2ff831406c2966871eb1cbdfe4fdcdc3c5"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/transaction/index.js",
+      "sha256": "76cd01c430c30800cfa358d2a0303f64bf579e4fc6fcab1435a9ef94d89cc8e1"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/transaction/transaction.js",
+      "sha256": "d6401d21de89d651b25a6837d41e8a5be8c617dab207a2ef2960486ce0b0da39"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/base58.js",
+      "sha256": "38fb0bf3962b8e24cbe8c9280a8de7972095c0da612ab32c0c70057e5ec5686d"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/base64-browser.js",
+      "sha256": "89cf03c8953a0a2a40df380743bf396874af63e33ac304e8602296491e13e015"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/data.js",
+      "sha256": "80a413f6448936b9ec8a87411725b8ea6f6c5c7d99fc7331862fce136d2b05e6"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/errors.js",
+      "sha256": "86b90fc247ae3a11abd50fa00f34a557eb11d94a4343dd92fd2833c1ddf5bd98"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/events.js",
+      "sha256": "c0d74c2f2224697ac730ad3aab98df620dd343ef297d7f522167cdab5f47c83b"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/fetch.js",
+      "sha256": "83cf6316cb0cbfab30d62826d8e238153ba05b9db310dd6220256ac732b8b9e5"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/fixednumber.js",
+      "sha256": "b2c6566a0ba02d1961d1ffbc55b0d23a9fb4374cb331c058993baeb7eed0ee35"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/geturl-browser.js",
+      "sha256": "6904c603247f68b07b5c516796d8f5e16a123915f620d64cde448af6450d691b"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/index.js",
+      "sha256": "87f9f65d29d5686dbae0d032fd7a3d19d0ed6062ba63641648c5dfc7bc56aa3e"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/maths.js",
+      "sha256": "6e8fe1cfbe29d5b4ff308b35c865500a4833f971081a357551000c419ad5e7b3"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/properties.js",
+      "sha256": "8767551fbaf6563360089fd1061348ab1751006cbeec366dc7b2ab5013b1c879"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/rlp-decode.js",
+      "sha256": "3a981835374690162a61f0d72dc1080d066d75be6827de3d99481f78b4442f82"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/rlp-encode.js",
+      "sha256": "c6d92abf28f6589d2a814f57b64600125504d3527f1a0e43b1a09015fb86f033"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/units.js",
+      "sha256": "32fb2d99a3ce9ad249b75a0a4c09c8fdee7814eec9419d4d0c228114f726ec18"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/utf8.js",
+      "sha256": "d6cde7314bea1ea5f17756110b64dc60eafdc03d01a8c6261da53097873bd8a0"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/utils/uuid.js",
+      "sha256": "0db82b8953b305fa4ec797e2fc2b8b1971d107f8d8eb218c99caa014b2cf6430"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wallet/base-wallet.js",
+      "sha256": "9bfb412471e5fb83f3fd4d015c0707c6248bc276a4bcb010686cd59a3125eec6"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wallet/hdwallet.js",
+      "sha256": "bbcf201f4df3e6ad55d631246ac91fa7e801c418f6923147a1841629882c4ca9"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wallet/index.js",
+      "sha256": "d8d575295146c3e058055934bf27d1a190319356ae4ba28080301c4dcc58529b"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wallet/json-crowdsale.js",
+      "sha256": "0bd0dad72e021e502a305e3c7ccf4b3fabb5f40d26977b29950efdd3299936a4"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wallet/json-keystore.js",
+      "sha256": "725510a247d7078e24e194bbb87f73235d4c3945691c85f7dbf6a2e063b6a857"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wallet/mnemonic.js",
+      "sha256": "8125b28441295ae3d3400ec79447a539f29c5bb0cac689a673fd994e40c739f2"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wallet/utils.js",
+      "sha256": "56a5438c1739f0cddb4a150c01b4931ea882a22215f6f0c4b029cfe9ce1e1830"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wallet/wallet.js",
+      "sha256": "71b7b77c35c0320ba53b57875b1df137c89209b6160dec13e793d92564659455"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wordlists/bit-reader.js",
+      "sha256": "b062579e25800a07beb0669647df207e80925727370a8151d283535397150178"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wordlists/decode-owl.js",
+      "sha256": "98e00c4948789fe34b8c1aeef91ad816298b17fb8e6015a3d11a81c55b7e371d"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wordlists/decode-owla.js",
+      "sha256": "a8b8163884a338c50ea82d0b673cd36052f2fc532644a6466617f86e1d79ab9a"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wordlists/index.js",
+      "sha256": "5e28c87aa299bb472f161463387720ad1f6403ed3e4d85c629099f881f42a5dd"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wordlists/lang-en.js",
+      "sha256": "55c72f9f81abd618eb892d5c3669d427adb31a40ba5d25d5946e68b67eae4472"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wordlists/wordlist-owl.js",
+      "sha256": "350ffe433e9e7a05737b90df71f724b45f5f80649b11b9a24cf4265675adb370"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wordlists/wordlist-owla.js",
+      "sha256": "8e1d34c678586c252f8d2138c619d9b8413143f010189c1867e4d1534b19e800"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wordlists/wordlist.js",
+      "sha256": "77918b03eb000c5f2b1e25ae0983787fdcc6176e6b7cb4b830aca2fb8dc9a665"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/lib.esm/wordlists/wordlists-browser.js",
+      "sha256": "2e55be9da951806b9e11aee6dab72ca9c80c78ab2312d129b58e4bccbe9246a4"
+    },
+    {
+      "path": "tools/runtime/node_modules/ethers/package.json",
+      "sha256": "957d5092241ed59860532077633008c49852b98b384493bb0f04225a414eb601"
     },
     {
       "path": "tools/runtime/package-lock.json",
-      "sha256": "f88fb02bc5f3d7504340cb8ad81625ec0f00a19fad93d7dcecfbe38a5e1f5f88"
+      "sha256": "ba47a432b04ef2cc7be55ef3531c324f29ec40cafeba3ccdd9ba6fe46a4d295e"
     },
     {
       "path": "tools/runtime/package.json",
-      "sha256": "49bef6f8a9dbb458b8b7e99f4707703ad7b80140f6f69aa357fb7681b975dce2"
+      "sha256": "9aedff05a92c09699420e50095ae67b17410cd30d9f0efbd822ddf61a8a9bafc"
     }
   ]
 }

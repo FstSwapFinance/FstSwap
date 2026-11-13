@@ -1,6 +1,6 @@
-import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261112-46";
-import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261112-46";
-import { swapRpcWork } from "./swap-rpc-work.mjs?v=mainnet-20261112-46";
+import { FSTSWAP_CONFIG, fstSwapReady } from "./fstswap-config.mjs?v=mainnet-20261113-47";
+import { matchesWalletExecution } from "./swap-receipt.mjs?v=mainnet-20261113-47";
+import { swapRpcWork } from "./swap-rpc-work.mjs?v=mainnet-20261113-47";
 // 聚合路由 Swap 引擎（BSC 主网 56，FstSi aggregator-live v9「multi-pool」，合约 VERSION 1.01）。
 // 与 market-trade.mjs 相同的约束风格：全部函数只通过注入的 JSON-RPC
 // request 访问链上，返回精确的十进制字符串/大整数，浏览器与 Node 均可运行。
@@ -971,7 +971,7 @@ export function loadSwapLibrary() {
       script.dataset.fstLibrary = "ethers";
       script.addEventListener("load", markSwapLibraryState, {once:true});
       script.addEventListener("error", markSwapLibraryState, {once:true});
-      script.src = new URL("../assets/vendor/ethers.umd.min.js", import.meta.url).href;
+      script.src = new URL("../assets/vendor/ethers-6.15.0-fst.min.js", import.meta.url).href;
       document.head.append(script);
     }
   }).catch(err => { swapLibraryPromise = null; throw err; });

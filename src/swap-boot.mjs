@@ -1,4 +1,4 @@
-import {startDefaultSwapReads} from './swap-startup.mjs?v=mainnet-20261112-46';
+import {startDefaultSwapReads} from './swap-startup.mjs?v=mainnet-20261113-47';
 
 // This entry deliberately has no UI/wallet dependency. Its consumer joins the
 // same service pending request and original two-second completed cache as app.
