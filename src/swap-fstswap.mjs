@@ -1,6 +1,6 @@
 // FstSwap staged versions: exact-input only, one fee on the real main route.
-import {SWAP_ADAPTERS,SWAP_ABI,swapActiveRouter} from './swap-aggregator.mjs?v=mainnet-20261113-47';
-import {readPoolPolicy,createPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261113-47';
+import {SWAP_ADAPTERS,SWAP_ABI,swapActiveRouter} from './swap-aggregator.mjs?v=mainnet-20261113-48';
+import {readPoolPolicy,createPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261113-48';
 const ZERO='0x'+'00'.repeat(20),BPS=10000n;
 const lower=x=>String(x||ZERO).toLowerCase();
 export const FST_FEE_ASSETS=Object.freeze({BNB:ZERO,USDT:'0x55d398326f99059ff775485246999027b3197955',FIST:'0xc9882def23bc42d53895b8361d0b1edc7570bc6a',WBNB:'0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',ETH:'0x2170ed0880ac9a755fd29b2688956bd959f933f8',USDC:'0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d'});
@@ -196,8 +196,15 @@ export async function quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,sli
   if(isWrap(from,to))return{from,to,amountIn:amount,minimum:amount,out:amount,impact:0,legs:[{kind:'wrap',out:amount,amountIn:amount}],assertFresh(){}};
   const policy={...whole,...createPoolPolicy(whole.pools,whole.prices,from,to,{tradeTokenIn:tokenIn})};
   const routes=await quoteFstRoutes(request,{from,to,amount,used,policy,singleHop,configVersion:config.version,adaptersOff:config.adaptersOff,...routeOptions});
-  const valid=routes.candidates.filter(c=>{c.minimum=minimum(c.out,slippageBps);try{policy.assertValue(c.amountIn,c.minimum);return true;}catch{return false;}});
-  if(!valid.length)throw noRoute();return{...valid[0],candidates:valid};
+  let rejection;
+  const valid=routes.candidates.filter(c=>{
+   c.minimum=minimum(c.out,slippageBps);
+   try{policy.assertValue(c.amountIn,c.minimum);return true;}
+   catch(error){if(error?.code!=='POOL_LIQUIDITY')throw error;rejection??=error;return false;}
+  });
+  // Candidates already follow quote order. Only report the best candidate's
+  // policy rejection after every alternative was checked and none was usable.
+  if(!valid.length)throw rejection||noRoute();return{...valid[0],candidates:valid};
  };
  const q=await buildFstQuote({tokenIn,tokenOut,amountIn,config,slippageBps,findRoute});
  whole?.assertValue(q.amountIn,q.minimum);whole?.assertFresh();q.assertFresh();q.poolCheckedAt=whole?.checkedAt??Date.now();return q;
