@@ -394,8 +394,8 @@
     {
       "kind": "generated-ethers-license",
       "path": "assets/vendor/ethers-6.15.0-fst.LICENSE.txt",
-      "sha256": "39474ad9b2bcc0992a26469546f18267bd4b08f160099df48de6a28286dfa50f",
-      "bytes": 2596,
+      "sha256": "186be49f8b118dc83963971af70e688c94b87847e1d0a057de1006812b6bad7e",
+      "bytes": 2594,
       "packages": [
         {
           "name": "@noble/hashes",
@@ -827,7 +827,7 @@
     },
     {
       "path": "tools/runtime/build.mjs",
-      "sha256": "c1b83ef1fe83c957ba25d277310e7f4abdce20e3eedc85485ed72ca5d45bddba"
+      "sha256": "792531515be2d2b98958444db0a888cbea9bc72aa57367c0d0e13df49422460e"
     },
     {
       "path": "tools/runtime/compatibility.json",

@@ -86,7 +86,7 @@ async function vendorLicenses(root,metafile){
     for(const name of ['LICENSE','LICENSE.md','LICENSE.txt','LICENCE','LICENCE.md']){const candidate=directory+'/'+name,body=await fileExists(path.join(root,candidate));if(body){source=candidate;bytes=body;break;}}
     if(!source)throw Error('Missing license for contributing vendor package: '+pkg.name);
     notices.push({name:pkg.name,version:pkg.version,license:pkg.license,source,sha256:sha(bytes)});sources.push(pkgSource,source);
-    bodies.push(Buffer.from('\n================================================================\n'+pkg.name+' '+pkg.version+'\nLicense: '+String(pkg.license)+'\nSource: '+source+'\n\n'),bytes,Buffer.from('\n'));
+    bodies.push(Buffer.from('\n================================================================\n'+pkg.name+' '+pkg.version+'\nLicense: '+String(pkg.license)+'\nSource: '+source+'\n\n'),bytes);
   }
   const bytes=Buffer.concat(bodies),asset={kind:'generated-ethers-license',path:ETHERS_LICENSE,sha256:sha(bytes),bytes:bytes.length,packages:notices};
   return{bytes,asset,sources};
