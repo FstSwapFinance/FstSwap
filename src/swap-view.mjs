@@ -517,6 +517,12 @@ export async function mountSwapView(root) {
   }
 
   function render() { renderPanels(); renderTrade(); renderBottom(); }
+  // Slippage and route changes make the visible amount and minimum stale
+  // immediately. Waiting for the next response would keep the old number.
+  function dropDisplayedQuote() {
+    state.quote = null; state.quoteError = ""; state.quoteErrorReason = "";
+    if (main.isConnected) render();
+  }
 
   // —— 设置弹层（官方 SettingsTab + TransactionSettings） ——
   function renderSettings() {
@@ -531,7 +537,7 @@ export async function mountSwapView(root) {
       const presets = [10, 20, 50, 100];
       slipBtns.forEach((b, i) => {
         b.className = b.className.replace(/\b(fpFSKc|jLxtdz)\b/, !settings.slippageAuto && settings.slippageBps === presets[i] ? "jLxtdz" : "fpFSKc");
-        b.addEventListener("click", () => { settings.slippageBps = presets[i]; settings.slippageAuto = false; state.customSlip = ""; saveSettings(settings); state.quote=null; renderSettings(); restartPairPrice(); scheduleQuote(0); });
+        b.addEventListener("click", () => { settings.slippageBps = presets[i]; settings.slippageAuto = false; state.customSlip = ""; saveSettings(settings); dropDisplayedQuote(); renderSettings(); restartPairPrice(); scheduleQuote(0); });
       });
       // 官方 OptionCustom：用户自定义（非 auto）时高亮（lagkxn），输入框显示 toFixed(2)
       const slipInput = groups[0].querySelector("input"); const custom = slipInput.closest("button, .hQBzuZ, .lagkxn");
@@ -539,9 +545,9 @@ export async function mountSwapView(root) {
       slipInput.value = state.customSlip || (settings.slippageAuto ? "" : (settings.slippageBps / 100).toFixed(2)); slipInput.setAttribute("placeholder", (settings.slippageBps / 100).toFixed(2));
       slipInput.addEventListener("input", () => {
         state.customSlip = slipInput.value;
-        if (slipInput.value === "") { settings.slippageAuto = true; settings.slippageBps = 50; saveSettings(settings); state.quote=null; restartPairPrice(); scheduleQuote(0); return; }
+        if (slipInput.value === "") { settings.slippageAuto = true; settings.slippageBps = 50; saveSettings(settings); dropDisplayedQuote(); restartPairPrice(); scheduleQuote(0); return; }
         const v = Math.floor(Number(slipInput.value) * 100);
-        if (Number.isSafeInteger(v) && v >= 0 && v <= 5000) { settings.slippageBps = v; settings.slippageAuto = false; saveSettings(settings); state.quote=null; restartPairPrice(); scheduleQuote(0);
+        if (Number.isSafeInteger(v) && v >= 0 && v <= 5000) { settings.slippageBps = v; settings.slippageAuto = false; saveSettings(settings); dropDisplayedQuote(); restartPairPrice(); scheduleQuote(0);
           slipBtns.forEach((b, i) => { b.className = b.className.replace(/\b(fpFSKc|jLxtdz)\b/, v === presets[i] ? "jLxtdz" : "fpFSKc"); });
           if (custom) custom.className = custom.className.replace(/\b(hQBzuZ|lagkxn)\b/, "lagkxn"); }
       });
@@ -561,7 +567,7 @@ export async function mountSwapView(root) {
       };
       toggle("toggle-expert-mode-button", "expert");
       toggle("toggle-disable-multihop-button", "singleHop", () => {
-        state.quote = null; restartPairPrice(); renderBottom(); scheduleQuote(0);
+        dropDisplayedQuote(); restartPairPrice(); scheduleQuote(0);
       });
     }
     settingsWrap.replaceChildren(...fresh.childNodes);

@@ -8,6 +8,7 @@ import {createServiceClient, validateServiceQuote} from './swap-service-client.m
 import {readTokenBalances, readWalletBalances, invalidateWalletBalances} from './swap-balances.mjs?v=mainnet-20261113-50';
 import {createAllowanceReader} from './swap-allowance.mjs?v=mainnet-20261113-50';
 import {createSubmissionWarmup} from './swap-submission-warmup.mjs?v=mainnet-20261113-50';
+import {createQuoteRefresh} from './swap-quote-refresh.mjs?v=mainnet-20261113-50';
 import {nativeBalanceFraction} from './swap-native-max.mjs';
 import {balanceFraction, formatAmountInput} from './swap-amount.mjs';
 
@@ -300,6 +301,41 @@ test('a fresh allowance read does not cancel another waiter for that spender', a
   assert.equal(await latest, 5n);
   assert.equal(await mined, 9n);
   assert.equal(blockRead.payload.params[0].to, USDT.toLowerCase());
+  const callsBeforeReceipt = calls;
+  const minedAgain = reader.read(key, {fresh: true, blockTag: '0x11'});
+  await Promise.resolve();
+  pending.at(-1).resolve(encodeAllowance(80n));
+  assert.equal(await minedAgain, 80n);
+  const afterReceipt = reader.read(key);
+  await Promise.resolve();
+  assert.equal(calls, callsBeforeReceipt + 2);
+  pending.at(-1).resolve(encodeAllowance(80n));
+  assert.equal(await afterReceipt, 80n);
+});
+
+test('offline quote refresh does not run and online resumes the same flow', async () => {
+  let online = true, runs = 0;
+  const queued = [];
+  const timers = {setTimeout(fn){queued.push(fn);return queued.length;}, clearTimeout(id){if(id)queued[id-1]=()=>{};}};
+  const flush = () => { const batch = queued.splice(0); for (const fn of batch) fn(); };
+  const events = new EventTarget(), documentEvents = new EventTarget();
+  const flow = createQuoteRefresh({run: async () => { runs++; }, ready: () => online, events, documentEvents, timers, refreshMs: 60000});
+  flow.schedule(0);
+  flush();
+  await Promise.resolve();
+  assert.equal(runs, 1);
+  online = false;
+  events.dispatchEvent(new Event('offline'));
+  flush();
+  await Promise.resolve();
+  assert.equal(runs, 1);
+  assert.equal(flow.running(), false);
+  online = true;
+  events.dispatchEvent(new Event('online'));
+  flush();
+  await Promise.resolve();
+  assert.equal(runs, 2);
+  flow.dispose();
 });
 
 test('submission preparation expires and native Max reserves live gas', async () => {
