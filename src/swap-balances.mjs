@@ -66,11 +66,67 @@ function checkBatch(batch){
  checkSignal(batch.controller.signal);
  if(batch.epoch!==balanceEpoch)throw abortError();
 }
+// The service remains the first read. One public read may start only after this
+// wait, and only while that service request is still open. It is not a second
+// hedge and it cannot replace a result whose block hash changed.
+export const serviceBalanceHeadStartMs=350;
+function freshHeader(block){
+ if(!block||typeof block.hash!=='string'||!/^0x[0-9a-f]{64}$/i.test(block.hash)||block.number==null||block.timestamp==null)return false;
+ try{const stamp=Number(BigInt(block.timestamp));return Number.isFinite(stamp)&&Math.abs(Date.now()/1000-stamp)<=120;}catch{return false;}
+}
+async function readAnchoredTokenBalances(request,account,tokens,{signal}={}){
+ checkSignal(signal);
+ const header=await untilAborted(request({method:'eth_getBlockByNumber',params:['latest',false]},{signal}),signal);
+ checkSignal(signal);
+ if(!freshHeader(header))throw new Error('STALE_BLOCK');
+ const pinned=(payload,options)=>{
+  const params=payload.method==='eth_call'?[payload.params[0],header.number]:payload.method==='eth_getBalance'?[payload.params[0],header.number]:payload.params;
+  return request({...payload,params},options);
+ };
+ const result=await readTokenBalances(pinned,account,tokens,{signal});
+ checkSignal(signal);
+ if(!Object.keys(result.balances).length||result.failed.length)throw new Error('BALANCE_UNAVAILABLE');
+ const canonical=await untilAborted(request({method:'eth_getBlockByNumber',params:[header.number,false]},{signal}),signal);
+ checkSignal(signal);
+ if(canonical?.hash!==header.hash)throw new Error('STALE_BLOCK');
+ return result;
+}
 async function fetchBalances(request,account,tokens,signal){
  checkSignal(signal);
- const remote=await untilAborted(swapService.balances(account,tokens,{signal}),signal);
- checkSignal(signal);
- return remote||readTokenBalances(request,account,tokens,{signal});
+ const serviceAbort=new AbortController(),publicAbort=new AbortController();
+ const onCallerAbort=()=>{serviceAbort.abort(signal.reason);publicAbort.abort(signal.reason);};
+ signal?.addEventListener('abort',onCallerAbort,{once:true});
+ const serviceSignal=serviceAbort.signal,publicSignal=signal?AbortSignal.any([signal,publicAbort.signal]):publicAbort.signal;
+ const remoteTask=untilAborted(swapService.balances(account,tokens,{signal:serviceSignal}),serviceSignal).then(value=>({source:'service',ok:true,value}),error=>({source:'service',ok:false,error}));
+ remoteTask.catch(()=>{});
+ let publicStarted=false,markPublic=()=>{};
+ const publicReady=new Promise(resolve=>{markPublic=resolve;});
+ const timer=setTimeout(()=>{
+  if(signal?.aborted||serviceAbort.signal.aborted){markPublic({source:'public',ok:false,skipped:true});return;}
+  publicStarted=true;
+  readAnchoredTokenBalances(request,account,tokens,{signal:publicSignal}).then(value=>markPublic({source:'public',ok:true,value}),error=>markPublic({source:'public',ok:false,error}));
+ },serviceBalanceHeadStartMs);
+ try{
+  const first=await Promise.race([remoteTask,publicReady]);
+  checkSignal(signal);
+  if(first.source==='service'){
+   clearTimeout(timer);
+   if(!first.ok)throw first.error;
+   if(first.value){publicAbort.abort();return first.value;}
+   if(publicStarted){const pub=await publicReady;checkSignal(signal);if(pub.ok)return pub.value;}
+   return readTokenBalances(request,account,tokens,{signal});
+  }
+  clearTimeout(timer);
+  if(first.ok){serviceAbort.abort();return first.value;}
+  if(first.error?.name==='AbortError')throw first.error;
+  const remote=await remoteTask;checkSignal(signal);
+  if(!remote.ok)throw remote.error;
+  if(remote.value)return remote.value;
+  return readTokenBalances(request,account,tokens,{signal});
+ }finally{
+  clearTimeout(timer);signal?.removeEventListener('abort',onCallerAbort);
+  if(!publicStarted)markPublic({source:'public',ok:false,skipped:true});
+ }
 }
 function startBatch(request,account,tokens,identity,clock,monotonic){
  const batch={controller:new AbortController(),epoch:balanceEpoch,consumers:new Set(),entries:[],settled:false};

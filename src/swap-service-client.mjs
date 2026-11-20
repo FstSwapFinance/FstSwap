@@ -160,7 +160,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
  // Same-origin reads can reuse the page's connection. Cross-origin reads and
  // non-browser callers keep anonymous transport; never opt into global include.
  const credentials=(()=>{try{const origin=globalThis.location?.origin;return origin&&new URL(base,origin).origin===origin?'same-origin':'omit';}catch{return'omit';}})();
- const cooldown={quote:null,balances:null},completed=new Map(),pending=new Map(),responseTimes=new WeakMap();
+ const cooldown={quote:null,balances:null},completed=new Map(),pending=new Map(),balancePending=new Map(),quoteEpoch=new Map(),responseTimes=new WeakMap();
  const serviceClock=createServiceClock({clock,monotonic});
  let connectionWarm;
  function cooling(action){
@@ -199,7 +199,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
     signal.removeEventListener('abort',subscriber.onAbort);
     reject(new DOMException('Service request canceled','AbortError'));
     if(!entry.subscribers.size&&!entry.done){
-     if(pending.get(entry.key)===entry)pending.delete(entry.key);
+     if(entry.lane.get(entry.key)===entry)entry.lane.delete(entry.key);
      entry.controller.abort();
     }
    };
@@ -210,7 +210,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
  }
  function settle(entry,error,data){
   entry.done=true;
-  if(pending.get(entry.key)===entry)pending.delete(entry.key);
+  if(entry.lane.get(entry.key)===entry)entry.lane.delete(entry.key);
   for(const subscriber of entry.subscribers){
    subscriber.signal?.removeEventListener('abort',subscriber.onAbort);
    try{checkCallerSignal(subscriber.signal);if(error)throw error;subscriber.resolve(data?structuredClone(data):null);}
@@ -219,7 +219,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
   entry.subscribers.clear();
  }
  async function loadQuote(entry,input,binding){
-  const signal=entry.controller.signal,current=()=>pending.get(entry.key)===entry;
+  const signal=entry.controller.signal,current=()=>entry.lane.get(entry.key)===entry&&quoteEpoch.get(entry.key)===entry.generation;
   try{
    const data=await post('quote',input,quoteTimeout,signal,current,{fresh:entry.fresh});checkCallerSignal(signal);
    if(data){
@@ -227,8 +227,8 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
     try{validateServiceQuote(data,input,validation);checkCallerSignal(signal);}
     catch{checkCallerSignal(signal);cool('quote',signal,current);settle(entry,null,null);return;}
     const completedAt=clock(),completedMono=monotonic();checkCallerSignal(signal);
-    // A newer fresh request supersedes this entry even if it finishes first or
-    // is canceled. An older completion must never replace the newer display.
+    // Only the newest live read for this input may fill the short display cache.
+    // A slower aborted or superseded response cannot replace it.
     if(current()&&entry.subscribers.size){
      if(sample)serviceClock.publish(sample,()=>current()&&entry.subscribers.size>0&&!signal.aborted);
      checkCallerSignal(signal);
@@ -237,6 +237,26 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
     }
    }
    settle(entry,null,data);
+  }catch(e){settle(entry,e,null);}
+ }
+ async function loadBalances(entry,input){
+  const signal=entry.controller.signal,current=()=>entry.lane.get(entry.key)===entry;
+  try{
+   const data=await post('balances',input,balanceTimeout,signal,current);checkCallerSignal(signal);
+   if(!data){settle(entry,null,null);return;}
+   try{
+    check(data.schema===1&&data.chainId===56&&data.account===input.account&&HASH.test(data.blockHash)&&/^0x[0-9a-f]+$/i.test(data.blockNumber));
+    const sample=responseTimes.get(data),bounds=sample?serviceClock.bounds(sample):null,now=bounds?.upper??clock(),earliest=bounds?.lower??now;
+    check(Number.isFinite(now)&&Number.isFinite(earliest)&&earliest<=now);
+    check(Number.isFinite(data.readAt)&&now-data.readAt<15000&&data.readAt<=earliest+2000);
+    check(data.balances&&Array.isArray(data.failedTokens));
+    check(Object.entries(data.balances).every(([k,v])=>input.tokens.includes(k)&&typeof v==='string'&&/^[0-9]{1,78}$/.test(v)&&BigInt(v)<(1n<<256n)));
+    check(data.failedTokens.every(k=>input.tokens.includes(k)&&data.balances[k]==null));
+    check(input.tokens.every(k=>data.balances[k]!=null||data.failedTokens.includes(k)));
+    const balances=Object.fromEntries(Object.entries(data.balances).filter(([,v])=>v!=null).map(([k,v])=>[k,BigInt(v)]));
+    checkCallerSignal(signal);if(sample)serviceClock.publish(sample,()=>current()&&!signal.aborted);checkCallerSignal(signal);
+    settle(entry,null,{balances,failedTokens:[...data.failedTokens]});
+   }catch{checkCallerSignal(signal);cool('balances',signal,current);settle(entry,null,null);}
   }catch(e){settle(entry,e,null);}
  }
  return{
@@ -264,8 +284,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
    const binding={router,adapters:structuredClone(adapters),clock,expectedVersion},key=quoteKey([input,lower(router),Object.entries(binding.adapters??{}),expectedVersion]);
    const now=clock();checkCallerSignal(signal);
    if(!base||cooling('quote'))return null;
-   if(fresh)completed.delete(key);
-   else{
+   if(!fresh){
     const saved=completed.get(key);
     if(saved){
      // Keep cancellation and the original deadlines effective until delivery,
@@ -281,10 +300,14 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
      }
      if(completed.get(key)===saved)completed.delete(key);
     }
-    const existing=pending.get(key);
-    if(existing){const data=await subscribe(existing,signal);checkCallerSignal(signal);return data;}
-   }
-   const entry={key,controller:new AbortController(),subscribers:new Set(),done:false,fresh};
+   }else completed.delete(key);
+   // An identical read already on the wire is the newest data. Share it,
+   // including a caller that only wanted to bypass the completed cache.
+   const existing=pending.get(key);
+   if(existing){const data=await subscribe(existing,signal);checkCallerSignal(signal);return data;}
+   const generation=(quoteEpoch.get(key)??0)+1;quoteEpoch.set(key,generation);
+   if(quoteEpoch.size>64){const oldest=quoteEpoch.keys().next().value;if(oldest!==key)quoteEpoch.delete(oldest);}
+   const entry={key,lane:pending,controller:new AbortController(),subscribers:new Set(),done:false,fresh,generation};
    pending.set(key,entry);
    const result=subscribe(entry,signal);void loadQuote(entry,input,binding);
    const data=await result;checkCallerSignal(signal);return data;
@@ -292,20 +315,15 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
   async balances(account,tokens,{signal}={}){
    checkCallerSignal(signal);
    if(!tokens.length||tokens.length>64)return null;
-   const input={chainId:56,account:lower(account),tokens:[...new Set(tokens.map(t=>lower(t.address)))]};
-   const data=await post('balances',input,balanceTimeout,signal);checkCallerSignal(signal);if(!data)return null;
-   try{
-    check(data.schema===1&&data.chainId===56&&data.account===input.account&&HASH.test(data.blockHash)&&/^0x[0-9a-f]+$/i.test(data.blockNumber));
-    const sample=responseTimes.get(data),bounds=sample?serviceClock.bounds(sample):null,now=bounds?.upper??clock(),earliest=bounds?.lower??now;
-    check(Number.isFinite(now)&&Number.isFinite(earliest)&&earliest<=now);
-    check(Number.isFinite(data.readAt)&&now-data.readAt<15000&&data.readAt<=earliest+2000);
-    check(data.balances&&Array.isArray(data.failedTokens));
-    check(Object.entries(data.balances).every(([k,v])=>input.tokens.includes(k)&&typeof v==='string'&&/^[0-9]{1,78}$/.test(v)&&BigInt(v)<(1n<<256n)));
-    check(data.failedTokens.every(k=>input.tokens.includes(k)&&data.balances[k]==null));
-    check(input.tokens.every(k=>data.balances[k]!=null||data.failedTokens.includes(k)));
-    const result={balances:Object.fromEntries(tokens.filter(t=>data.balances[lower(t.address)]!=null).map(t=>[t.key,BigInt(data.balances[lower(t.address)])])),failed:tokens.filter(t=>data.failedTokens.includes(lower(t.address))).map(t=>t.key)};
-    checkCallerSignal(signal);if(sample)serviceClock.publish(sample,()=>!signal?.aborted);checkCallerSignal(signal);return result;
-   }catch{checkCallerSignal(signal);cool('balances',signal,()=>true);return null;}
+   const input={chainId:56,account:lower(account),tokens:[...new Set(tokens.map(t=>lower(t.address)))].sort()};
+   const key=quoteKey(input);
+   if(!base||cooling('balances'))return null;
+   const mapResult=data=>data&&{balances:Object.fromEntries(tokens.filter(t=>data.balances[lower(t.address)]!=null).map(t=>[t.key,data.balances[lower(t.address)]])),failed:tokens.filter(t=>data.failedTokens.includes(lower(t.address))).map(t=>t.key)};
+   const existing=balancePending.get(key);
+   if(existing){const data=await subscribe(existing,signal);checkCallerSignal(signal);return mapResult(data);}
+   const entry={key,lane:balancePending,controller:new AbortController(),subscribers:new Set(),done:false};
+   balancePending.set(key,entry);
+   const result=subscribe(entry,signal);void loadBalances(entry,input);const data=await result;checkCallerSignal(signal);return mapResult(data);
   }
  };
 }

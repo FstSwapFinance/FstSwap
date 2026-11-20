@@ -62,9 +62,12 @@ export function createAllowanceReader(request,{clock=Date.now,ttlMs=5000}={}){
     if(entry.pending)return subscribe(entry,signal);
     const readEpoch=epoch,now=clock();checkSignal(signal);if(readEpoch!==epoch)throw abortError();
     if(now>=entry.completedAt&&now-entry.completedAt<ttlMs){
-     remember(entry);await Promise.resolve();checkSignal(signal);if(readEpoch!==epoch)throw abortError();return entry.value;
+     remember(entry);await Promise.resolve();checkSignal(signal);     if(readEpoch!==epoch)throw abortError();return entry.value;
     }
    }
+   // A live latest read is already on the chain. Another latest caller joins it
+   // instead of aborting the subscribers that are waiting for that response.
+   if(fresh&&cacheable&&entry?.pending&&entry.cacheable)return subscribe(entry,signal);
    entry={key,cacheable,pending:true,subscribers:new Set(),delivered:false,fresh,epoch,controller:new AbortController()};remember(entry);
    const result=subscribe(entry,signal);
    if(entry.subscribers.size)void run(entry,{method:'eth_call',params:[{to:token,data:codec.encodeFunctionData('allowance',[account,spender])},blockTag]});

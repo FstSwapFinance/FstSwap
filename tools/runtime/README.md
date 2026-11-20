@@ -50,8 +50,8 @@ The three stylesheet hash copies retain their exact source bytes and relative
 font paths. Only content-addressed module, stylesheet and vendor URLs receive
 immutable caching; editable source, fallback aliases and notices revalidate.
 
-`compatibility.json` explicitly lists the actual previous release 49 and retained
-releases 48, 47, 46 and 45, including source commit, frontend manifest hash and every approved
+`compatibility.json` explicitly lists the actual previous release 50 and retained
+releases 49, 48, 47 and 46, including source commit, frontend manifest hash and every approved
 asset's SHA256 and length. The generator verifies and deduplicates this allowlist
 before writing, rejects conflicting content, and removes only unapproved hashes
 owned by this generator. Current HTML/preloads/imports contain only current assets.

@@ -122,6 +122,60 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
    throw fail('UPSTREAM_UNAVAILABLE');
   }finally{active--;clearTimeout(timer);signal.removeEventListener('abort',onAbort);}
  }
+ // One HTTP request may carry the pinned balance call and its canonical header.
+ // Two items is the budget. A node that rejects batches is remembered and is not penalized.
+ async function callMany(node,payloads,signal,isProbe=false){
+  if(signal.aborted)throw cancelled(signal);
+  if(!Array.isArray(payloads)||payloads.length<1||payloads.length>2||payloads.some(payload=>!payload||!METHODS.has(payload.method)))throw fail(payloads?.some?.(payload=>payload&&!METHODS.has(payload.method))?'RPC_FORBIDDEN':'INVALID_INPUT');
+  if(node.batchSupported===false)throw fail('BATCH_UNSUPPORTED');
+  if(active>=MAX_ACTIVE)throw fail('SERVICE_BUSY');
+  const items=payloads.map(payload=>({jsonrpc:'2.0',id:++nextId,method:payload.method,params:payload.params??[]}));
+  let body;try{body=JSON.stringify(items);}catch{throw fail('INVALID_INPUT');}
+  if(Buffer.byteLength(body)>LIMIT)throw fail('UPSTREAM_LIMIT');
+  const stats=items.map(item=>(isProbe?node.probeRequests:node.requests)[item.method]??=metric());
+  const started=clock(),controller=new AbortController();let timedOut=false;
+  const onAbort=()=>controller.abort(signal.reason);
+  signal.addEventListener('abort',onAbort,{once:true});
+  const timer=setTimeout(()=>{timedOut=true;controller.abort();},timeoutMs);
+  active++;
+  const unsupported=()=>{const error=fail('BATCH_UNSUPPORTED');node.batchSupported=false;throw error;};
+  try{
+   const response=await abortable(Promise.resolve().then(()=>fetchImpl(node.url,{method:'POST',headers:{'content-type':'application/json'},body,signal:controller.signal})),controller.signal);
+   if(!response.ok){
+    try{await response.body?.cancel();}catch{}
+    if(response.status===400||response.status===405||response.status===415)unsupported();
+    throw response.status===429||response.status===503&&response.headers?.get('retry-after')?fail('UPSTREAM_RATE_LIMIT',{retryAfterMs:retryAfter(response,clock())}):fail('UPSTREAM_UNAVAILABLE');
+   }
+   const chunks=[];let bytes=0;
+   if(!response.body)throw fail('UPSTREAM_UNAVAILABLE');
+   const reader=response.body.getReader();
+   try{
+    while(true){
+     const {done,value}=await abortable(reader.read(),controller.signal);if(done)break;
+     bytes+=value.byteLength;if(bytes>LIMIT)throw fail('UPSTREAM_LIMIT');chunks.push(value);
+    }
+   }finally{try{await reader.cancel();}catch{}reader.releaseLock();}
+   let data;try{data=JSON.parse(Buffer.concat(chunks).toString());}catch{throw fail('UPSTREAM_UNAVAILABLE');}
+   if(!Array.isArray(data))unsupported();
+   const byId=new Map(data.map(item=>[item?.id,item]));
+   if(items.some(item=>{const row=byId.get(item.id);return !row||row.error||!Object.hasOwn(row,'result');}))throw fail('UPSTREAM_UNAVAILABLE');
+   const elapsed=clock()-started;
+   for(const item of stats)observe(item,elapsed,clock());
+   node.batchSupported=true;
+   for(const item of items){
+    const result=byId.get(item.id).result;
+    if(item.method==='eth_getBlockByNumber'&&item.params?.[0]==='latest'&&/^0x[0-9a-f]+$/i.test(result?.number)){node.head=BigInt(result.number);node.headAt=clock();}
+   }
+   return items.map(item=>byId.get(item.id).result);
+  }catch(error){
+   if(error?.code==='BATCH_UNSUPPORTED')throw error;
+   if(signal.aborted)throw cancelled(signal);
+   for(const item of stats)item.failures++;
+   if(timedOut)throw fail('UPSTREAM_TIMEOUT');
+   if(error?.[INTERNAL_ERROR])throw error;
+   throw fail('UPSTREAM_UNAVAILABLE');
+  }finally{active--;clearTimeout(timer);signal.removeEventListener('abort',onAbort);}
+ }
  function verifyChain(node,signal,isProbe){
   if(signal.aborted)return Promise.reject(cancelled(signal));
   const age=node.chainAt===null?Infinity:clock()-node.chainAt;
@@ -214,6 +268,7 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
      const started=clock();
      const attempt=(async()=>{
       const request=payload=>call(node,payload,controller.signal,isProbe);
+      request.batch=payloads=>callMany(node,payloads,controller.signal,isProbe);
       await verifyChain(node,controller.signal,isProbe);
       if(controller.signal.aborted)throw cancelled(controller.signal);
       return operation(request,node.public,controller.signal);

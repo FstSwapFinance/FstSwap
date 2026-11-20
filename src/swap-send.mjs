@@ -119,15 +119,24 @@ export async function sendWalletOnce({provider,read,transaction,gasLimit,gasPric
     timing?.('prepare_done');
     return result;
    });
+   // Nonce and the canonical recheck do not depend on simulation. They start
+   // with the guard so a slow preparation does not add another full round trip.
+   const noncePromise=walletRead({method:'eth_getTransactionCount',params:[account,'pending']});
+   const chainPromise=prepare?walletRead({method:'eth_chainId'}):null;
+   const accountsPromise=prepare?walletRead({method:'eth_accounts'}):null;
+   noncePromise.catch(()=>{});chainPromise?.catch(()=>{});accountsPromise?.catch(()=>{});
+   const guardPromise=guard();
+   const blockPromise=guardPromise.then(canonical=>walletRead({method:'eth_getBlockByNumber',params:[canonical.number,false]}));
+   blockPromise.catch(()=>{});
    // Both branches are observed immediately. A failure aborts the other branch;
    // a late read result can never call eth_sendTransaction on its own.
-   const [canonical,prepared]=await Promise.all([guard(),walletDeadline(preparation,walletReadTimeoutMs,active)]);
+   const [canonical,prepared]=await Promise.all([guardPromise,walletDeadline(preparation,walletReadTimeoutMs,active)]);
    checkSignal(active);unchanged();
    if(prepared?.needsApproval)return{needsApproval:true,preparation:prepared};
    timing?.('final_guard_start');
    const [block,nonce,chain,accounts]=await Promise.all([
-    walletRead({method:'eth_getBlockByNumber',params:[canonical.number,false]}),walletRead({method:'eth_getTransactionCount',params:[account,'pending']}),
-    ...(prepare?[walletRead({method:'eth_chainId'}),walletRead({method:'eth_accounts'})]:[]),
+    blockPromise,noncePromise,
+    ...(prepare?[chainPromise,accountsPromise]:[]),
    ]);
    if(prepare&&(BigInt(chain)!==56n||!same(accounts[0],account)))throw fail('WALLET_CHANGED','钱包网络或账户已改变，请重新核对');
    if(!block||!same(block.hash,canonical.hash))throw fail('WRONG_CHAIN','钱包网络与读链节点不一致');
