@@ -8,7 +8,8 @@ import { createAllowanceReader } from './swap-allowance.mjs?v=mainnet-20261113-5
 import { createSubmissionWarmup } from './swap-submission-warmup.mjs?v=mainnet-20261113-50';
 import { createWalletTiming, timeWalletPhase, walletTimingFailure } from './swap-wallet-timing.mjs?v=mainnet-20261113-50';
 import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261113-50';
-import { readWalletBalances } from './swap-balances.mjs?v=mainnet-20261113-50';
+import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261113-50';
+import { acceptQuoteResult, quoteFieldState, balanceFieldState, holdingLabel } from './swap-display.mjs?v=mainnet-20261113-50';
 import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261113-50";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
@@ -216,8 +217,8 @@ export function openTokenPicker({ selected, other, balances = {}, onPick, loadBa
       r.setAttribute("role", "button"); r.tabIndex = k === selected ? -1 : 0;
       r.setAttribute("aria-disabled", String(k === selected));
       const balBox = r.querySelector(".hpHOqm");
-      const bal = balances[k];
-      if (balBox) { if (wallet.account && bal != null) { balBox.textContent = sigDown(bal, TOKENS[k].decimals, 4); balBox.title = swapFormatUnits(bal, TOKENS[k].decimals); } else balBox.parentElement.replaceChildren(); }
+      const held = holdingLabel(balances[k], TOKENS[k].decimals, (value, decimals) => sigDown(value, decimals, 4), swapFormatUnits);
+      if (balBox) { if (wallet.account && held) { balBox.textContent = held.text; balBox.title = held.title; } else balBox.parentElement.replaceChildren(); }
       if (k !== selected) {
         r.addEventListener("click", () => { closePicker(); onPick(k); });
         r.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); r.click(); } });
@@ -260,7 +261,7 @@ export async function mountSwapView(root) {
   const transactionRead = (payload,{signal}={}) => swapPublicRpc(globalThis.fetch, signal ? AbortSignal.any([signal,AbortSignal.timeout(6000)]) : AbortSignal.timeout(6000), { priority:"foreground", attempts: 2, timeoutMs: 2000 })(payload);
   const settings = readSettings();
   const state = {
-    amount: "", quote: null, quoteError: "", quoteErrorReason: "", balances: {}, balanceErrors: {}, balanceEpoch: 0, allowance: null, config: null,
+    amount: "", quote: null, quoteError: "", quoteErrorReason: "", balances: {}, balanceErrors: {}, balancePending: {}, balanceEpoch: 0, allowance: null, config: null,
     showInverted: false, settingsOpen: false, seq: 0,
   };
   // —— 骨架：官方 main（AppBody）+ SwapHeader + #swap-page ——
@@ -330,13 +331,14 @@ export async function mountSwapView(root) {
       const left = fiat.firstElementChild;
       if (tk) {
         left.classList.add("fst-balance-row");
-        const bal = state.balances[tk.key];
+        const field = balanceFieldState({connected:Boolean(wallet.account),balance:state.balances[tk.key],error:Boolean(state.balanceErrors[tk.key]),pending:Boolean(state.balancePending[tk.key])});
         const balText = left.querySelector(".css-djrxae");
         if (balText) {
-          const value = !wallet.account ? "—" : state.balanceErrors[tk.key] ? tr("读取失败", "Unavailable") : bal == null ? tr("读取中…", "Loading…") : formatBalance(bal, tk) + " " + tk.symbol;
+          const value = field.state === "disconnected" ? "—" : field.state === "error" ? tr("读取失败", "Unavailable") : field.state === "loading" ? tr("读取中…", "Loading…") : formatBalance(field.balance, tk) + " " + tk.symbol;
           balText.textContent = tr("余额：", "Balance: ") + value;
+          balText.dataset.balanceState = field.state;
           balText.style.cursor = "default";
-          balText.title = !wallet.account ? tr("连接钱包后查看余额", "Connect a wallet to view your balance") : "";
+          balText.title = field.state === "disconnected" ? tr("连接钱包后查看余额", "Connect a wallet to view your balance") : field.state === "ready" ? swapFormatUnits(field.balance, tk.decimals) : "";
         }
         const max = left.querySelector("button.cfnxzr");
         max?.remove();
@@ -349,9 +351,10 @@ export async function mountSwapView(root) {
             action.type="button";action.className="fst-balance-action"+(percent===100?" cfnxzr":"");
             action.dataset.percent=String(percent);action.textContent=percent===100?"Max":percent+"%";
             action.setAttribute("aria-label",percent+"% "+tr("可用余额","available balance")+" "+tk.symbol);
-            action.disabled=!account||typeof bal!=="bigint"||bal<=0n||Boolean(state.balanceErrors[tk.key])||(tk.key==="bnb"?Boolean(state.nativeMaxBusy):balanceFraction(bal,percent)===0n);
+            const spendable=field.spendable?field.balance:null;
+            action.disabled=!account||spendable==null||spendable<=0n||(tk.key==="bnb"?Boolean(state.nativeMaxBusy):balanceFraction(spendable,percent)===0n);
             action.addEventListener("click",()=>{
-              if(wallet.account!==account||inT()?.key!==tk.key||state.balances[tk.key]!==bal)return;
+              if(wallet.account!==account||inT()?.key!==tk.key||state.balancePending[tk.key]||state.balances[tk.key]!==spendable)return;
               setBalanceFraction(percent);
             });
             actions.append(action);
@@ -371,9 +374,15 @@ export async function mountSwapView(root) {
     return sigDown(bal, tk.decimals, 9);
   }
 
+  function presentedQuote() {
+    let amountRaw = null;
+    try { if (inT() && state.amount) amountRaw = swapUnits(state.amount, inT().decimals); } catch {}
+    return quoteFieldState({amount:state.amount, quote:state.quote, error:state.quoteError, decimals:outT()?.decimals ?? 18, now:state.quote ? quoteNow(state.quote) : Date.now(), amountRaw});
+  }
   function renderPanels() {
     selectedTokenSignature = selectedTokenIdentity();
-    const outVal = state.quote ? formatAmountInput(state.quote.out, outT().decimals) : "";
+    const presented = presentedQuote();
+    const outVal = presented.value;
     const inVal = state.amount;
     const refocus = state.refocus || document.activeElement === main.querySelector("#swap-currency-input input");
     const arrow = part("swap_quoted", ".hDVbXn");
@@ -382,6 +391,10 @@ export async function mountSwapView(root) {
     const showMax = Boolean(inT());
     const inEl = panel("swap-currency-input", inT(), inVal, { showMax });
     const outEl = panel("swap-currency-output", outT(), outVal, { showMax: false });
+    const outInput = outEl.querySelector("input");
+    outInput.placeholder = presented.placeholder;
+    outInput.dataset.quoteState = presented.state;
+    outInput.setAttribute("aria-busy", presented.state === "loading" || presented.state === "stale" ? "true" : "false");
     panelsCol.replaceChildren(inEl, arrow, outEl);
     const input = inEl.querySelector("input");
     if (refocus) {
@@ -393,7 +406,7 @@ export async function mountSwapView(root) {
   function renderTrade() {
     // Unit price is display-only: it never populates state.quote or enables a swap.
     const preview = !state.amount && state.preview?.serviceExpiresAt > quoteNow(state.preview) ? state.preview : null;
-    const q = state.quote || preview;
+    const q = presentedQuote().state === "ready" ? state.quote : preview;
     const existingDetails = card.querySelector(":scope > .cKJcLm");
     existingDetails?.remove();
     if (!q) {
@@ -493,8 +506,8 @@ export async function mountSwapView(root) {
     if (state.quoteError) return tr("报价暂不可用，正在重试", "Quote unavailable; retrying");
     if (!state.quote) return tr("正在获取报价…", "Fetching quote…");
     if (state.quote.serviceExpiresAt && quoteNow(state.quote) >= state.quote.serviceExpiresAt) return tr("正在更新报价…", "Refreshing quote…");
-    const bal = state.balances[page.inKey];
-    if (bal != null && bal < (state.quote.maxIn ?? state.quote.amountIn)) return tr(inT().symbol + " 余额不足", "Insufficient " + inT().symbol + " balance");
+    const held = balanceFieldState({connected:true,balance:state.balances[page.inKey],error:Boolean(state.balanceErrors[page.inKey]),pending:Boolean(state.balancePending[page.inKey])});
+    if (held.spendable && held.balance < (state.quote.maxIn ?? state.quote.amountIn)) return tr(inT().symbol + " 余额不足", "Insufficient " + inT().symbol + " balance");
     return "";
   }
   function needsApproval() {
@@ -583,6 +596,12 @@ export async function mountSwapView(root) {
     const wanted = [...new Set(keys)].filter(k => TOKENS[k]);
     const id = ++balanceRequestId;
     wanted.forEach(k => balanceRequests.set(k, id));
+    // A post-trade refresh must not keep the previous number spendable. A
+    // background read keeps the last confirmed row until its own result lands.
+    if (fresh) {
+      for (const k of wanted) state.balancePending[k] = id;
+      if (main.isConnected) { renderPanels(); renderBottom(); }
+    }
     let result;
     if(submissionWarmup.pending())cancelSubmissionWarm();activeBalanceReads++;
     try { result = await readWalletBalances(balanceRequest, account, wanted.map(k => TOKENS[k]), {fresh,signal}); }
@@ -591,7 +610,8 @@ export async function mountSwapView(root) {
     if (signal?.aborted || wallet.account !== account || state.balanceEpoch !== epoch) return;
     for (const k of wanted) {
       if (balanceRequests.get(k) !== id) continue;
-      if (result.balances[k] != null) { state.balances[k] = result.balances[k]; delete state.balanceErrors[k]; }
+      if (state.balancePending[k] === id) delete state.balancePending[k];
+      if (typeof result.balances[k] === "bigint" && result.balances[k] >= 0n) { state.balances[k] = result.balances[k]; delete state.balanceErrors[k]; }
       else { delete state.balances[k]; state.balanceErrors[k] = true; }
     }
   }
@@ -737,7 +757,8 @@ export async function mountSwapView(root) {
     e.target.value = v; state.amount = v;  state.quote = null; state.quoteError = ""; state.refocus = true;
     renderTrade(); renderBottom();
     prewarmQuote();
-    const out = main.querySelector("#swap-currency-output input"); if (out) out.value = "";
+    const out = main.querySelector("#swap-currency-output input");
+    if (out) { out.value = ""; const loading = Number(v) > 0; out.placeholder = loading ? "…" : "0.0"; out.dataset.quoteState = loading ? "loading" : "empty"; out.setAttribute("aria-busy", loading ? "true" : "false"); }
     scheduleQuote(hadQuote || now-lastTypedAt<400 ? 100 : 0);lastTypedAt=now;
     if (!Number(v)) { refreshPairPrice(); otherBalances.schedule(); }
   }
@@ -748,7 +769,7 @@ export async function mountSwapView(root) {
   }
   function cancelNativeMax() {
     const pending=nativeMaxJob;pending?.controller.abort();nativeMaxJob=null;state.nativeMaxBusy=false;
-    if(pending&&main.isConnected){const bal=state.balances.bnb;main.querySelectorAll('#swap-currency-input .fst-balance-action').forEach(button=>{button.disabled=!wallet.account||typeof bal!=="bigint"||bal<=0n||Boolean(state.balanceErrors.bnb)||balanceFraction(bal,Number(button.dataset.percent))===0n;});}
+    if(pending&&main.isConnected){const held=balanceFieldState({connected:Boolean(wallet.account),balance:state.balances.bnb,error:Boolean(state.balanceErrors.bnb),pending:Boolean(state.balancePending.bnb)});main.querySelectorAll('#swap-currency-input .fst-balance-action').forEach(button=>{button.disabled=!held.spendable||held.balance<=0n||balanceFraction(held.balance,Number(button.dataset.percent))===0n;});}
   }
   async function readNativeMaxTransaction(amount,{signal}) {
     const ti=inT(),to=outT();if(!ti||ti.key!=="bnb"||!to)throw Error(tr("请先选择币对","Select a token pair first"));
@@ -769,9 +790,9 @@ export async function mountSwapView(root) {
     cancelNativeMax();
     const account=wallet.account,provider=wallet.provider,providerRequest=provider?.request,balance=state.balances.bnb;
     const originalAmount=state.amount,epoch=state.balanceEpoch,identity=selectedTokenIdentity(),options=JSON.stringify(settings);
-    if(!account||inT()?.key!=="bnb"||typeof balance!=="bigint"||balance<=0n||state.balanceErrors.bnb)return;
+    if(!account||inT()?.key!=="bnb"||state.balancePending.bnb||state.balanceErrors.bnb||typeof balance!=="bigint"||balance<=0n)return;
     const controller=new AbortController(),job={controller};nativeMaxJob=job;
-    const assertCurrent=()=>{if(nativeMaxJob!==job||!main.isConnected||wallet.account!==account||wallet.provider!==provider||provider?.request!==providerRequest||selectedTokenIdentity()!==identity||state.amount!==originalAmount||state.balanceEpoch!==epoch||state.balances.bnb!==balance||state.balanceErrors.bnb||JSON.stringify(settings)!==options)throw new DOMException('Native amount changed','AbortError');};
+    const assertCurrent=()=>{if(nativeMaxJob!==job||!main.isConnected||wallet.account!==account||wallet.provider!==provider||provider?.request!==providerRequest||selectedTokenIdentity()!==identity||state.amount!==originalAmount||state.balanceEpoch!==epoch||state.balancePending.bnb||state.balances.bnb!==balance||state.balanceErrors.bnb||JSON.stringify(settings)!==options)throw new DOMException('Native amount changed','AbortError');};
     state.nativeMaxBusy=true;cancelSubmissionWarm();otherBalances.pause();quoteFlow.pause();++state.seq;clearTimeout(quoteExpiryTimer);stopPairPrice();
     state.quote=null;state.quoteError="";state.quoteErrorReason="";renderPanels();renderTrade();renderBottom();
     try{
@@ -790,8 +811,10 @@ export async function mountSwapView(root) {
     }finally{controller.abort();if(main.isConnected)otherBalances.schedule();}
   }
   function setBalanceFraction(percent) {
-    const token=inT(),bal=state.balances[page.inKey];
-    if(!wallet.account||!token||typeof bal!=="bigint"||bal<=0n||state.balanceErrors[token.key])return;
+    const token=inT(),held=balanceFieldState({connected:Boolean(wallet.account),balance:state.balances[page.inKey],error:Boolean(state.balanceErrors[page.inKey]),pending:Boolean(state.balancePending[page.inKey])});
+    if(!held.spendable||!token)return;
+    const bal=held.balance;
+    if(bal<=0n)return;
     if(token.key==="bnb"){void setNativeBalanceFraction(percent);return;}
     cancelNativeMax();const value=balanceFraction(bal,percent);
     if(value===0n)return;
@@ -925,7 +948,7 @@ export async function mountSwapView(root) {
       q.poolCheckedAt = poolPolicy?.checkedAt ?? q.poolCheckedAt ?? Date.now();
       poolPolicy?.assertFresh();
       poolPolicy?.assertValue(q.maxIn || q.amountIn, minOut(q));
-      if (seq !== state.seq || !main.isConnected) return;
+      if (!main.isConnected || !acceptQuoteResult({requestId:seq,currentId:state.seq,requestedText:typed,currentText:state.amount,aborted:Boolean(signal?.aborted)}) || q.amountIn!==amount) return;
       if(signal?.aborted || background && state.transactionBusy)return;
       q.serviceExpiresAt ??= q.poolCheckedAt+15000;
       state.quote = q;state.quoteKey=inputKey;state.quoteError = "";
@@ -1278,7 +1301,8 @@ export async function mountSwapView(root) {
     otherBalances.pause();
     if (wallet.account && !page.connectedDefaults) applyDefaults();
     allowanceReader.invalidate();state.allowance=null;state.allowanceIdentity=null;
-    state.quote = null; ++state.seq; ++state.balanceEpoch; closeModal(); state.balances = {}; state.balanceErrors = {}; render(); refreshBalances(false); restoreSubmittedTransaction(); scheduleQuote(0); refreshPairPrice({reuse:true});
+    invalidateWalletBalances();
+    state.quote = null; ++state.seq; ++state.balanceEpoch; closeModal(); state.balances = {}; state.balanceErrors = {}; state.balancePending = {}; render(); refreshBalances(false); restoreSubmittedTransaction(); scheduleQuote(0); refreshPairPrice({reuse:true});
   });
 
   initialWalletNotification = false;

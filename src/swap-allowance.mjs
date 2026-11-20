@@ -58,6 +58,9 @@ export function createAllowanceReader(request,{clock=Date.now,ttlMs=5000}={}){
    if(typeof blockTag!=='string'||!(/^(latest|pending|earliest|safe|finalized)$/.test(blockTag)||/^0x(?:0|[1-9a-f][0-9a-f]*)$/i.test(blockTag)))throw new Error('Invalid allowance block tag');
    const key=[chainId,account,token,spender].join(':'),cacheable=blockTag==='latest';
    let entry=entries.get(key);
+   // A fresh read replaces an older in-flight call. The late response cannot
+   // satisfy this read or refresh the latest-block cache.
+   if(fresh&&entry?.pending)entry.controller.abort();
    if(!fresh&&cacheable&&entry?.cacheable){
     if(entry.pending)return subscribe(entry,signal);
     const readEpoch=epoch,now=clock();checkSignal(signal);if(readEpoch!==epoch)throw abortError();
