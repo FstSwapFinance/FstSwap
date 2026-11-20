@@ -9,7 +9,7 @@ import { createSubmissionWarmup } from './swap-submission-warmup.mjs?v=mainnet-2
 import { createWalletTiming, timeWalletPhase, walletTimingFailure } from './swap-wallet-timing.mjs?v=mainnet-20261113-50';
 import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261113-50';
 import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261113-50';
-import { acceptQuoteResult, quoteFieldState, balanceFieldState, holdingLabel } from './swap-display.mjs?v=mainnet-20261113-50';
+import { acceptQuoteResult, quoteFieldState, balanceFieldState, holdingLabel, amountForDirectionChange, shouldClearBalancePending } from './swap-display.mjs?v=mainnet-20261113-50';
 import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261113-50";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
@@ -395,6 +395,7 @@ export async function mountSwapView(root) {
     outInput.placeholder = presented.placeholder;
     outInput.dataset.quoteState = presented.state;
     outInput.setAttribute("aria-busy", presented.state === "loading" || presented.state === "stale" ? "true" : "false");
+    if (presented.state === "ready" && typeof state.quote?.out === "bigint" && outT()) outInput.title = swapFormatUnits(state.quote.out, outT().decimals);
     panelsCol.replaceChildren(inEl, arrow, outEl);
     const input = inEl.querySelector("input");
     if (refocus) {
@@ -578,13 +579,15 @@ export async function mountSwapView(root) {
     if (field === "in") { if (page.outKey === key) page.outKey = page.inKey; page.inKey = key; }
     else { if (page.inKey === key) page.inKey = page.outKey; page.outKey = key; }
     stopPairPrice();
-    state.quote = null; state.allowance = null; render(); refreshBalances(false); prewarmQuote(); refreshPairPrice(); scheduleQuote(0);
+    state.quote = null; state.quoteError = ""; state.quoteErrorReason = ""; state.allowance = null; render(); refreshBalances(false); prewarmQuote(); refreshPairPrice(); scheduleQuote(0);
   }
   function flip() {
+    const presented = presentedQuote();
+    const nextAmount = limitAmountDecimals(amountForDirectionChange({quoteState:presented.state, quotedOutput:presented.value, typedAmount:state.amount}));
     [page.inKey, page.outKey] = [page.outKey, page.inKey];
-    state.amount = state.quote ? formatAmountInput(state.quote.out, (inT() || TOKENS.bnb).decimals) : limitAmountDecimals(state.amount);
+    state.amount = nextAmount;
     stopPairPrice();
-    state.quote = null; state.allowance = null; render(); refreshBalances(false); prewarmQuote(); refreshPairPrice(); scheduleQuote(0);
+    state.quote = null; state.quoteError = ""; state.quoteErrorReason = ""; state.allowance = null; render(); refreshBalances(false); prewarmQuote(); refreshPairPrice(); scheduleQuote(0);
   }
 
   // —— 余额（BSC 公共只读 RPC）/ 授权（钱包 provider） ——
@@ -602,15 +605,24 @@ export async function mountSwapView(root) {
       for (const k of wanted) state.balancePending[k] = id;
       if (main.isConnected) { renderPanels(); renderBottom(); }
     }
+    const dropAbortedFreshBalance = () => {
+      if (!fresh || wallet.account !== account || state.balanceEpoch !== epoch) return;
+      for (const k of wanted) {
+        if (balanceRequests.get(k) !== id) continue;
+        delete state.balances[k];
+        delete state.balanceErrors[k];
+        if (state.balancePending[k] === id) delete state.balancePending[k];
+      }
+    };
     let result;
     if(submissionWarmup.pending())cancelSubmissionWarm();activeBalanceReads++;
     try { result = await readWalletBalances(balanceRequest, account, wanted.map(k => TOKENS[k]), {fresh,signal}); }
-    catch { if (signal?.aborted) return; result = {balances:{}, failed:wanted}; }
+    catch { if (signal?.aborted) { dropAbortedFreshBalance(); return; } result = {balances:{}, failed:wanted}; }
     finally { activeBalanceReads--;if(wanted.some(key=>key===page.inKey||key===page.outKey))queueSubmissionWarm(); }
-    if (signal?.aborted || wallet.account !== account || state.balanceEpoch !== epoch) return;
+    if (signal?.aborted || wallet.account !== account || state.balanceEpoch !== epoch) { dropAbortedFreshBalance(); return; }
     for (const k of wanted) {
-      if (balanceRequests.get(k) !== id) continue;
-      if (state.balancePending[k] === id) delete state.balancePending[k];
+      if (!shouldClearBalancePending(state.balancePending[k], id, balanceRequests.get(k))) continue;
+      delete state.balancePending[k];
       if (typeof result.balances[k] === "bigint" && result.balances[k] >= 0n) { state.balances[k] = result.balances[k]; delete state.balanceErrors[k]; }
       else { delete state.balances[k]; state.balanceErrors[k] = true; }
     }

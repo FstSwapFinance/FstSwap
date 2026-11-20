@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as ethers from '../tools/runtime/node_modules/ethers/lib.esm/index.js';
 import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261113-50';
-import {acceptQuoteResult, quoteFieldState, balanceFieldState, holdingLabel} from './swap-display.mjs?v=mainnet-20261113-50';
+import {acceptQuoteResult, quoteFieldState, balanceFieldState, holdingLabel, amountForDirectionChange, shouldClearBalancePending} from './swap-display.mjs?v=mainnet-20261113-50';
 import {createServiceClient, validateServiceQuote} from './swap-service-client.mjs?v=mainnet-20261113-50';
 import {readTokenBalances, readWalletBalances, invalidateWalletBalances} from './swap-balances.mjs?v=mainnet-20261113-50';
 import {createAllowanceReader} from './swap-allowance.mjs?v=mainnet-20261113-50';
@@ -218,6 +218,88 @@ test('allowance cache is isolated by account, chain, and spender and drops after
   values.set(ACCOUNT_A.toLowerCase() + ':' + SPENDER_A.toLowerCase(), 3n);
   assert.equal(await reader.read(key(ACCOUNT_A, SPENDER_A)), 3n);
   await assert.rejects(reader.read({...key(ACCOUNT_A, SPENDER_A), chainId: 1}), /Invalid allowance chain/);
+});
+
+test('dust quotes, direction changes, and later balance reads keep their meaning', () => {
+  const now = 1_700_000_000_000;
+  const dust = quoteFieldState({amount: '1', quote: {amountIn: 1n, out: 1n, serviceExpiresAt: now + 1000}, decimals: 6, now, amountRaw: 1n});
+  assert.equal(dust.state, 'ready');
+  assert.equal(dust.value, '<0.0001');
+  assert.notEqual(dust.value, '0');
+  const visible = quoteFieldState({amount: '1', quote: {amountIn: 100n, out: 100n, serviceExpiresAt: now + 1000}, decimals: 6, now, amountRaw: 100n});
+  assert.equal(visible.value, '0.0001');
+  assert.equal(amountForDirectionChange({quoteState: 'ready', quotedOutput: '3.9147', typedAmount: '1'}), '3.9147');
+  assert.equal(amountForDirectionChange({quoteState: 'stale', quotedOutput: '3.9147', typedAmount: '1'}), '1');
+  assert.equal(amountForDirectionChange({quoteState: 'error', quotedOutput: '', typedAmount: '12'}), '12');
+  assert.equal(amountForDirectionChange({quoteState: 'empty', quotedOutput: '', typedAmount: ''}), '');
+  assert.equal(shouldClearBalancePending(1, 2, 2), true);
+  assert.equal(shouldClearBalancePending(2, 2, 2), true);
+  assert.equal(shouldClearBalancePending(1, 1, 2), false);
+  assert.equal(quoteFieldState({amount: '', error: 'NO_ROUTE', now}).state, 'empty');
+});
+
+test('aborting one coalesced subscriber still delivers to the other', async () => {
+  let now = 1_700_000_000_000, calls = 0;
+  const pending = [];
+  const fetchImpl = async (_url, options) => {
+    calls++;
+    const gate = deferred();
+    pending.push({gate, signal: options.signal, body: JSON.parse(options.body)});
+    const data = await gate.promise;
+    return new Response(encode(data), {status: 200, headers: {'content-type': 'application/json'}});
+  };
+  const client = createServiceClient({base: 'https://quote.test/api/swap', fetchImpl, clock: () => now, monotonic: () => 0, expectedVersion: '2.1.0', quoteTimeout: 5000, balanceTimeout: 5000});
+  const amount = 10n ** 18n;
+  const controller = new AbortController();
+  const first = client.quote({tokenIn: ZERO, tokenOut: WBNB, amountIn: amount, slippageBps: 50, singleHop: true}, {router: FSTSWAP_CONFIG.router, adapters, signal: controller.signal});
+  const second = client.quote({tokenIn: ZERO, tokenOut: WBNB, amountIn: amount, slippageBps: 50, singleHop: true}, {router: FSTSWAP_CONFIG.router, adapters});
+  await Promise.resolve();
+  assert.equal(calls, 1);
+  controller.abort();
+  pending[0].gate.resolve(wrapQuote({amountIn: amount, now}));
+  await assert.rejects(first, error => error.name === 'AbortError');
+  assert.equal((await second).quote.amountIn, amount);
+  assert.equal(pending[0].signal.aborted, false);
+
+  const balanceController = new AbortController();
+  const balances = client.balances(ACCOUNT_A, [{key: 'usdt', address: USDT}], {signal: balanceController.signal});
+  const balancesToo = client.balances(ACCOUNT_A, [{key: 'tether', address: USDT}]);
+  await Promise.resolve();
+  balanceController.abort();
+  pending.at(-1).gate.resolve({schema: 1, chainId: 56, account: ACCOUNT_A, blockNumber: '0x11', blockHash: '0x' + 'cd'.repeat(32), readAt: now, balances: {[USDT]: '0'}, failedTokens: []});
+  await assert.rejects(balances, error => error.name === 'AbortError');
+  assert.equal((await balancesToo).balances.tether, 0n);
+  assert.equal(pending.at(-1).signal.aborted, false);
+});
+
+test('a fresh allowance read does not cancel another waiter for that spender', async () => {
+  const codec = new ethers.Interface(['function allowance(address,address) view returns(uint256)']);
+  const encodeAllowance = value => codec.encodeFunctionResult('allowance', [value]);
+  let calls = 0;
+  const pending = [];
+  const reader = createAllowanceReader(payload => {
+    calls++;
+    return new Promise(resolve => pending.push({payload, resolve}));
+  }, {clock: () => 0, ttlMs: 5000});
+  const key = {chainId: 56, account: ACCOUNT_A, token: USDT, spender: SPENDER_A};
+  const first = reader.read(key);
+  const fresh = reader.read(key, {fresh: true});
+  await Promise.resolve();
+  assert.equal(calls, 1);
+  pending[0].resolve(encodeAllowance(4n));
+  assert.equal(await first, 4n);
+  assert.equal(await fresh, 4n);
+  const latest = reader.read(key, {fresh: true});
+  const mined = reader.read(key, {fresh: true, blockTag: '0x10'});
+  await Promise.resolve();
+  assert.equal(calls, 3);
+  const blockRead = pending.find(item => item.payload.params[1] === '0x10');
+  const latestRead = pending.find(item => item.payload.params[1] === 'latest' && item !== pending[0]);
+  latestRead.resolve(encodeAllowance(5n));
+  blockRead.resolve(encodeAllowance(9n));
+  assert.equal(await latest, 5n);
+  assert.equal(await mined, 9n);
+  assert.equal(blockRead.payload.params[0].to, USDT.toLowerCase());
 });
 
 test('submission preparation expires and native Max reserves live gas', async () => {

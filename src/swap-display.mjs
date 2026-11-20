@@ -13,8 +13,22 @@ export function quoteFieldState({amount='',quote=null,error='',decimals=18,now=D
  const matches=!!quote&&typeof quote.out==='bigint'&&quote.out>0n&&typeof quote.amountIn==='bigint'&&(amountRaw==null||quote.amountIn===amountRaw);
  const expires=quote?.serviceExpiresAt;
  if(matches&&Number.isFinite(expires)&&now>=expires)return {value:'',placeholder:'…',state:'stale',showDetails:false};
- if(!matches)return {value:'',placeholder:'…',state:'loading',showDetails:false};
- return {value:formatAmountInput(quote.out,decimals),placeholder:'0.0',state:'ready',showDetails:true};
+  if(!matches)return {value:'',placeholder:'…',state:'loading',showDetails:false};
+ // Four displayed decimals must not turn a positive raw amount into a confirmed zero.
+ const value=formatAmountInput(quote.out,decimals);
+ return {value:value&&value!=='0'?value:'<0.0001',placeholder:'0.0',state:'ready',showDetails:true};
+}
+
+// A ready quote can become the new input. A hidden stale, failed, or loading
+// output cannot, because that number is not the amount the user still sees.
+export function amountForDirectionChange({quoteState,quotedOutput,typedAmount}={}){
+ return quoteState==='ready'?String(quotedOutput??''):String(typedAmount??'');
+}
+
+// The latest balance read clears its own pending mark and any older one. A
+// superseded read must leave a newer pending mark alone.
+export function shouldClearBalancePending(pendingId,requestId,latestId){
+ return latestId===requestId&&(pendingId==null||pendingId<=requestId);
 }
 
 // Missing, failed, and invalidated rows are never a confirmed zero and cannot
