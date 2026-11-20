@@ -270,9 +270,24 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
    return untilAborted(balancePool.run(async request=>{
     const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertRunning(combined);assertBlock(block,clock);
     const tokens=input.tokens.map(a=>({key:a===ZERO?'bnb':a,address:a===ZERO?null:a}));
-    const result=await readBalances(pinned(request,block),input.account,tokens);assertRunning(combined);
+    // The balance call and the hash recheck are one HTTP request on this same node.
+    // A rejected batch falls back to the two serial reads; the hash is still required.
+    let canonicalHeader=null,batched=false;
+    const anchored=async payload=>{
+     const pinnedPayload=payload.method==='eth_call'?{...payload,params:[payload.params[0],block.number]}:payload.method==='eth_getBalance'?{...payload,params:[payload.params[0],block.number]}:payload;
+     if(pinnedPayload.method!=='eth_call'||batched)return request(pinnedPayload);
+     batched=true;
+     try{
+      const [callResult,header]=await request.batch([pinnedPayload,{method:'eth_getBlockByNumber',params:[block.number,false]}]);
+      canonicalHeader=header;return callResult;
+     }catch(error){
+      if(error.code!=='BATCH_UNSUPPORTED')throw error;
+      batched=false;return request(pinnedPayload);
+     }
+    };
+    const result=await readBalances(anchored,input.account,tokens);assertRunning(combined);
     if(!Object.keys(result.balances).length)throw fail('BALANCE_UNAVAILABLE');
-    const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(combined);if(canonical?.hash!==block.hash)throw fail('STALE_BLOCK');
+    const canonical=canonicalHeader??await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(combined);if(canonical?.hash!==block.hash)throw fail('STALE_BLOCK');
     return{schema:1,chainId:56,account:input.account,blockNumber:block.number,blockHash:block.hash,readAt:clock(),balances:Object.fromEntries(tokens.filter(t=>result.balances[t.key]!=null).map(t=>[t.address||ZERO,result.balances[t.key].toString()])),failedTokens:tokens.filter(t=>result.failed.includes(t.key)).map(t=>t.address||ZERO)};
    },combined,{operation:'balances'}),combined);
   },
