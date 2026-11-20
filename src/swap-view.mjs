@@ -9,7 +9,7 @@ import { createSubmissionWarmup } from './swap-submission-warmup.mjs?v=mainnet-2
 import { createWalletTiming, timeWalletPhase, walletTimingFailure } from './swap-wallet-timing.mjs?v=mainnet-20261113-50';
 import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261113-50';
 import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261113-50';
-import { acceptQuoteResult, quoteFieldState, balanceFieldState, holdingLabel, amountForDirectionChange, shouldClearBalancePending, typedQuoteDelayMs } from './swap-display.mjs?v=mainnet-20261113-50';
+import { acceptQuoteResult, quoteFieldState, balanceFieldState, holdingLabel, amountForDirectionChange, typedQuoteDelayMs } from './swap-display.mjs?v=mainnet-20261113-50';
 import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261113-50";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
@@ -627,8 +627,11 @@ export async function mountSwapView(root) {
     finally { activeBalanceReads--;if(wanted.some(key=>key===page.inKey||key===page.outKey))queueSubmissionWarm(); }
     if (signal?.aborted || wallet.account !== account || state.balanceEpoch !== epoch) { dropAbortedFreshBalance(); return; }
     for (const k of wanted) {
-      if (!shouldClearBalancePending(state.balancePending[k], id, balanceRequests.get(k))) continue;
-      delete state.balancePending[k];
+      const pendingId = state.balancePending?.[k];
+      // Keep this check inside the controller. The extracted balance path has
+      // no module import scope, and an absent map is not a confirmed pending row.
+      if (balanceRequests.get(k) !== id || (pendingId != null && pendingId !== id)) continue;
+      if (state.balancePending) delete state.balancePending[k];
       if (typeof result.balances[k] === "bigint" && result.balances[k] >= 0n) { state.balances[k] = result.balances[k]; delete state.balanceErrors[k]; }
       else { delete state.balances[k]; state.balanceErrors[k] = true; }
     }

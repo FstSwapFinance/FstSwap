@@ -3,12 +3,12 @@
   "esbuildVersion": "0.28.2",
   "entries": {
     "boot": "src/fst-runtime-boot-VX2QARAW.mjs",
-    "app": "src/fst-runtime-app-3SNN2GW4.mjs"
+    "app": "src/fst-runtime-app-R6LDKMSL.mjs"
   },
   "files": [
     {
-      "path": "src/fst-runtime-app-3SNN2GW4.mjs",
-      "sha256": "8e86803fb23c0a7c0742fc7dd95570e04d2ab1ba248a8bd2c47b5f68e7ed8aed",
+      "path": "src/fst-runtime-app-R6LDKMSL.mjs",
+      "sha256": "92ac2ce623c5d5bb223760fc1a6aa0815239dfa703f34af9e98f914a05d62897",
       "bytes": 2388,
       "imports": [
         {
@@ -32,12 +32,12 @@
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-CUIULEEN.mjs",
+          "path": "src/fst-runtime-chunk-OZ6QC3YS.mjs",
           "kind": "dynamic-import",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-IFN4YMA6.mjs",
+          "path": "src/fst-runtime-chunk-4SEAWRD6.mjs",
           "kind": "dynamic-import",
           "external": false
         },
@@ -130,15 +130,10 @@
       ]
     },
     {
-      "path": "src/fst-runtime-chunk-CUIULEEN.mjs",
-      "sha256": "1de87b9b9bc7d689cbba5241472b3a76854f70379047bf6c0be5487bb22932d9",
-      "bytes": 368,
+      "path": "src/fst-runtime-chunk-3J7JQ77Q.mjs",
+      "sha256": "e150119c19f0848c181c5af94d1c27d6a7f34074a99625d53944a421d37c3530",
+      "bytes": 82836,
       "imports": [
-        {
-          "path": "src/fst-runtime-chunk-UJWAWRYX.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
         {
           "path": "src/fst-runtime-chunk-23VRFM6Y.mjs",
           "kind": "import-statement",
@@ -155,16 +150,31 @@
           "external": false
         }
       ],
-      "inputs": [],
-      "entryPoint": "src/swap-view.mjs?v=mainnet-20261113-50"
+      "inputs": [
+        "src/swap-allowance.mjs?v=mainnet-20261113-50",
+        "src/swap-amount.mjs",
+        "src/swap-approval.mjs",
+        "src/swap-display.mjs?v=mainnet-20261113-50",
+        "src/swap-fee-assets.mjs?v=mainnet-20261113-50",
+        "src/swap-idle-read.mjs?v=mainnet-20261113-50",
+        "src/swap-native-max.mjs",
+        "src/swap-preflight.mjs?v=mainnet-20261113-50",
+        "src/swap-quote-context.mjs?v=mainnet-20261113-50",
+        "src/swap-quote-refresh.mjs?v=mainnet-20261113-50",
+        "src/swap-receipt-read.mjs?v=mainnet-20261113-50",
+        "src/swap-send.mjs?v=mainnet-20261113-50",
+        "src/swap-submission-warmup.mjs?v=mainnet-20261113-50",
+        "src/swap-view.mjs?v=mainnet-20261113-50",
+        "src/swap-wallet-timing.mjs?v=mainnet-20261113-50"
+      ]
     },
     {
-      "path": "src/fst-runtime-chunk-IFN4YMA6.mjs",
-      "sha256": "1fce83c2f42759fef4cf5e748bfb7ea30e1c752859e3612431700aa354c32e98",
+      "path": "src/fst-runtime-chunk-4SEAWRD6.mjs",
+      "sha256": "a9aa11fdae1296e861389df6c8893a29e354fb1d5d7da4bb5c15ce2ad267dcc1",
       "bytes": 30486,
       "imports": [
         {
-          "path": "src/fst-runtime-chunk-UJWAWRYX.mjs",
+          "path": "src/fst-runtime-chunk-3J7JQ77Q.mjs",
           "kind": "import-statement",
           "external": false
         },
@@ -227,6 +237,35 @@
       "inputs": [
         "src/swap-startup.mjs?v=mainnet-20261113-50"
       ]
+    },
+    {
+      "path": "src/fst-runtime-chunk-OZ6QC3YS.mjs",
+      "sha256": "ec8b31d11bd17c8ef7292d8182fc3e55cdd1415b4ea8b50928c042d16b3241d8",
+      "bytes": 368,
+      "imports": [
+        {
+          "path": "src/fst-runtime-chunk-3J7JQ77Q.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-23VRFM6Y.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-RIZH5S53.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-TRBLJD7K.mjs",
+          "kind": "import-statement",
+          "external": false
+        }
+      ],
+      "inputs": [],
+      "entryPoint": "src/swap-view.mjs?v=mainnet-20261113-50"
     },
     {
       "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
@@ -306,45 +345,6 @@
         "src/swap-service-client.mjs?v=mainnet-20261113-50",
         "src/swap-service-clock.mjs?v=mainnet-20261113-50"
       ]
-    },
-    {
-      "path": "src/fst-runtime-chunk-UJWAWRYX.mjs",
-      "sha256": "34ac136aa4866755e9576cb12220850a8271309314ed6e26e84e87a63578b8e7",
-      "bytes": 82843,
-      "imports": [
-        {
-          "path": "src/fst-runtime-chunk-23VRFM6Y.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-RIZH5S53.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-TRBLJD7K.mjs",
-          "kind": "import-statement",
-          "external": false
-        }
-      ],
-      "inputs": [
-        "src/swap-allowance.mjs?v=mainnet-20261113-50",
-        "src/swap-amount.mjs",
-        "src/swap-approval.mjs",
-        "src/swap-display.mjs?v=mainnet-20261113-50",
-        "src/swap-fee-assets.mjs?v=mainnet-20261113-50",
-        "src/swap-idle-read.mjs?v=mainnet-20261113-50",
-        "src/swap-native-max.mjs",
-        "src/swap-preflight.mjs?v=mainnet-20261113-50",
-        "src/swap-quote-context.mjs?v=mainnet-20261113-50",
-        "src/swap-quote-refresh.mjs?v=mainnet-20261113-50",
-        "src/swap-receipt-read.mjs?v=mainnet-20261113-50",
-        "src/swap-send.mjs?v=mainnet-20261113-50",
-        "src/swap-submission-warmup.mjs?v=mainnet-20261113-50",
-        "src/swap-view.mjs?v=mainnet-20261113-50",
-        "src/swap-wallet-timing.mjs?v=mainnet-20261113-50"
-      ]
     }
   ],
   "cacheAssets": [
@@ -423,10 +423,10 @@
       "src/fst-runtime-chunk-MXGR5NWG.mjs",
       "src/fst-runtime-boot-VX2QARAW.mjs",
       "src/fst-runtime-chunk-23VRFM6Y.mjs",
-      "src/fst-runtime-app-3SNN2GW4.mjs",
+      "src/fst-runtime-app-R6LDKMSL.mjs",
       "src/fst-runtime-chunk-KFXUIUHA.mjs",
-      "src/fst-runtime-chunk-UJWAWRYX.mjs",
-      "src/fst-runtime-chunk-CUIULEEN.mjs"
+      "src/fst-runtime-chunk-3J7JQ77Q.mjs",
+      "src/fst-runtime-chunk-OZ6QC3YS.mjs"
     ],
     "analysis": [
       "src/fst-runtime-chunk-TRBLJD7K.mjs",
@@ -434,7 +434,7 @@
       "src/fst-runtime-chunk-MXGR5NWG.mjs",
       "src/fst-runtime-boot-VX2QARAW.mjs",
       "src/fst-runtime-chunk-23VRFM6Y.mjs",
-      "src/fst-runtime-app-3SNN2GW4.mjs",
+      "src/fst-runtime-app-R6LDKMSL.mjs",
       "src/fst-runtime-chunk-KFXUIUHA.mjs",
       "src/fst-runtime-chunk-POGXVOZ4.mjs",
       "src/fst-runtime-chunk-RGGY7STC.mjs"
@@ -445,7 +445,7 @@
       "src/fst-runtime-chunk-MXGR5NWG.mjs",
       "src/fst-runtime-boot-VX2QARAW.mjs",
       "src/fst-runtime-chunk-23VRFM6Y.mjs",
-      "src/fst-runtime-app-3SNN2GW4.mjs",
+      "src/fst-runtime-app-R6LDKMSL.mjs",
       "src/fst-runtime-chunk-KFXUIUHA.mjs",
       "src/fst-runtime-chunk-POGXVOZ4.mjs",
       "src/fst-runtime-chunk-RGGY7STC.mjs"
@@ -456,11 +456,11 @@
       "src/fst-runtime-chunk-MXGR5NWG.mjs",
       "src/fst-runtime-boot-VX2QARAW.mjs",
       "src/fst-runtime-chunk-23VRFM6Y.mjs",
-      "src/fst-runtime-app-3SNN2GW4.mjs",
+      "src/fst-runtime-app-R6LDKMSL.mjs",
       "src/fst-runtime-chunk-KFXUIUHA.mjs",
-      "src/fst-runtime-chunk-UJWAWRYX.mjs",
+      "src/fst-runtime-chunk-3J7JQ77Q.mjs",
       "src/fst-runtime-chunk-POGXVOZ4.mjs",
-      "src/fst-runtime-chunk-IFN4YMA6.mjs"
+      "src/fst-runtime-chunk-4SEAWRD6.mjs"
     ],
     "add": [
       "src/fst-runtime-chunk-TRBLJD7K.mjs",
@@ -468,11 +468,11 @@
       "src/fst-runtime-chunk-MXGR5NWG.mjs",
       "src/fst-runtime-boot-VX2QARAW.mjs",
       "src/fst-runtime-chunk-23VRFM6Y.mjs",
-      "src/fst-runtime-app-3SNN2GW4.mjs",
+      "src/fst-runtime-app-R6LDKMSL.mjs",
       "src/fst-runtime-chunk-KFXUIUHA.mjs",
-      "src/fst-runtime-chunk-UJWAWRYX.mjs",
+      "src/fst-runtime-chunk-3J7JQ77Q.mjs",
       "src/fst-runtime-chunk-POGXVOZ4.mjs",
-      "src/fst-runtime-chunk-IFN4YMA6.mjs"
+      "src/fst-runtime-chunk-4SEAWRD6.mjs"
     ],
     "remove": [
       "src/fst-runtime-chunk-TRBLJD7K.mjs",
@@ -480,11 +480,11 @@
       "src/fst-runtime-chunk-MXGR5NWG.mjs",
       "src/fst-runtime-boot-VX2QARAW.mjs",
       "src/fst-runtime-chunk-23VRFM6Y.mjs",
-      "src/fst-runtime-app-3SNN2GW4.mjs",
+      "src/fst-runtime-app-R6LDKMSL.mjs",
       "src/fst-runtime-chunk-KFXUIUHA.mjs",
-      "src/fst-runtime-chunk-UJWAWRYX.mjs",
+      "src/fst-runtime-chunk-3J7JQ77Q.mjs",
       "src/fst-runtime-chunk-POGXVOZ4.mjs",
-      "src/fst-runtime-chunk-IFN4YMA6.mjs"
+      "src/fst-runtime-chunk-4SEAWRD6.mjs"
     ]
   },
   "preloadPriority": [
@@ -1011,7 +1011,7 @@
     },
     {
       "path": "src/swap-view.mjs",
-      "sha256": "0d98db7e450855ec114f13e8db9dc4a91cc5d1491bf1a25e0f437a64c348a6c6"
+      "sha256": "08aa78c63da73a99a1994f6c75340020488e50b573b8c1b1f56b86508856e910"
     },
     {
       "path": "src/swap-wallet-timing.mjs",
