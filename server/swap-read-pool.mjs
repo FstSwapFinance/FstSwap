@@ -181,12 +181,13 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
    const kind=isProbe?'probe':['quote','balances','config','warm'].includes(options.operation)?options.operation:'read';
    const rpcClass=options.rpcClass==='header'?'header':'call';
    const candidates=states.filter(n=>n.cooldown<=clock());
-   const hedgeEligible=nodeId===undefined&&options.hedge===true&&candidates.length>=2;
-   // Reserving every fifth eligible operation prevents a burst of slow requests
-   // from turning all traffic into duplicate RPC work.
-   const permitHedge=hedgeEligible&&++eligibleOperations%5===0;
+   // Quote and balance reads are the page's critical path. A second node may
+   // start once, after a short wait, and only its own completed result can win.
+   const critical=kind==='quote'||kind==='balances';
+   const hedgeEligible=nodeId===undefined&&candidates.length>=2&&(critical||options.hedge===true);
+   const permitHedge=hedgeEligible&&(critical||++eligibleOperations%5===0);
    const history=operationStats[kind];
-   const hedgeDelay=history?.samples?Math.max(1500,history.p90Ms*1.5):2500;
+   const hedgeDelay=critical?300:(history?.samples?Math.max(1500,history.p90Ms*1.5):2500);
    return new Promise((resolve,reject)=>{
     let settled=false,attempts=0,lastError,hedgeTimer,hedgeStarted=false;
     const attempted=new Set(),running=new Map();

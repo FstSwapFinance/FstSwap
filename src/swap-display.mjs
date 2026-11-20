@@ -1,5 +1,8 @@
 import {formatAmountInput} from './swap-amount.mjs';
 
+// Typing used to wait 100ms after the last change before a quote could start.
+export const typedQuoteDelayMs=0;
+
 // The latest typed amount owns the output. An older response, an abort, or a
 // mismatched raw amount must not paint a number.
 export function acceptQuoteResult({requestId,currentId,requestedText,currentText,aborted=false}={}){

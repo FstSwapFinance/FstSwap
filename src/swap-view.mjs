@@ -9,7 +9,7 @@ import { createSubmissionWarmup } from './swap-submission-warmup.mjs?v=mainnet-2
 import { createWalletTiming, timeWalletPhase, walletTimingFailure } from './swap-wallet-timing.mjs?v=mainnet-20261113-50';
 import { swapService, validateServiceQuote } from './swap-service-client.mjs?v=mainnet-20261113-50';
 import { readWalletBalances, invalidateWalletBalances } from './swap-balances.mjs?v=mainnet-20261113-50';
-import { acceptQuoteResult, quoteFieldState, balanceFieldState, holdingLabel, amountForDirectionChange, shouldClearBalancePending } from './swap-display.mjs?v=mainnet-20261113-50';
+import { acceptQuoteResult, quoteFieldState, balanceFieldState, holdingLabel, amountForDirectionChange, shouldClearBalancePending, typedQuoteDelayMs } from './swap-display.mjs?v=mainnet-20261113-50';
 import { quoteFstSwap, recheckFstQuote, fstRequest, FST_ABI } from "./swap-fstswap.mjs?v=mainnet-20261113-50";
 // 兑换页 —— 界面逐节点复刻官方 fstswap.github.io（DOM 模板 swap-official-tpl.mjs + 样式 swap-official.css），
 // 交易逻辑：全部链上操作走聚合合约，不再直连 FstSwap 路由器（0x1B6C…）。
@@ -746,7 +746,7 @@ export async function mountSwapView(root) {
     }
   }
   // —— 报价 ——
-  let quoteExpiryTimer=null,lastTypedAt=0;
+  let quoteExpiryTimer=null;
   const quoteFlow=createQuoteRefresh({run:options=>refreshQuote(options),
     ready:()=>main.isConnected && !document.hidden && navigator.onLine!==false && !!inT() && !!outT() && Number(state.amount)>0,
     blocked:()=>!!state.transactionBusy || !!state.nativeMaxBusy || Boolean(approvals.pending(approvalIdentity()))});
@@ -768,7 +768,6 @@ export async function mountSwapView(root) {
   globalThis.addEventListener('pagehide', stopPairPrice);
   function scheduleQuote(ms=180) { cancelNativeMax();cancelSubmissionWarm();activeWalletController?.abort(); activeSubmissionContext?.dispose(); otherBalances.pause(); ++state.seq;quoteFlow.schedule(ms); }
   function onAmountInput(e) {
-    const hadQuote=!!state.quote,now=Date.now();
     const v = limitAmountDecimals(e.target.value.replace(/,/g, "."));
     if (v !== "" && !/^\d*\.?\d*$/.test(v)) { e.target.value = state.amount; return; }
     stopPairPrice(); otherBalances.pause();
@@ -777,7 +776,8 @@ export async function mountSwapView(root) {
     prewarmQuote();
     const out = main.querySelector("#swap-currency-output input");
     if (out) { out.value = ""; const loading = Number(v) > 0; out.placeholder = loading ? "…" : "0.0"; out.dataset.quoteState = loading ? "loading" : "empty"; out.setAttribute("aria-busy", loading ? "true" : "false"); }
-    scheduleQuote(hadQuote || now-lastTypedAt<400 ? 100 : 0);lastTypedAt=now;
+    // The previous 100ms typing pause waited before the correct request existed.
+    scheduleQuote(typedQuoteDelayMs);
     if (!Number(v)) { refreshPairPrice(); otherBalances.schedule(); }
   }
   function applyBalanceAmount(value,percent,decimals) {
