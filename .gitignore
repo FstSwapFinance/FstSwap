@@ -7,6 +7,13 @@ node_modules/
 contracts/**/out/
 contracts/**/cache/
 contracts/**/broadcast/
-tests/
+# Keep automated regressions in Git; local probes and captures stay local.
+/tests/*
+!/tests/*.test.mjs
+!/tests/runtime-build-fixture.mjs
+!/tests/swap-context-retention-probe.mjs
+!/tests/fixtures/
+/tests/fixtures/*
+!/tests/fixtures/fstsi-8a25-runtime.hex
 backup/
 shots/

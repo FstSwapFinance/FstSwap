@@ -443,6 +443,19 @@ export async function mountSwapView(root) {
     const impact = val(2).querySelector(".hHwHpX"); impact.textContent = formatImpact(q.impact);
     val(3).textContent = fmtTokens(minOut(q), outT()) + " " + outT().symbol;
     val(4).textContent = (settings.slippageBps / 100).toFixed(2) + "%";
+    const deductions=[];
+    for(const segment of q.segments||[])for(const leg of segment.legs||[]){
+      for(const [address,amount,bps] of [[leg.tokenIn,typeof leg.poolAmountIn==='bigint'?leg.amountIn-leg.poolAmountIn:0n,leg.transferInBps],[leg.tokenOut,typeof leg.grossOut==='bigint'?leg.grossOut-leg.out:0n,leg.transferOutBps]]){
+        if(!(amount>0n))continue;
+        const token=Object.values(TOKENS).find(t=>(t.address||ZERO).toLowerCase()===String(address).toLowerCase());
+        deductions.push((token?fmtTokens(amount,token)+" "+token.symbol:amount.toString()+" "+tr("最小单位","base units"))+" ("+(bps/100).toFixed(2)+"%)");
+      }
+    }
+    if(deductions.length){
+      const taxRow=rows[4].cloneNode(true);taxRow.dataset.transferTax="included";
+      taxRow.firstElementChild.textContent=tr("转账税（已计入）","Transfer tax (included)");
+      taxRow.querySelector(":scope > .css-16sxy43").textContent=deductions.join(" · ");el.append(taxRow);
+    }
     return el;
   }
   const formatImpact = (v) => (v == null ? "-" : v < 0.0001 && v > 0 ? "<0.01%" : (Math.max(0, v) * 100).toFixed(2) + "%");
@@ -493,6 +506,7 @@ export async function mountSwapView(root) {
     if (!typed || !(Number(typed) > 0)) return T("输入数额");
     if (state.quoteError === SWAP_V10_MISSING.code) return tr(SWAP_V10_MISSING.zh, SWAP_V10_MISSING.en);
     if (state.quoteError === "NO_ROUTE") return settings.singleHop ? tr("没有符合要求的直达池，可关闭禁用多跳", "No eligible direct pool; enable multihop") : tr("没有符合流动性要求的交易路线", "No route meets the liquidity requirements");
+    if (state.quoteError === "TAX_UNVERIFIED") return tr("无法可靠确认代币转账税，暂停报价", "Transfer tax cannot be verified; quote unavailable");
     if (state.quoteError === "POOL_LIQUIDITY") {
       if (state.quoteErrorReason === "oracle") return tr("价格数据暂不可用，正在重试", "Price data unavailable; retrying");
       if (state.quoteErrorReason === "data") return tr("池子数据读取失败，正在重试", "Pool data unavailable; retrying");
@@ -739,7 +753,7 @@ export async function mountSwapView(root) {
       }, Math.max(0, remote.expiresAt - quoteNow(preview)));
     } catch(error) {
       // Business rejections remain quiet; only transient reads recover in place.
-      retry=!['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY'].includes(error?.code)||Boolean(error?.retryable);
+      retry=!['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','TAX_UNVERIFIED','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY'].includes(error?.code)||Boolean(error?.retryable);
     }
     finally {
       if (previewController === controller) {
@@ -985,14 +999,14 @@ export async function mountSwapView(root) {
       render();queueSubmissionWarm();
     } catch (err) {
       if (signal?.aborted || err?.name==='AbortError' || seq !== state.seq) return;
-      const hardFailure=["NO_ROUTE","NO_FEE_ROUTE","UNSAFE_QUOTE","PRICE_IMPACT_TOO_HIGH"].includes(err?.code) || err?.code==="POOL_LIQUIDITY"&&!err?.retryable;
+      const hardFailure=["NO_ROUTE","NO_FEE_ROUTE","UNSAFE_QUOTE","TAX_UNVERIFIED","PRICE_IMPACT_TOO_HIGH"].includes(err?.code) || err?.code==="POOL_LIQUIDITY"&&!err?.retryable;
       if(!hardFailure && retained && retained.serviceExpiresAt>quoteNow(retained) && state.quote===retained) {state.quoteError="";renderBottom();return;}
       state.quote = null;
       state.quoteError = err?.code === SWAP_V10_MISSING.code ? SWAP_V10_MISSING.code
         : err?.code === "NO_ROUTE" || /revert|INSUFFICIENT/i.test(err?.message || "") ? "NO_ROUTE" : (err?.code || "SWAP_RPC");
       state.quoteErrorReason = err?.reason || "";
       render();
-      if (err?.retryable || !["NO_ROUTE", "NO_FEE_ROUTE", "POOL_LIQUIDITY", "UNSAFE_QUOTE", "PRICE_IMPACT_TOO_HIGH", SWAP_V10_MISSING.code].includes(state.quoteError)) scheduleQuote(8000);
+      if (err?.retryable || !["NO_ROUTE", "NO_FEE_ROUTE", "POOL_LIQUIDITY", "UNSAFE_QUOTE", "TAX_UNVERIFIED", "PRICE_IMPACT_TOO_HIGH", SWAP_V10_MISSING.code].includes(state.quoteError)) scheduleQuote(8000);
     } finally { if (main.isConnected && !signal?.aborted) otherBalances.schedule(); }
   }
 
@@ -1285,7 +1299,7 @@ export async function mountSwapView(root) {
     } catch (err) {
       walletTimingFailure(timing,err);
       if(err?.name === "AbortError"){closeModal();return;}
-      if(!["UNSAFE_QUOTE","PRICE_IMPACT_TOO_HIGH","POOL_LIQUIDITY"].includes(err?.code)&&!err?.pendingIntent&&Number(err?.code)!==4001&&state.quote===q&&await showApprovalIfNeeded(q))return;
+      if(!["UNSAFE_QUOTE","TAX_UNVERIFIED","PRICE_IMPACT_TOO_HIGH","POOL_LIQUIDITY"].includes(err?.code)&&!err?.pendingIntent&&Number(err?.code)!==4001&&state.quote===q&&await showApprovalIfNeeded(q))return;
       if (err?.pendingIntent) errorModal(err.message, err.pendingIntent);
       else if (Number(err?.code) === 4001) errorModal(T("交易被拒绝。"));
       else errorModal(err?.message || tr("交易失败", "Transaction failed"));

@@ -1,10 +1,11 @@
 import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261113-50';
 import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261113-50';
+import {transferModelsFromWire,transferTaxBps,transferNet} from './swap-transfer-tax.mjs';
 import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261113-50';
 import {createServiceClock,serviceMonotonic,SERVICE_TIME_NONCE_HEADER} from './swap-service-clock.mjs?v=mainnet-20261113-50';
 // Read-only API acceleration. Wallet requests and final transaction preflight stay local.
 const ZERO='0x'+'00'.repeat(20),ADDRESS=/^0x[0-9a-f]{40}$/i,HASH=/^0x[0-9a-f]{64}$/i;
-const businessErrors=new Set(['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY']);
+const businessErrors=new Set(['NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY','TAX_UNVERIFIED']);
 const addr=v=>typeof v==='string'&&ADDRESS.test(v),lower=v=>String(v||ZERO).toLowerCase();
 const QUOTE_CACHE_MS=2000,QUOTE_CACHE_SIZE=32;
 // Canonicalize deployment fields; the outer adapter lookup order stays explicit.
@@ -21,7 +22,7 @@ async function waitForSignal(promise,signal){
 }
 // The staged 2.0 wire format binds every executable branch to its quoted amount
 // graph. UI-only annotations are ignored; alternate executable forms are not.
-function validateFstServiceQuote(q,c,input,adapters){
+function validateFstServiceQuote(q,c,input,adapters,blockNumber){
  const BPS=10000n,MAX=(1n<<256n)-1n,WBNB='0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c';
  const feeAssets=new Set([ZERO,WBNB,'0x55d398326f99059ff775485246999027b3197955','0xc9882def23bc42d53895b8361d0b1edc7570bc6a','0x2170ed0880ac9a755fd29b2688956bd959f933f8','0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d']);
  const fields=(o,allowed)=>check(o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).every(k=>allowed.includes(k)));
@@ -29,7 +30,7 @@ function validateFstServiceQuote(q,c,input,adapters){
  const same=(a,b)=>addr(a)&&addr(b)&&lower(a)===lower(b);
  const impact=v=>check(Number.isFinite(v)&&v>=0&&v<=1);
  check(addr(input.tokenIn)&&addr(input.tokenOut)&&!same(input.tokenIn,input.tokenOut)&&Number.isInteger(input.slippageBps)&&input.slippageBps>=0&&input.slippageBps<=5000&&typeof input.singleHop==='boolean');
- fields(q,['kind','tokenIn','tokenOut','amountIn','out','minimum','lpFee','feeToken','feeMode','configVersion','impact','poolCheckedAt','stages','segments','serviceMeta','serviceExpiresAt','feeAsset']);
+ fields(q,['kind','tokenIn','tokenOut','amountIn','out','minimum','lpFee','feeToken','feeMode','configVersion','impact','poolCheckedAt','stages','segments','serviceMeta','serviceExpiresAt','feeAsset','quoteModel','taxProfiles']);
  check(q.kind==='fstswap'&&same(q.tokenIn,input.tokenIn)&&same(q.tokenOut,input.tokenOut)&&Number.isSafeInteger(q.poolCheckedAt)&&q.poolCheckedAt>=0);
  fields(c,['version','platformFeeBps','feeReceiver','wbnb','defaultFeeToken','feeConfigVersion','adaptersOff','v3Factory']);
  check(feeAssets.has(lower(c.defaultFeeToken))&&same(c.wbnb,WBNB));
@@ -40,13 +41,33 @@ function validateFstServiceQuote(q,c,input,adapters){
  const from=lower(input.tokenIn),to=lower(input.tokenOut),mode=feeAssets.has(from)?'input':feeAssets.has(to)?'output':'intermediate',fee=mode==='input'?from:mode==='output'?to:lower(c.defaultFeeToken);
  check(q.feeMode===mode&&lower(q.feeToken)===fee);
  check(Array.isArray(q.segments)&&q.segments.length===(mode==='intermediate'?2:1)&&Array.isArray(q.stages)&&q.stages.length>0&&q.stages.length<=6);
+ const net=q.quoteModel==='net-transfer-v1';
+ check(q.quoteModel==null||net);check(net||q.taxProfiles==null);
+ // Old settlement-only DTOs can coexist during a rolling release. Any asset
+ // requiring a transfer model must carry a validated, block-bound profile.
+ const routeTokens=[from,to,...q.stages.flatMap(stage=>[stage?.tokenIn,stage?.tokenOut,...(Array.isArray(stage?.branches)?stage.branches.flatMap(branch=>branch?.kind===1?[branch.v3Path?.slice(0,42),'0x'+branch.v3Path?.slice(48)]:Array.isArray(branch?.path)?branch.path:[]):[])])].filter(addr);
+ const models=transferModelsFromWire(net?q.taxProfiles:[],{tokens:routeTokens,blockNumber});
+ if([...models.values()].some(model=>model.kind==='pair')&&c.version!=='2.1.0')throw Object.assign(Error('Transfer-tax quote requires the direct V2 execution graph'),{code:'TAX_UNVERIFIED'});
+ const taxRates=(l,stageIndex,stage,stages)=>{
+  const next=stages[stageIndex+1],prefunded=stageIndex>0&&stage.legs.length===1&&stages[stageIndex-1].legs.length===1&&l.kind==='v2'&&stages[stageIndex-1].legs[0].kind==='v2';
+  const destination=next?.legs?.length===1&&stage.legs.length===1&&l.kind==='v2'&&next.legs[0].kind==='v2'?next.legs[0].poolIds[0]:ZERO;
+  const incoming=prefunded?0:Number(transferTaxBps(models.get(lower(l.tokenIn)),ZERO,l.poolIds[0]));
+  const outgoing=Number(transferTaxBps(models.get(lower(l.tokenOut)),l.poolIds[0],destination));
+  return{incoming,outgoing};
+ };
  const dexes=Object.entries(adapters).filter(([key])=>['fst','pancake','v3'].includes(key)),pools=new Set(),expectedStages=[];
  const wrapPair=(a,b)=>[lower(a),lower(b)].sort().join(':')===[ZERO,WBNB].sort().join(':');
- const signature=l=>JSON.stringify([lower(l.adapter),l.kind,Array.isArray(l.path)?l.path.map(lower):String(l.path).toLowerCase(),lower(l.tokenIn),lower(l.tokenOut),String(l.amountIn),String(l.out),l.weightBps,l.poolIds.map(lower)]);
+ const signature=l=>JSON.stringify([lower(l.adapter),l.kind,Array.isArray(l.path)?l.path.map(lower):String(l.path).toLowerCase(),lower(l.tokenIn),lower(l.tokenOut),String(l.amountIn),String(l.out),l.weightBps,l.poolIds.map(lower),...(net?[String(l.poolAmountIn),String(l.grossOut),l.transferInBps,l.transferOutBps]:[])]);
  function checkLeg(l){
-  fields(l,['adapter','kind','path','tokenIn','tokenOut','amountIn','out','weightBps','poolIds']);
+  fields(l,['adapter','kind','path','tokenIn','tokenOut','amountIn','out','weightBps','poolIds',...(net?['poolAmountIn','grossOut','transferInBps','transferOutBps']:[])]);
   check(addr(l.adapter)&&addr(l.tokenIn)&&addr(l.tokenOut)&&!same(l.tokenIn,l.tokenOut));uint(l.amountIn,true);uint(l.out,true);
   check(Number.isInteger(l.weightBps)&&l.weightBps>0&&l.weightBps<=10000&&Array.isArray(l.poolIds));
+  if(net){
+   uint(l.poolAmountIn,true);uint(l.grossOut,true);
+   check([l.transferInBps,l.transferOutBps].every(v=>Number.isInteger(v)&&v>=0&&v<=10000));
+   check(l.poolAmountIn===transferNet(l.amountIn,BigInt(l.transferInBps))&&l.out===transferNet(l.grossOut,BigInt(l.transferOutBps)));
+   if(l.kind!=='v2')check(l.transferInBps===0&&l.transferOutBps===0);
+  }
   if(l.kind==='wrap'){
    check(wrapPair(l.tokenIn,l.tokenOut)&&wrapPair(from,to)&&q.segments.length===1&&q.stages.length===1&&lower(l.adapter)===ZERO&&Array.isArray(l.path)&&l.path.length===0&&l.poolIds.length===0&&l.weightBps===10000&&l.amountIn===l.out);
   }else{
@@ -70,13 +91,19 @@ function validateFstServiceQuote(q,c,input,adapters){
   check(flat.length===s.legs.length&&flat.every((l,n)=>signature(l)===signature(s.legs[n])));
   const wrapped=s.legs[0].kind==='wrap';check(s.minimum===(wrapped?s.out:minimum(s.out))&&(!wrapped||s.impact===0));
   let budget=s.amountIn,token=s.from;const seenTokens=new Set([lower(token)]);
-  for(const stage of s.routeStages){
+  for(let stageIndex=0;stageIndex<s.routeStages.length;stageIndex++){
+   const stage=s.routeStages[stageIndex];
    fields(stage,['tokenIn','tokenOut','out','legs']);check(same(stage.tokenIn,token)&&addr(stage.tokenOut)&&!seenTokens.has(lower(stage.tokenOut)));seenTokens.add(lower(stage.tokenOut));uint(stage.out,true);
    check(stage.legs.length>0&&stage.legs.length<=3&&stage.legs.reduce((n,l)=>n+l.weightBps,0)===10000);
    let allocated=0n,total=0n;
    for(let n=0;n<stage.legs.length;n++){
     const l=stage.legs[n],part=n+1===stage.legs.length?budget-allocated:budget*BigInt(l.weightBps)/BPS;allocated+=part;
-    check(same(l.tokenIn,stage.tokenIn)&&same(l.tokenOut,stage.tokenOut)&&l.amountIn===part);total+=l.out;
+    check(same(l.tokenIn,stage.tokenIn)&&same(l.tokenOut,stage.tokenOut)&&l.amountIn===part);
+    if(net){
+     const rates=l.kind==='wrap'?{incoming:0,outgoing:0}:taxRates(l,stageIndex,stage,s.routeStages);
+     check(l.transferInBps===rates.incoming&&l.transferOutBps===rates.outgoing);
+    }
+    total+=l.out;
     for(const pool of l.poolIds){check(!pools.has(lower(pool)));pools.add(lower(pool));}
    }
    check(total===stage.out);
@@ -116,7 +143,7 @@ export function validateServiceQuote(data,input,{router,adapters,clock=Date.now,
  check(q&&typeof q.amountIn==='bigint'&&q.amountIn===BigInt(input.amountIn)&&typeof q.out==='bigint'&&q.out>0n&&typeof q.lpFee==='bigint'&&q.lpFee>=0n&&addr(q.feeToken)&&Number.isFinite(q.impact)&&q.impact>=0);
  check(q.poolCheckedAt+15000===data.expiresAt);
  check(q.maxIn==null&&!q.exactOut);
- if(['2.0.0','2.1.0'].includes(c.version)){check(data.quotedAt<data.expiresAt);validateFstServiceQuote(q,c,input,adapters);return data;}
+ if(['2.0.0','2.1.0'].includes(c.version)){check(data.quotedAt<data.expiresAt);validateFstServiceQuote(q,c,input,adapters,data.blockNumber);return data;}
  const entries=Object.entries(adapters).filter(([key])=>['fst','pancake','v3'].includes(key)),empty=l=>l&&lower(l.adapter)===ZERO&&Array.isArray(l.path)&&l.path.length===0;
  const leg=l=>{
   const entry=entries.find(([,a])=>lower(a.adapter)===lower(l?.adapter));check(entry&&!c.adaptersOff.includes(entry[0]));
@@ -225,7 +252,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
    if(data){
     const sample=responseTimes.get(data),validation=sample?{...binding,timeBounds:()=>serviceClock.bounds(sample)}:binding;
     try{validateServiceQuote(data,input,validation);checkCallerSignal(signal);}
-    catch{checkCallerSignal(signal);cool('quote',signal,current);settle(entry,null,null);return;}
+    catch(error){checkCallerSignal(signal);if(error?.code==='TAX_UNVERIFIED'){settle(entry,error,null);return;}cool('quote',signal,current);settle(entry,null,null);return;}
     const completedAt=clock(),completedMono=monotonic();checkCallerSignal(signal);
     // Only the newest live read for this input may fill the short display cache.
     // A slower aborted or superseded response cannot replace it.
