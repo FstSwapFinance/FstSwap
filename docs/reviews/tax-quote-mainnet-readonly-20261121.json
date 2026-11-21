@@ -1,0 +1,249 @@
+{
+  "at": "2026-11-21T05:12:40.217Z",
+  "scope": "Isolated canonical-pool read-only Router sample, not complete public quote-service validation and not a transaction simulation or broadcast. No synthetic pool reserves; gross/net correctness independently calculated from this real pinned block. Timings are sequential public-RPC samples, not statistically controlled performance claims.",
+  "baselineCommit": "47ccfb1",
+  "patchSource": "Working-tree source at the recorded sample time; no claim that the later committed checkout remains uncommitted.",
+  "block": {
+    "number": "0x8095419",
+    "hash": "0x3d944a1eb9978b2e07bfce6888c8e36d9c7b1c3acf6ddd427254ea58ea15c31f",
+    "timestamp": 1795237948
+  },
+  "pair": {
+    "adapter": "0x9De342bDFFB5da04D9865f4cd9846D22560D253a",
+    "address": "0xec6abc1cbaef40878069245c2568401e56c949f1",
+    "token0": "0x8a25a5929a18c132eaf47a2b497c86ad00ea5b9e",
+    "token1": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+    "reserves": [
+      "8541588917009287955855385",
+      "59288281175097608745"
+    ],
+    "kind": "v2"
+  },
+  "profileIdentity": {
+    "fields": {
+      "pair": "0xEC6ABC1CBaef40878069245c2568401e56c949f1",
+      "tradeTaxBps(true)": "300",
+      "tradeTaxBps(false)": "300",
+      "tradingOpenedAt": "1794664343",
+      "tradingOpenedBlock": "133554912",
+      "protocolContext": false,
+      "liquidityMode": "0",
+      "feeProcessing": false
+    },
+    "runtimeBytes": 6647
+  },
+  "profileSample": {
+    "elapsedMs": 707.7164169999996,
+    "rpcAttempts": 2,
+    "successfulRpcCalls": 2,
+    "model": {
+      "kind": "pair",
+      "pair": "0xec6abc1cbaef40878069245c2568401e56c949f1",
+      "buyBps": "300",
+      "sellBps": "300",
+      "codeHash": "7e4601dda4099afdcb91e338cca52a15a77112046876aaf4f13917a8b52693ed",
+      "blockNumber": "0x8095419"
+    }
+  },
+  "cases": [
+    {
+      "name": "buy",
+      "tokenIn": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "tokenOut": "0x8a25a5929a18c132eaf47a2b497c86ad00ea5b9e",
+      "amountIn": "1000000000000000",
+      "baseline": {
+        "elapsedMs": 520.2110840000005,
+        "rpcAttempts": 1,
+        "successfulRpcCalls": 1,
+        "out": "143706166361160199380"
+      },
+      "patchedWithProfileReused": {
+        "elapsedMs": 930.8696249999994,
+        "rpcAttempts": 1,
+        "successfulRpcCalls": 1,
+        "out": "139394981370325393399",
+        "poolAmountIn": "1000000000000000",
+        "grossOut": "143706166361160199380",
+        "transferInBps": 0,
+        "transferOutBps": 300,
+        "impact": 0.0025167900000000465
+      },
+      "independentFormula": {
+        "poolFeeBps": 25,
+        "transferTaxBps": "300",
+        "poolAmountIn": "1000000000000000",
+        "grossPoolOutput": "143706166361160199380",
+        "netOutput": "139394981370325393399",
+        "matches": true
+      },
+      "platformFeeExample": {
+        "bps": 30,
+        "mode": "input",
+        "fee": "3000000000000",
+        "feeToken": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+        "out": "138976803440772421468",
+        "minimum": "138281919423568559360",
+        "slippageBps": 50,
+        "matchesIndependentFormula": true
+      }
+    },
+    {
+      "name": "sell",
+      "tokenIn": "0x8a25a5929a18c132eaf47a2b497c86ad00ea5b9e",
+      "tokenOut": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+      "amountIn": "1000000000000000000000",
+      "baseline": {
+        "elapsedMs": 938.6324160000004,
+        "rpcAttempts": 1,
+        "successfulRpcCalls": 1,
+        "out": "6922968944675244"
+      },
+      "patchedWithProfileReused": {
+        "elapsedMs": 519.1751659999991,
+        "rpcAttempts": 1,
+        "successfulRpcCalls": 1,
+        "out": "6715303400294177",
+        "poolAmountIn": "970000000000000000000",
+        "grossOut": "6715303400294177",
+        "transferInBps": 300,
+        "transferOutBps": 0,
+        "impact": 0.0026129900000000372
+      },
+      "independentFormula": {
+        "poolFeeBps": 25,
+        "transferTaxBps": "300",
+        "poolAmountIn": "970000000000000000000",
+        "grossPoolOutput": "6715303400294177",
+        "netOutput": "6715303400294177",
+        "matches": true
+      },
+      "platformFeeExample": {
+        "bps": 30,
+        "mode": "output",
+        "fee": "20145910200882",
+        "feeToken": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+        "out": "6695157490093295",
+        "minimum": "6661681702642828",
+        "slippageBps": 50,
+        "matchesIndependentFormula": true
+      }
+    }
+  ],
+  "network": [
+    {
+      "phase": "metadata",
+      "node": 0,
+      "method": "eth_getBlockByNumber",
+      "block": "latest",
+      "elapsedMs": 3043.901208,
+      "success": true
+    },
+    {
+      "phase": "metadata",
+      "node": 0,
+      "method": "eth_call",
+      "block": "0x8095419",
+      "elapsedMs": 514.5362500000001,
+      "success": true
+    },
+    {
+      "phase": "metadata",
+      "node": 0,
+      "method": "eth_call",
+      "block": "0x8095419",
+      "elapsedMs": 2697.4164170000004,
+      "success": true
+    },
+    {
+      "phase": "metadata",
+      "node": 0,
+      "method": "eth_call",
+      "block": "0x8095419",
+      "elapsedMs": 2795.24225,
+      "success": true
+    },
+    {
+      "phase": "metadata",
+      "node": 0,
+      "method": "eth_call",
+      "block": "0x8095419",
+      "elapsedMs": 4412.370832999999,
+      "success": true
+    },
+    {
+      "phase": "metadata",
+      "node": 0,
+      "method": "eth_call",
+      "block": "0x8095419",
+      "elapsedMs": 1219.7586249999995,
+      "success": true
+    },
+    {
+      "phase": "cold-profile",
+      "node": 0,
+      "method": "eth_call",
+      "block": "0x8095419",
+      "elapsedMs": 564.9522089999991,
+      "success": true
+    },
+    {
+      "phase": "cold-profile",
+      "node": 0,
+      "method": "eth_getCode",
+      "block": "0x8095419",
+      "elapsedMs": 701.0323749999989,
+      "success": true
+    },
+    {
+      "phase": "buy-baseline",
+      "node": 0,
+      "method": "eth_call",
+      "block": "0x8095419",
+      "elapsedMs": 515.2052079999994,
+      "success": true
+    },
+    {
+      "phase": "buy-patched-profile-reused",
+      "node": 0,
+      "method": "eth_call",
+      "block": "0x8095419",
+      "elapsedMs": 924.4697919999999,
+      "success": true
+    },
+    {
+      "phase": "buy-with-platform-fee",
+      "node": 0,
+      "method": "eth_call",
+      "block": "0x8095419",
+      "elapsedMs": 537.2633749999986,
+      "success": true
+    },
+    {
+      "phase": "sell-baseline",
+      "node": 0,
+      "method": "eth_call",
+      "block": "0x8095419",
+      "elapsedMs": 931.1766250000001,
+      "success": true
+    },
+    {
+      "phase": "sell-patched-profile-reused",
+      "node": 0,
+      "method": "eth_call",
+      "block": "0x8095419",
+      "elapsedMs": 514.6708330000001,
+      "success": true
+    },
+    {
+      "phase": "sell-with-platform-fee",
+      "node": 0,
+      "method": "eth_call",
+      "block": "0x8095419",
+      "elapsedMs": 534.8104579999999,
+      "success": true
+    }
+  ],
+  "baselineLatestEquivalentCommit": "59b91a52ca69a21f80cbbba1ce03013e97d47215",
+  "quoteFunctionSHA256": "a7e870044c5e97f5b0ff1f18facbcc841525be96448b86d9c2535cc11f71d278",
+  "baselineEquivalenceNote": "This recorded sample used 47ccfb1. The original quoteFstRoutes source slice is byte-identical to the latest base 59b91a52ca69a21f80cbbba1ce03013e97d47215 with the recorded SHA256. No network sample was rerun or values altered during this metadata clarification."
+}

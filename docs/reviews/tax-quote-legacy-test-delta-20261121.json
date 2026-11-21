@@ -1,0 +1,39 @@
+{
+  "baseline": "59b91a52ca69a21f80cbbba1ce03013e97d47215",
+  "baselineFailCount": 23,
+  "patchFailCount": 29,
+  "baselineExisting": [
+    "BNB fractions reserve current route Gas and price headroom instead of fixed 0.01 BNB",
+    "Swap exposes four semantic shortcuts only on the paying panel",
+    "Swap percentages preserve full wei while showing four decimal places and scheduling once",
+    "a BNB balance below old 0.01 reserve remains usable when actual Gas fits",
+    "a six-decimal token uses its own precision without losing Max remainder",
+    "an account change during preparation is checked again before nonce and sending",
+    "an active local quote still completes validation and publishes without modifying its expiry",
+    "an insufficient allowance returns to authorization without nonce, storage, or send",
+    "an older http failure cannot disable a successful newer refresh",
+    "an older validation failure cannot disable a successful newer refresh",
+    "changing single-hop while a unit price is visible clears it and requests the new identity instead of stranding expiry",
+    "changing slippage during unit-price cooldown cancels the old identity and rearms the new settings",
+    "compatibility retains actual Git releases49,48,47,46,45 with source-manifest and historical blob proof",
+    "disconnected, unknown, failed and zero balances disable every action and cannot mutate input",
+    "failed Gas price or estimate leaves the native input untouched and restores controls",
+    "fresh calls do not join each other and a canceled newer refresh blocks old cache publication",
+    "fresh does not join older pending work and the old completion cannot overwrite newer cache",
+    "keyboard Enter and Space retain focus on the newly rendered percentage button",
+    "pending native Gas reads cannot overwrite a changed account, token, amount, balance or settings",
+    "stale account, token, balance and error callbacks cannot reuse old shortcuts",
+    "the real preview renderer cannot keep an expired unit price visible after a backward wall-clock jump",
+    "the real quote expiry and input guard use 15s service time despite a backward device-clock jump",
+    "verified swap receipt performs one fresh three-token read, then header shares it without failing the page or restoring old balances"
+  ],
+  "patchOnly": [
+    "FstSwap API accepts all six fee inputs and eligible fee outputs with exact net amounts",
+    "FstSwap API preserves explicit zero slippage and every allowed intermediate fee asset",
+    "FstSwap API supports complete intermediate fee routes with no pool reuse",
+    "FstSwap API validates mixed V3/V2 stages and parallel direct splits",
+    "every input and adapter deployment field and router isolates completed cache keys",
+    "single-hop FstSwap allows a required fee bridge but rejects multihop within either segment"
+  ],
+  "baselineOnly": []
+}

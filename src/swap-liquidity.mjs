@@ -225,5 +225,5 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
   if(!block.hash||lower(canonical?.hash)!==lower(block.hash))throw fail('区块状态已变化，请刷新报价','stale',true);
  }
  assertFresh();
- return{...createPoolPolicy(pools,prices,tokenIn,tokenOut),assertFresh,blockNumber:block.number,checkedAt:now};
+ return{...createPoolPolicy(pools,prices,tokenIn,tokenOut),assertFresh,blockNumber:block.number,blockTimestamp:timestamp,checkedAt:now};
 }
