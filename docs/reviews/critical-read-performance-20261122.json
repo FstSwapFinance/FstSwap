@@ -224,5 +224,12 @@
   "toolSourceHashes": {
     "tools/critical-read-benchmark.mjs": "b31d06764f9b68add6c80fd0c8e5d50a3a228a48ee54bdb2d6a6f1679e9460c6",
     "tools/critical-read-benchmark-fixtures.mjs": "8d7eef34ac3870a0bb7f10e4740f3e2e8250083b1afe341f7b7e52ecfd860988"
+  },
+  "delivery": {
+    "implementationCommit": "2cdcb604464c8374581091e12903cf06353f9f3c",
+    "pr": "https://github.com/FstSwapFinance/FstSwap/pull/3",
+    "baseBranch": "codex/tax-aware-quotes-20261121",
+    "deployed": false,
+    "merged": false
   }
 }

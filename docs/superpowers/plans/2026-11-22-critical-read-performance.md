@@ -68,7 +68,7 @@
 - [x] Add failing timing/API tests; implement request-local scopes without global mutation or private data leakage.
 - [x] Finish same-condition baseline/candidate public samples and preserve all failed initial attempts; synthetic and public correctness/call-count comparisons remain separately labeled.
 - [x] Regenerate runtime, syntax/build/full tests, independent review and clean checkout verification.
-- [ ] Commit conventional messages, push a new performance branch and create a stacked PR targeting the PR #2 branch (until it merges); attach the PR. No deployment.
+- [x] Commit conventional messages, push a new performance branch and create a stacked PR targeting the PR #2 branch (until it merges); attach the PR. No deployment.
 
 ## Execution Ledger
 
@@ -83,3 +83,5 @@
 - Independent review: no unresolved P0/P1/P2; two-pair 30-cycle GC probe retains only current two config/policy/block objects.
 
 - Evidence: final public engine 96/96 plus supplemental balances 18/18; synthetic engine 96/96 and 12/12 lane experiments. All applicable output/minimum/fee/pair checks match, 9 initial anchor failures retained. Public warm 3-pair HTTP 37->21; neither public endpoint hits the 500ms balance-head cache. Detailed provenance is in docs/reviews/critical-read-performance-20261122.md and its evidence index.
+
+- Delivery: implementation commit 2cdcb604464c8374581091e12903cf06353f9f3c pushed on codex/critical-read-perf-20261122; PR #3 created and attached: https://github.com/FstSwapFinance/FstSwap/pull/3. Its base is the unmerged PR #2 branch at d22667a. No merge, deployment, signature or broadcast. Final follow-up changes documentation only.

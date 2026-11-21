@@ -1,6 +1,6 @@
 # FstSwap 关键只读路径：实现、验证与优化前后实测
 
-基于 PR #2 的 `d22667a20cf1c2a62d727d387e191c3bc78240cb`，在独立分支 `codex/critical-read-perf-20261122` 实现。本次仅提交代码和 PR；没有部署、合并、钱包签名或主网交易。当前线上接口和页面仍不是本候选版本。
+基于 PR #2 的 `d22667a20cf1c2a62d727d387e191c3bc78240cb`，在独立分支 `codex/critical-read-perf-20261122` 实现。实现提交为 `2cdcb604464c8374581091e12903cf06353f9f3c`，[PR #3](https://github.com/FstSwapFinance/FstSwap/pull/3) 基于尚未合并的 PR #2。本次仅提交代码和 PR；没有部署、合并、钱包签名或主网交易。当前线上接口和页面仍不是本候选版本。
 
 ## 改动范围
 
