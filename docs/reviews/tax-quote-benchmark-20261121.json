@@ -1,0 +1,264 @@
+{
+  "scope": "Simulated fixed-condition local benchmark; not public-network latency, real trade simulation, or mainnet settlement.",
+  "baselineCommit": "59b91a52ca69a21f80cbbba1ce03013e97d47215",
+  "baselineQuoteFileSHA256": "f4170e370ac8a349bc095792651363bcaf7878f1d18b078c6d86234813798cae",
+  "patchedQuoteFileSHA256": "77e45fe04a50017f79a6e9dd13e98be5b815843e09ff2277a947f6103c251fe8",
+  "patchedTaxFileSHA256": "c558d876e3bb44843149d875d132155dc466d8098f5381e19b87a8602a985373",
+  "parameters": {
+    "samplesPerSide": 20,
+    "warmupSamplesPerSide": 2,
+    "outerRpcDelayMs": 3,
+    "fixedInputBaseUnits": "10000",
+    "routeMode": "linear V2",
+    "taxModel": "synthetic canonical-pair directional 300 bps, neutral recipient, no exemptions",
+    "profileFixture": "committed real FSTSI runtime bytecode; metadata responses simulated",
+    "timing": "paired before/after order alternates; latency includes real ABI decode/encode and production quote code; profile time is separate, not hidden in route cache"
+  },
+  "results": [
+    {
+      "id": "ordinary-direct",
+      "label": "普通结算币直达，无转账税",
+      "inputBaseUnits": "10000",
+      "expectedBestNet": "20000",
+      "before": {
+        "outerRpcCalls": 1,
+        "innerContractCalls": 1,
+        "medianMs": 5.955,
+        "p95Ms": 7.186,
+        "reportedOut": "20000",
+        "selectedPoolIds": [
+          "0x0000000000000000000000000000000000000001"
+        ],
+        "modeledActualNetOut": "20000",
+        "netOverstatement": "0",
+        "shortfallAgainstBestNet": "0"
+      },
+      "after": {
+        "outerRpcCalls": 1,
+        "innerContractCalls": 1,
+        "medianMs": 6.198,
+        "p95Ms": 7.622,
+        "reportedOut": "20000",
+        "selectedPoolIds": [
+          "0x0000000000000000000000000000000000000001"
+        ],
+        "modeledActualNetOut": "20000",
+        "netOverstatement": "0",
+        "shortfallAgainstBestNet": "0"
+      },
+      "profileNetworkNote": "Known settlement profile adds zero token metadata RPC."
+    },
+    {
+      "id": "canonical-buy",
+      "label": "canonical 池买入，输出税 3%",
+      "inputBaseUnits": "10000",
+      "expectedBestNet": "19400",
+      "before": {
+        "outerRpcCalls": 1,
+        "innerContractCalls": 1,
+        "medianMs": 5.761,
+        "p95Ms": 7.021,
+        "reportedOut": "20000",
+        "selectedPoolIds": [
+          "0x0000000000000000000000000000000000000001"
+        ],
+        "modeledActualNetOut": "19400",
+        "netOverstatement": "600",
+        "shortfallAgainstBestNet": "0"
+      },
+      "after": {
+        "outerRpcCalls": 1,
+        "innerContractCalls": 1,
+        "medianMs": 5.764,
+        "p95Ms": 6.719,
+        "reportedOut": "19400",
+        "selectedPoolIds": [
+          "0x0000000000000000000000000000000000000001"
+        ],
+        "modeledActualNetOut": "19400",
+        "netOverstatement": "0",
+        "shortfallAgainstBestNet": "0"
+      },
+      "profileNetworkNote": "Trusted synthetic map isolates route work; verified token profile acquisition is measured separately below."
+    },
+    {
+      "id": "canonical-sell",
+      "label": "canonical 池卖出，实际入池扣 3%",
+      "inputBaseUnits": "10000",
+      "expectedBestNet": "19400",
+      "before": {
+        "outerRpcCalls": 1,
+        "innerContractCalls": 1,
+        "medianMs": 5.816,
+        "p95Ms": 7.43,
+        "reportedOut": "20000",
+        "selectedPoolIds": [
+          "0x0000000000000000000000000000000000000001"
+        ],
+        "modeledActualNetOut": "19400",
+        "netOverstatement": "600",
+        "shortfallAgainstBestNet": "0"
+      },
+      "after": {
+        "outerRpcCalls": 1,
+        "innerContractCalls": 1,
+        "medianMs": 5.987,
+        "p95Ms": 7.024,
+        "reportedOut": "19400",
+        "selectedPoolIds": [
+          "0x0000000000000000000000000000000000000001"
+        ],
+        "modeledActualNetOut": "19400",
+        "netOverstatement": "0",
+        "shortfallAgainstBestNet": "0"
+      },
+      "profileNetworkNote": "Trusted synthetic map isolates route work; verified token profile acquisition is measured separately below."
+    },
+    {
+      "id": "pair-to-pair-buy",
+      "label": "canonical → other pair，买税只扣一次",
+      "inputBaseUnits": "10000",
+      "expectedBestNet": "38800",
+      "before": {
+        "outerRpcCalls": 2,
+        "innerContractCalls": 2,
+        "medianMs": 10.232,
+        "p95Ms": 13.321,
+        "reportedOut": "40000",
+        "selectedPoolIds": [
+          "0x0000000000000000000000000000000000000001",
+          "0x0000000000000000000000000000000000000002"
+        ],
+        "modeledActualNetOut": "38800",
+        "netOverstatement": "1200",
+        "shortfallAgainstBestNet": "0"
+      },
+      "after": {
+        "outerRpcCalls": 2,
+        "innerContractCalls": 2,
+        "medianMs": 10.304,
+        "p95Ms": 11.727,
+        "reportedOut": "38800",
+        "selectedPoolIds": [
+          "0x0000000000000000000000000000000000000001",
+          "0x0000000000000000000000000000000000000002"
+        ],
+        "modeledActualNetOut": "38800",
+        "netOverstatement": "0",
+        "shortfallAgainstBestNet": "0"
+      },
+      "profileNetworkNote": "Trusted synthetic map isolates route work; verified token profile acquisition is measured separately below."
+    },
+    {
+      "id": "pair-to-pair-sell",
+      "label": "other → canonical pair，卖税只扣一次",
+      "inputBaseUnits": "10000",
+      "expectedBestNet": "38800",
+      "before": {
+        "outerRpcCalls": 2,
+        "innerContractCalls": 2,
+        "medianMs": 10.427,
+        "p95Ms": 12.312,
+        "reportedOut": "40000",
+        "selectedPoolIds": [
+          "0x0000000000000000000000000000000000000001",
+          "0x0000000000000000000000000000000000000002"
+        ],
+        "modeledActualNetOut": "38800",
+        "netOverstatement": "1200",
+        "shortfallAgainstBestNet": "0"
+      },
+      "after": {
+        "outerRpcCalls": 2,
+        "innerContractCalls": 2,
+        "medianMs": 10.476,
+        "p95Ms": 12.867,
+        "reportedOut": "38800",
+        "selectedPoolIds": [
+          "0x0000000000000000000000000000000000000001",
+          "0x0000000000000000000000000000000000000002"
+        ],
+        "modeledActualNetOut": "38800",
+        "netOverstatement": "0",
+        "shortfallAgainstBestNet": "0"
+      },
+      "profileNetworkNote": "Trusted synthetic map isolates route work; verified token profile acquisition is measured separately below."
+    },
+    {
+      "id": "net-winner",
+      "label": "毛额 20000 的含税池应输给净额 19800 的无税池",
+      "inputBaseUnits": "10000",
+      "expectedBestNet": "19800",
+      "before": {
+        "outerRpcCalls": 1,
+        "innerContractCalls": 2,
+        "medianMs": 6.648,
+        "p95Ms": 8.821,
+        "reportedOut": "20000",
+        "selectedPoolIds": [
+          "0x0000000000000000000000000000000000000001"
+        ],
+        "modeledActualNetOut": "19400",
+        "netOverstatement": "600",
+        "shortfallAgainstBestNet": "400"
+      },
+      "after": {
+        "outerRpcCalls": 1,
+        "innerContractCalls": 2,
+        "medianMs": 6.533,
+        "p95Ms": 8.516,
+        "reportedOut": "19800",
+        "selectedPoolIds": [
+          "0x0000000000000000000000000000000000000002"
+        ],
+        "modeledActualNetOut": "19800",
+        "netOverstatement": "0",
+        "shortfallAgainstBestNet": "0"
+      },
+      "profileNetworkNote": "Trusted synthetic map isolates route work; verified token profile acquisition is measured separately below."
+    }
+  ],
+  "profileAcquisition": [
+    {
+      "label": "known-settlement",
+      "before": {
+        "outerRpcCalls": 0,
+        "innerContractCalls": 0,
+        "note": "Baseline does not verify transfer taxes."
+      },
+      "after": {
+        "outerRpcCalls": 0,
+        "innerContractCalls": 0,
+        "methods": [],
+        "medianMs": 0.004,
+        "p95Ms": 0.015
+      }
+    },
+    {
+      "label": "verified-tax-token",
+      "before": {
+        "outerRpcCalls": 0,
+        "innerContractCalls": 0,
+        "note": "Baseline does not verify transfer taxes."
+      },
+      "after": {
+        "outerRpcCalls": 2,
+        "innerContractCalls": 8,
+        "methods": [
+          "eth_call",
+          "eth_getCode"
+        ],
+        "medianMs": 5.521,
+        "p95Ms": 6.968
+      }
+    }
+  ],
+  "findings": {
+    "allCorrectedNetOutputsMatchExecutionModel": true,
+    "routeQuoteRpcCountUnchanged": true,
+    "verifiedTaxProfileAddsOuterRpcCalls": 2,
+    "verifiedTaxProfileAddsMetadataContractCalls": 8,
+    "networkOperations": "none; all RPC methods are in-process stubs with fixed delay",
+    "privateKeyOrWalletOperations": "none"
+  }
+}

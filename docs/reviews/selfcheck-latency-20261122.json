@@ -1,0 +1,494 @@
+{
+  "dateLocal": "2026-11-22",
+  "timezone": "Asia/Shanghai",
+  "reviewBase": "cdb4133992c1d10a001c591968efe27fe9b0f815",
+  "scope": "Read-only public production timing and local candidate review. No deployment, private-key read, wallet signature, or mainnet transaction.",
+  "liveApi": {
+    "host": "fstswap-live.vercel.app",
+    "measuredAtUtc": "2026-11-21T18:31:15Z",
+    "location": "execution host/network location not independently known",
+    "freshQuote": true,
+    "lanes": {
+      "balances": [
+        {
+          "iteration": 1,
+          "connection": "cold DNS/TCP/TLS",
+          "connectMs": 632.06,
+          "ttfbMs": 2115.31,
+          "totalMs": 2115.41,
+          "status": 200,
+          "serverTiming": "total;dur=622.9",
+          "vercelId": "icn1::8cskz-1795285879381-9c8fb3a1c65c",
+          "error": null,
+          "blockNumber": "0x80af3f6",
+          "router": null,
+          "valid": true,
+          "failedTokens": []
+        },
+        {
+          "iteration": 2,
+          "connection": "reuse if server permits",
+          "ttfbMs": 1283.42,
+          "totalMs": 1283.49,
+          "status": 200,
+          "serverTiming": "total;dur=531.1",
+          "vercelId": "icn1::nc64t-1795285880866-ce81e91a18e7",
+          "error": null,
+          "blockNumber": "0x80af3f8",
+          "router": null,
+          "valid": true,
+          "failedTokens": []
+        },
+        {
+          "iteration": 3,
+          "connection": "reuse if server permits",
+          "ttfbMs": 846.13,
+          "totalMs": 846.23,
+          "status": 200,
+          "serverTiming": "total;dur=358.1",
+          "vercelId": "icn1::qq9jq-1795285882150-ddce067be64b",
+          "error": null,
+          "blockNumber": "0x80af3fa",
+          "router": null,
+          "valid": true,
+          "failedTokens": []
+        },
+        {
+          "iteration": 4,
+          "connection": "reuse if server permits",
+          "ttfbMs": 877.0,
+          "totalMs": 877.09,
+          "status": 200,
+          "serverTiming": "total;dur=376.1",
+          "vercelId": "icn1::qq9jq-1795285882993-663a2021bb78",
+          "error": null,
+          "blockNumber": "0x80af3fc",
+          "router": null,
+          "valid": true,
+          "failedTokens": []
+        },
+        {
+          "iteration": 5,
+          "connection": "reuse if server permits",
+          "ttfbMs": 925.85,
+          "totalMs": 925.9,
+          "status": 200,
+          "serverTiming": "total;dur=422.2",
+          "vercelId": "icn1::nc64t-1795285883871-ac81d02cf9d8",
+          "error": null,
+          "blockNumber": "0x80af3fe",
+          "router": null,
+          "valid": true,
+          "failedTokens": []
+        },
+        {
+          "iteration": 6,
+          "connection": "reuse if server permits",
+          "ttfbMs": 874.83,
+          "totalMs": 874.89,
+          "status": 200,
+          "serverTiming": "total;dur=359.4",
+          "vercelId": "icn1::2mrwq-1795285884801-f4f84f562e99",
+          "error": null,
+          "blockNumber": "0x80af400",
+          "router": null,
+          "valid": true,
+          "failedTokens": []
+        }
+      ],
+      "usdt-fist": [
+        {
+          "iteration": 1,
+          "connection": "cold DNS/TCP/TLS",
+          "connectMs": 631.5,
+          "ttfbMs": 1708.28,
+          "totalMs": 1708.37,
+          "status": 200,
+          "serverTiming": "total;dur=268.2",
+          "vercelId": "icn1::dlbrx-1795285879381-cced82f38e99",
+          "error": null,
+          "blockNumber": "0x80af3ee",
+          "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+          "valid": true,
+          "out": {
+            "$bigint": "4233422"
+          },
+          "minimum": {
+            "$bigint": "4212254"
+          }
+        },
+        {
+          "iteration": 2,
+          "connection": "reuse if server permits",
+          "ttfbMs": 976.25,
+          "totalMs": 976.33,
+          "status": 200,
+          "serverTiming": "total;dur=134.9",
+          "vercelId": "icn1::mksj9-1795285880457-a6c0e7404796",
+          "error": null,
+          "blockNumber": "0x80af3ee",
+          "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+          "valid": true,
+          "out": {
+            "$bigint": "4233422"
+          },
+          "minimum": {
+            "$bigint": "4212254"
+          }
+        },
+        {
+          "iteration": 3,
+          "connection": "reuse if server permits",
+          "ttfbMs": 977.47,
+          "totalMs": 977.6,
+          "status": 200,
+          "serverTiming": "total;dur=266.5",
+          "vercelId": "icn1::dlbrx-1795285881434-683ada5ed61b",
+          "error": null,
+          "blockNumber": "0x80af3ee",
+          "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+          "valid": true,
+          "out": {
+            "$bigint": "4233422"
+          },
+          "minimum": {
+            "$bigint": "4212254"
+          }
+        },
+        {
+          "iteration": 4,
+          "connection": "reuse if server permits",
+          "ttfbMs": 641.72,
+          "totalMs": 641.82,
+          "status": 200,
+          "serverTiming": "total;dur=133.5",
+          "vercelId": "icn1::8cskz-1795285882416-4a5267fc8d25",
+          "error": null,
+          "blockNumber": "0x80af3ee",
+          "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+          "valid": true,
+          "out": {
+            "$bigint": "4233422"
+          },
+          "minimum": {
+            "$bigint": "4212254"
+          }
+        },
+        {
+          "iteration": 5,
+          "connection": "reuse if server permits",
+          "ttfbMs": 1857.32,
+          "totalMs": 1857.37,
+          "status": 200,
+          "serverTiming": "total;dur=1355.4",
+          "vercelId": "icn1::t8jqd-1795285883061-d5718037678a",
+          "error": null,
+          "blockNumber": "0x80af3f6",
+          "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+          "valid": true,
+          "out": {
+            "$bigint": "4233422"
+          },
+          "minimum": {
+            "$bigint": "4212254"
+          }
+        },
+        {
+          "iteration": 6,
+          "connection": "reuse if server permits",
+          "ttfbMs": 703.25,
+          "totalMs": 703.37,
+          "status": 200,
+          "serverTiming": "total;dur=170.7",
+          "vercelId": "icn1::t8jqd-1795285884935-40abb4d4231e",
+          "error": null,
+          "blockNumber": "0x80af3f6",
+          "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+          "valid": true,
+          "out": {
+            "$bigint": "4233422"
+          },
+          "minimum": {
+            "$bigint": "4212254"
+          }
+        }
+      ],
+      "bnb-usdt": [
+        {
+          "iteration": 1,
+          "connection": "cold DNS/TCP/TLS",
+          "connectMs": 631.51,
+          "ttfbMs": 4531.2,
+          "totalMs": 4531.31,
+          "status": 200,
+          "serverTiming": "total;dur=3041.1",
+          "vercelId": "icn1::ksm72-1795285879384-6dcb913443fb",
+          "error": null,
+          "blockNumber": "0x80af3f6",
+          "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+          "valid": true,
+          "out": {
+            "$bigint": "547388818960320205"
+          },
+          "minimum": {
+            "$bigint": "544651874865518603"
+          }
+        },
+        {
+          "iteration": 2,
+          "connection": "reuse if server permits",
+          "ttfbMs": 3001.56,
+          "totalMs": 3001.62,
+          "status": 200,
+          "serverTiming": "total;dur=1777.3",
+          "vercelId": "icn1::2mrwq-1795285883281-781063fd9d77",
+          "error": null,
+          "blockNumber": "0x80af3ee",
+          "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+          "valid": true,
+          "out": {
+            "$bigint": "547345766522307929"
+          },
+          "minimum": {
+            "$bigint": "544609037689696389"
+          }
+        },
+        {
+          "iteration": 3,
+          "connection": "reuse if server permits",
+          "ttfbMs": 1948.53,
+          "totalMs": 1948.65,
+          "status": 200,
+          "serverTiming": "total;dur=1452.6",
+          "vercelId": "icn1::qq9jq-1795285886284-2a942ccef1e3",
+          "error": null,
+          "blockNumber": "0x80af3f6",
+          "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+          "valid": true,
+          "out": {
+            "$bigint": "547388818960320205"
+          },
+          "minimum": {
+            "$bigint": "544651874865518603"
+          }
+        },
+        {
+          "iteration": 4,
+          "connection": "reuse if server permits",
+          "ttfbMs": 3009.06,
+          "totalMs": 3009.17,
+          "status": 200,
+          "serverTiming": "total;dur=2511.5",
+          "vercelId": "icn1::dtqpv-1795285888234-42d136c98f06",
+          "error": null,
+          "blockNumber": "0x80af407",
+          "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+          "valid": true,
+          "out": {
+            "$bigint": "547303355702303514"
+          },
+          "minimum": {
+            "$bigint": "544566838923791996"
+          }
+        },
+        {
+          "iteration": 5,
+          "connection": "reuse if server permits",
+          "ttfbMs": 1490.8,
+          "totalMs": 1491.02,
+          "status": 200,
+          "serverTiming": "total;dur=641.8",
+          "vercelId": "icn1::dtqpv-1795285891244-a468596a702d",
+          "error": null,
+          "blockNumber": "0x80af407",
+          "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+          "valid": true,
+          "out": {
+            "$bigint": "547303355702303514"
+          },
+          "minimum": {
+            "$bigint": "544566838923791996"
+          }
+        },
+        {
+          "iteration": 6,
+          "connection": "reuse if server permits",
+          "ttfbMs": 1808.21,
+          "totalMs": 1808.28,
+          "status": 200,
+          "serverTiming": "total;dur=1008.2",
+          "vercelId": "icn1::dtqpv-1795285892737-15ae64123487",
+          "error": null,
+          "blockNumber": "0x80af407",
+          "router": "0x6F421584a067b511CEb441C2d5b8534B0C9cdDE7",
+          "valid": true,
+          "out": {
+            "$bigint": "547303355702303514"
+          },
+          "minimum": {
+            "$bigint": "544566838923791996"
+          }
+        }
+      ]
+    },
+    "manifest": {
+      "status": 200,
+      "totalMs": 1273.25,
+      "sha256": "e9eed2dbbebade4249d6277af74bae07d24dce43dcc427205663545584d1dc10",
+      "entries": {
+        "boot": "src/fst-runtime-boot-YLCXWZ6J.mjs",
+        "app": "src/fst-runtime-app-26A4CJHY.mjs"
+      }
+    }
+  },
+  "liveApiSummary": {
+    "balances": {
+      "samples": 6,
+      "valid": 6,
+      "firstConnectionMs": 2115.41,
+      "subsequentMinMs": 846.23,
+      "subsequentMaxMs": 1283.49,
+      "subsequentMedianMs": 877.09,
+      "serverTimeMedianMs": 399.15
+    },
+    "usdt-fist": {
+      "samples": 6,
+      "valid": 6,
+      "firstConnectionMs": 1708.37,
+      "subsequentMinMs": 641.82,
+      "subsequentMaxMs": 1857.37,
+      "subsequentMedianMs": 976.33,
+      "serverTimeMedianMs": 218.6
+    },
+    "bnb-usdt": {
+      "samples": 6,
+      "valid": 6,
+      "firstConnectionMs": 4531.31,
+      "subsequentMinMs": 1491.02,
+      "subsequentMaxMs": 3009.17,
+      "subsequentMedianMs": 1948.65,
+      "serverTimeMedianMs": 1614.9499999999998
+    }
+  },
+  "liveUi": {
+    "at": "2026-11-21T18:31:26.418Z",
+    "scope": "Public production UI, fresh mobile-sized browser context, no wallet and no transactions; local test-runner network location is unknown.",
+    "interactiveMs": 1733.5334160000002,
+    "errors": [],
+    "samples": [
+      {
+        "amount": "1.371",
+        "inputToOutputMs": 2916.839375,
+        "displayedOutput": "5.804"
+      },
+      {
+        "amount": "1.372",
+        "inputToOutputMs": 1010.8871250000002,
+        "displayedOutput": "5.8082"
+      },
+      {
+        "amount": "1.373",
+        "inputToOutputMs": 915.3989579999998,
+        "displayedOutput": "5.8124"
+      }
+    ]
+  },
+  "timingLimitations": [
+    "Each first API request includes a new DNS/TCP/TLS connection, not necessarily an empty server route or pool cache.",
+    "Subsequent timings reuse an HTTPS connection when permitted; fresh quote headers bypass completed quote entries, not all server snapshots.",
+    "Execution host location is unknown. Six samples per operation are not a stable percentile or a promise for all users.",
+    "Balances measure API response only; no actual extension-wallet connection restore was measured.",
+    "UI is a fresh disconnected mobile-sized browser context, USDT to FIST; amount-to-result includes fill and DOM observation.",
+    "Public production manifest differs from the candidate PR. No candidate timings are claimed as deployed performance."
+  ],
+  "findings": [
+    {
+      "id": "warm-tax-recheck",
+      "severity": "P2",
+      "rootCause": "Completed warm policy bypassed fresh transfer-tax model confirmation on click. Latest eth_call and on-chain minimum remained in force.",
+      "resolution": "Require fresh policy/tax validation for non-none tax profiles, including a zero-rate pair model; retain ordinary-token warm reuse and Gas prefetch.",
+      "mainnetExploitOrLossDemonstrated": false,
+      "readCost": "Ordinary warm reuse adds no reads. Pair-model click restores the complete existing cold recheckFstQuote (pool policy plus two parallel tax-confirmation calls), not merely two extra RPCs. Gas stays prewarmed; actual calls depend on pools/retries."
+    },
+    {
+      "id": "candidate-price-fallback",
+      "severity": "P2",
+      "rootCause": "A price-floor rejection in one intermediate-fee candidate aborted all candidate jobs despite another valid route. Present in the pre-PR baseline.",
+      "resolution": "Reject only that candidate for non-retryable POOL_LIQUIDITY/price; keep global tax, oracle, stale, data and cancellation failures fatal. Preserve the price error when no candidate is usable."
+    }
+  ],
+  "walletGuardMutation": {
+    "operation": "Disable only the final chain/accounts condition in an in-memory copy of swap-send.mjs. No workspace source mutation.",
+    "expectedFailures": 10,
+    "result": "All ten relevant account/network preparation/nonce/block switch regressions detect the mutation."
+  },
+  "evidenceHashes": {
+    "rawApiSha256": "8ffd02ec7b8e932d78a0370e848ad07082f1f29e3c2a1b821ccfce2a92854350",
+    "rawUiSha256": "5ccb20499fc7c95d60298f3a8b1a940d3ad455a2f5980889f999ac886f9c5406"
+  },
+  "verification": {
+    "tests": 860,
+    "pass": 860,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "testFiles": 80,
+    "durationMs": 57821.308292,
+    "logSha256": "80f53d524bad541941a794ca92cc904facdffcdec045f98f11736e19def01e6a",
+    "node": "v24.16.0",
+    "checks": [
+      "node --check for both changed source files and both test files",
+      "npm run build",
+      "npm run build:check",
+      "git diff --check"
+    ],
+    "runtimeApp": "src/fst-runtime-app-FAI56WFQ.mjs",
+    "baselineTests": {
+      "tests": 842,
+      "pass": 842,
+      "fail": 0,
+      "skipped": 0
+    },
+    "newRegressionTests": 18,
+    "independentReview": "No blocking findings in final four-file review; targeted 43/43 passed.",
+    "deployment": "not performed"
+  },
+  "protectedFiles": [
+    {
+      "path": "src/swap-transfer-tax.mjs",
+      "sha256": "c558d876e3bb44843149d875d132155dc466d8098f5381e19b87a8602a985373",
+      "unchangedSince": "cdb4133992c1d10a001c591968efe27fe9b0f815"
+    },
+    {
+      "path": "src/swap-liquidity.mjs",
+      "sha256": "524da69ee013e5e46ea1f5d2f8b32051ac80c16733d46c9865a8f7619c6d723d",
+      "unchangedSince": "cdb4133992c1d10a001c591968efe27fe9b0f815"
+    },
+    {
+      "path": "src/swap-service-client.mjs",
+      "sha256": "dd1002acde86a9ba74d55032eb1d1d081bc6726f35c1e0a22fb1513158633e40",
+      "unchangedSince": "cdb4133992c1d10a001c591968efe27fe9b0f815"
+    },
+    {
+      "path": "server/fstswap-service.mjs",
+      "sha256": "b02a28d281e4624e96255504139471682c40158543e99d0cb1b91654adf7edb6",
+      "unchangedSince": "cdb4133992c1d10a001c591968efe27fe9b0f815"
+    },
+    {
+      "path": "src/swap-preflight.mjs",
+      "sha256": "6b5a90c7112dceff361b40aee98a60b217c1f2921af4407153354237c3f07aab",
+      "unchangedSince": "cdb4133992c1d10a001c591968efe27fe9b0f815"
+    },
+    {
+      "path": "src/swap-send.mjs",
+      "sha256": "ca73e3e82f29a9ef6a6d7531825cb70ac190049dc00a1805072c5ac3b43e67cc",
+      "unchangedSince": "cdb4133992c1d10a001c591968efe27fe9b0f815"
+    },
+    {
+      "path": "contracts/fstswap-v21/src/FstSwap.sol",
+      "sha256": "96e9f503245899a4307bf6dc574ab87713d8e66851f3389d9f453e5926bfdd95",
+      "unchangedSince": "cdb4133992c1d10a001c591968efe27fe9b0f815"
+    }
+  ]
+}

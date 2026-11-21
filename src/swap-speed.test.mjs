@@ -39,7 +39,7 @@ test('wallet preparation overlaps nonce and block recheck before eth_sendTransac
   const result = await sendWalletOnce({
     provider, read, storage:memoryStorage(), locks:{request:async (_name, _options, callback) => callback({name:'lock'})},
     transaction:{from:account, to:router, data:'0x1234', value:0n},
-    prepare:async () => {await sleep(200); return {gasLimit:21000n, gasPrice:3_000_000_000n};},
+    prepare:async () => {await sleep(200); calls.push({method:'prepare-done',at:Date.now()-started}); return {gasLimit:21000n, gasPrice:3_000_000_000n};},
     walletReadTimeoutMs:5000, walletTimeoutMs:5000,
   });
   const send = calls.find(call => call.method === 'eth_sendTransaction');
@@ -48,8 +48,16 @@ test('wallet preparation overlaps nonce and block recheck before eth_sendTransac
   assert.equal(result.transaction.nonce, '0x7');
   assert.equal(result.transaction.chainId, '0x38');
   assert.ok(nonce.at < 40, 'nonce started at ' + nonce.at + 'ms');
-  // Previous measured invocation was 284ms: 200ms preparation plus a later 80ms round trip.
-  assert.ok(send.at < 240, 'eth_sendTransaction was invoked at ' + send.at + 'ms');
+  const prepared=calls.find(call=>call.method==='prepare-done');
+  for(const method of ['eth_chainId','eth_accounts']){
+    const identityReads=calls.filter(call=>call.method===method);
+    assert.equal(identityReads.length,2);
+    assert.ok(identityReads[1].at>=prepared.at,method+' must sample identity after preparation');
+    assert.ok(identityReads[1].at<send.at,method+' must complete before send');
+  }
+  // Preparation still overlaps nonce/block reads, but the final identity round
+  // trip is mandatory: a 200ms simulation plus an 80ms wallet identity read.
+  assert.ok(send.at < 400, 'eth_sendTransaction was invoked at ' + send.at + 'ms');
   assert.ok(send.at + 80 <= Date.now() - started);
 });
 

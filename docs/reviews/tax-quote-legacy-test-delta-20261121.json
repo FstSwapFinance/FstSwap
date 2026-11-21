@@ -1,0 +1,290 @@
+{
+  "baseline": "59b91a52ca69a21f80cbbba1ce03013e97d47215",
+  "baselineFailCount": 23,
+  "patchFailCount": 29,
+  "baselineExisting": [
+    "BNB fractions reserve current route Gas and price headroom instead of fixed 0.01 BNB",
+    "Swap exposes four semantic shortcuts only on the paying panel",
+    "Swap percentages preserve full wei while showing four decimal places and scheduling once",
+    "a BNB balance below old 0.01 reserve remains usable when actual Gas fits",
+    "a six-decimal token uses its own precision without losing Max remainder",
+    "an account change during preparation is checked again before nonce and sending",
+    "an active local quote still completes validation and publishes without modifying its expiry",
+    "an insufficient allowance returns to authorization without nonce, storage, or send",
+    "an older http failure cannot disable a successful newer refresh",
+    "an older validation failure cannot disable a successful newer refresh",
+    "changing single-hop while a unit price is visible clears it and requests the new identity instead of stranding expiry",
+    "changing slippage during unit-price cooldown cancels the old identity and rearms the new settings",
+    "compatibility retains actual Git releases49,48,47,46,45 with source-manifest and historical blob proof",
+    "disconnected, unknown, failed and zero balances disable every action and cannot mutate input",
+    "failed Gas price or estimate leaves the native input untouched and restores controls",
+    "fresh calls do not join each other and a canceled newer refresh blocks old cache publication",
+    "fresh does not join older pending work and the old completion cannot overwrite newer cache",
+    "keyboard Enter and Space retain focus on the newly rendered percentage button",
+    "pending native Gas reads cannot overwrite a changed account, token, amount, balance or settings",
+    "stale account, token, balance and error callbacks cannot reuse old shortcuts",
+    "the real preview renderer cannot keep an expired unit price visible after a backward wall-clock jump",
+    "the real quote expiry and input guard use 15s service time despite a backward device-clock jump",
+    "verified swap receipt performs one fresh three-token read, then header shares it without failing the page or restoring old balances"
+  ],
+  "patchOnly": [
+    "FstSwap API accepts all six fee inputs and eligible fee outputs with exact net amounts",
+    "FstSwap API preserves explicit zero slippage and every allowed intermediate fee asset",
+    "FstSwap API supports complete intermediate fee routes with no pool reuse",
+    "FstSwap API validates mixed V3/V2 stages and parallel direct splits",
+    "every input and adapter deployment field and router isolates completed cache keys",
+    "single-hop FstSwap allows a required fee bridge but rejects multihop within either segment"
+  ],
+  "baselineOnly": [],
+  "followUp": {
+    "date": "2026-11-21",
+    "codeDefects": 1,
+    "testDrift": 28,
+    "entries": [
+      {
+        "originalFailure": "BNB fractions reserve current route Gas and price headroom instead of fixed 0.01 BNB",
+        "classification": "test-drift",
+        "file": "tests/swap-percent-actions.test.mjs",
+        "resolution": "DOM fixture 接入真实 presentedQuote、quoteFieldState、balanceFieldState 与 balancePending；原百分比、精度、Gas、焦点及取消断言保留。"
+      },
+      {
+        "originalFailure": "Swap exposes four semantic shortcuts only on the paying panel",
+        "classification": "test-drift",
+        "file": "tests/swap-percent-actions.test.mjs",
+        "resolution": "DOM fixture 接入真实 presentedQuote、quoteFieldState、balanceFieldState 与 balancePending；原百分比、精度、Gas、焦点及取消断言保留。"
+      },
+      {
+        "originalFailure": "Swap percentages preserve full wei while showing four decimal places and scheduling once",
+        "classification": "test-drift",
+        "file": "tests/swap-percent-actions.test.mjs",
+        "resolution": "DOM fixture 接入真实 presentedQuote、quoteFieldState、balanceFieldState 与 balancePending；原百分比、精度、Gas、焦点及取消断言保留。"
+      },
+      {
+        "originalFailure": "a BNB balance below old 0.01 reserve remains usable when actual Gas fits",
+        "classification": "test-drift",
+        "file": "tests/swap-percent-actions.test.mjs",
+        "resolution": "DOM fixture 接入真实 presentedQuote、quoteFieldState、balanceFieldState 与 balancePending；原百分比、精度、Gas、焦点及取消断言保留。"
+      },
+      {
+        "originalFailure": "a six-decimal token uses its own precision without losing Max remainder",
+        "classification": "test-drift",
+        "file": "tests/swap-percent-actions.test.mjs",
+        "resolution": "DOM fixture 接入真实 presentedQuote、quoteFieldState、balanceFieldState 与 balancePending；原百分比、精度、Gas、焦点及取消断言保留。"
+      },
+      {
+        "originalFailure": "an account change during preparation is checked again before nonce and sending",
+        "classification": "code-defect",
+        "file": "src/swap-send.mjs",
+        "resolution": "最终身份采样提前，移到所有 preparation、nonce、block 结束之后；prepared 与 direct 均核验。"
+      },
+      {
+        "originalFailure": "an active local quote still completes validation and publishes without modifying its expiry",
+        "classification": "test-drift",
+        "file": "tests/swap-view-local-quote-cancel.test.mjs",
+        "resolution": "VM fixture 缺 acceptQuoteResult，正常发布异常被 catch 清空；补真实函数。"
+      },
+      {
+        "originalFailure": "an insufficient allowance returns to authorization without nonce, storage, or send",
+        "classification": "test-drift",
+        "file": "tests/swap-send-prepare.test.mjs",
+        "resolution": "只读 nonce 预取不是发送；仍要求不足授权时不存 intent、不发交易。"
+      },
+      {
+        "originalFailure": "an older http failure cannot disable a successful newer refresh",
+        "classification": "test-drift",
+        "file": "tests/swap-service-cache.test.mjs",
+        "resolution": "旧断言要求 fresh 创建独立在途请求；按现行契约共享 pending，验证取消、独立 DTO、失效及旧失败不能覆盖新成功。"
+      },
+      {
+        "originalFailure": "an older validation failure cannot disable a successful newer refresh",
+        "classification": "test-drift",
+        "file": "tests/swap-service-cache.test.mjs",
+        "resolution": "旧断言要求 fresh 创建独立在途请求；按现行契约共享 pending，验证取消、独立 DTO、失效及旧失败不能覆盖新成功。"
+      },
+      {
+        "originalFailure": "changing single-hop while a unit price is visible clears it and requests the new identity instead of stranding expiry",
+        "classification": "test-drift",
+        "file": "tests/swap-pair-price-recovery.test.mjs",
+        "resolution": "设置事件 fixture 缺真实 dropDisplayedQuote，补齐实际函数与渲染依赖。"
+      },
+      {
+        "originalFailure": "changing slippage during unit-price cooldown cancels the old identity and rearms the new settings",
+        "classification": "test-drift",
+        "file": "tests/swap-pair-price-recovery.test.mjs",
+        "resolution": "设置事件 fixture 缺真实 dropDisplayedQuote，补齐实际函数与渲染依赖。"
+      },
+      {
+        "originalFailure": "compatibility retains actual Git releases49,48,47,46,45 with source-manifest and historical blob proof",
+        "classification": "test-drift",
+        "file": "tests/swap-runtime-lean-build.test.mjs",
+        "resolution": "独立 Git 发布基准更新到 50..46，逐文件历史 blob、manifest、SHA256 验证仍保留。"
+      },
+      {
+        "originalFailure": "disconnected, unknown, failed and zero balances disable every action and cannot mutate input",
+        "classification": "test-drift",
+        "file": "tests/swap-percent-actions.test.mjs",
+        "resolution": "DOM fixture 接入真实 presentedQuote、quoteFieldState、balanceFieldState 与 balancePending；原百分比、精度、Gas、焦点及取消断言保留。"
+      },
+      {
+        "originalFailure": "failed Gas price or estimate leaves the native input untouched and restores controls",
+        "classification": "test-drift",
+        "file": "tests/swap-percent-actions.test.mjs",
+        "resolution": "DOM fixture 接入真实 presentedQuote、quoteFieldState、balanceFieldState 与 balancePending；原百分比、精度、Gas、焦点及取消断言保留。"
+      },
+      {
+        "originalFailure": "fresh calls do not join each other and a canceled newer refresh blocks old cache publication",
+        "classification": "test-drift",
+        "file": "tests/swap-service-cache.test.mjs",
+        "resolution": "旧断言要求 fresh 创建独立在途请求；按现行契约共享 pending，验证取消、独立 DTO、失效及旧失败不能覆盖新成功。"
+      },
+      {
+        "originalFailure": "fresh does not join older pending work and the old completion cannot overwrite newer cache",
+        "classification": "test-drift",
+        "file": "tests/swap-service-cache.test.mjs",
+        "resolution": "旧断言要求 fresh 创建独立在途请求；按现行契约共享 pending，验证取消、独立 DTO、失效及旧失败不能覆盖新成功。"
+      },
+      {
+        "originalFailure": "keyboard Enter and Space retain focus on the newly rendered percentage button",
+        "classification": "test-drift",
+        "file": "tests/swap-percent-actions.test.mjs",
+        "resolution": "DOM fixture 接入真实 presentedQuote、quoteFieldState、balanceFieldState 与 balancePending；原百分比、精度、Gas、焦点及取消断言保留。"
+      },
+      {
+        "originalFailure": "pending native Gas reads cannot overwrite a changed account, token, amount, balance or settings",
+        "classification": "test-drift",
+        "file": "tests/swap-percent-actions.test.mjs",
+        "resolution": "DOM fixture 接入真实 presentedQuote、quoteFieldState、balanceFieldState 与 balancePending；原百分比、精度、Gas、焦点及取消断言保留。"
+      },
+      {
+        "originalFailure": "stale account, token, balance and error callbacks cannot reuse old shortcuts",
+        "classification": "test-drift",
+        "file": "tests/swap-percent-actions.test.mjs",
+        "resolution": "DOM fixture 接入真实 presentedQuote、quoteFieldState、balanceFieldState 与 balancePending；原百分比、精度、Gas、焦点及取消断言保留。"
+      },
+      {
+        "originalFailure": "the real preview renderer cannot keep an expired unit price visible after a backward wall-clock jump",
+        "classification": "test-drift",
+        "file": "tests/swap-view-clock.test.mjs",
+        "resolution": "VM fixture 接入真实 display helpers 与 presentedQuote，保持 15 秒有效期及跳钟断言。"
+      },
+      {
+        "originalFailure": "the real quote expiry and input guard use 15s service time despite a backward device-clock jump",
+        "classification": "test-drift",
+        "file": "tests/swap-view-clock.test.mjs",
+        "resolution": "VM fixture 接入真实 display helpers 与 presentedQuote，保持 15 秒有效期及跳钟断言。"
+      },
+      {
+        "originalFailure": "verified swap receipt performs one fresh three-token read, then header shares it without failing the page or restoring old balances",
+        "classification": "test-drift",
+        "file": "tests/swap-receipt-shared-balances.test.mjs",
+        "resolution": "VM fixture 补 balancePending 与 receiptReads.dispose，保留验证回执后仅一次 fresh 批量读取。"
+      },
+      {
+        "originalFailure": "FstSwap API accepts all six fee inputs and eligible fee outputs with exact net amounts",
+        "classification": "test-drift",
+        "file": "tests/swap-service-fstswap.test.mjs",
+        "resolution": "未知随机 ALT 被假定无税；拓扑 fixture 改用已有已支持普通币，保留未知币双向拒绝测试。"
+      },
+      {
+        "originalFailure": "FstSwap API preserves explicit zero slippage and every allowed intermediate fee asset",
+        "classification": "test-drift",
+        "file": "tests/swap-service-fstswap.test.mjs",
+        "resolution": "未知随机 ALT 被假定无税；拓扑 fixture 改用已有已支持普通币，保留未知币双向拒绝测试。"
+      },
+      {
+        "originalFailure": "FstSwap API supports complete intermediate fee routes with no pool reuse",
+        "classification": "test-drift",
+        "file": "tests/swap-service-fstswap.test.mjs",
+        "resolution": "未知随机 ALT 被假定无税；拓扑 fixture 改用已有已支持普通币，保留未知币双向拒绝测试。"
+      },
+      {
+        "originalFailure": "FstSwap API validates mixed V3/V2 stages and parallel direct splits",
+        "classification": "test-drift",
+        "file": "tests/swap-service-fstswap.test.mjs",
+        "resolution": "未知随机 ALT 被假定无税；拓扑 fixture 改用已有已支持普通币，保留未知币双向拒绝测试。"
+      },
+      {
+        "originalFailure": "every input and adapter deployment field and router isolates completed cache keys",
+        "classification": "test-drift",
+        "file": "tests/swap-service-cache.test.mjs",
+        "resolution": "未知随机 ALT 被假定无税；拓扑 fixture 改用已有已支持普通币，保留未知币双向拒绝测试。"
+      },
+      {
+        "originalFailure": "single-hop FstSwap allows a required fee bridge but rejects multihop within either segment",
+        "classification": "test-drift",
+        "file": "tests/swap-service-fstswap.test.mjs",
+        "resolution": "未知随机 ALT 被假定无税；拓扑 fixture 改用已有已支持普通币，保留未知币双向拒绝测试。"
+      }
+    ],
+    "protectedFiles": [
+      {
+        "path": "src/swap-transfer-tax.mjs",
+        "sha256": "c558d876e3bb44843149d875d132155dc466d8098f5381e19b87a8602a985373",
+        "unchangedSince": "e6ab0ba577cb74367e529387d21fc20cfbbaeb3a"
+      },
+      {
+        "path": "src/swap-fstswap.mjs",
+        "sha256": "77e45fe04a50017f79a6e9dd13e98be5b815843e09ff2277a947f6103c251fe8",
+        "unchangedSince": "e6ab0ba577cb74367e529387d21fc20cfbbaeb3a"
+      },
+      {
+        "path": "src/swap-service-client.mjs",
+        "sha256": "dd1002acde86a9ba74d55032eb1d1d081bc6726f35c1e0a22fb1513158633e40",
+        "unchangedSince": "e6ab0ba577cb74367e529387d21fc20cfbbaeb3a"
+      },
+      {
+        "path": "src/swap-liquidity.mjs",
+        "sha256": "524da69ee013e5e46ea1f5d2f8b32051ac80c16733d46c9865a8f7619c6d723d",
+        "unchangedSince": "e6ab0ba577cb74367e529387d21fc20cfbbaeb3a"
+      },
+      {
+        "path": "src/swap-view.mjs",
+        "sha256": "027897ee975c67aeff850850332177027653a5a48a3dc9cb0bc06f2e56ca479f",
+        "unchangedSince": "e6ab0ba577cb74367e529387d21fc20cfbbaeb3a"
+      },
+      {
+        "path": "server/fstswap-service.mjs",
+        "sha256": "b02a28d281e4624e96255504139471682c40158543e99d0cb1b91654adf7edb6",
+        "unchangedSince": "e6ab0ba577cb74367e529387d21fc20cfbbaeb3a"
+      },
+      {
+        "path": "contracts/fstswap-v21/src/FstSwap.sol",
+        "sha256": "96e9f503245899a4307bf6dc574ab87713d8e66851f3389d9f453e5926bfdd95",
+        "unchangedSince": "e6ab0ba577cb74367e529387d21fc20cfbbaeb3a"
+      }
+    ],
+    "historicalReplay": "Missing 2026-11-12 recording was not recovered; the former optional skip is now an explicitly synthetic pinned-block replay with the same full-policy, direction, canonical-reserve, missing-row and block assertions. Not mainnet evidence.",
+    "verification": {
+      "node": "v24.16.0",
+      "testFiles": 79,
+      "results": {
+        "worktree": {
+          "tests": 842,
+          "pass": 842,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "durationMs": 56847.221083,
+          "logSha256": "bf955e47a6761cc6c4185989aee03ba28670739a23e4b5093e67a678cdac4f0d"
+        },
+        "cleanCheckout": {
+          "tests": 842,
+          "pass": 842,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "durationMs": 56277.564958,
+          "logSha256": "9d566d9e3adcbe496436a234fb4d3b0ba17268fd0f988b9774e1a2ebe794f33e"
+        }
+      },
+      "buildCheck": "passed",
+      "runtimeApp": "src/fst-runtime-app-NU3KKRFR.mjs",
+      "cleanDependencies": "Independent root and tools/runtime npm ci --offline --ignore-scripts --no-audit --no-fund; no node_modules symlinks; complete Git history and installed Chromium required.",
+      "sourceChangesAfterCleanRun": "Documentation only.",
+      "deployment": "not performed"
+    },
+    "verifiedCommit": "cdb4133992c1d10a001c591968efe27fe9b0f815"
+  }
+}

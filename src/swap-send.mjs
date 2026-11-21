@@ -122,9 +122,7 @@ export async function sendWalletOnce({provider,read,transaction,gasLimit,gasPric
    // Nonce and the canonical recheck do not depend on simulation. They start
    // with the guard so a slow preparation does not add another full round trip.
    const noncePromise=walletRead({method:'eth_getTransactionCount',params:[account,'pending']});
-   const chainPromise=prepare?walletRead({method:'eth_chainId'}):null;
-   const accountsPromise=prepare?walletRead({method:'eth_accounts'}):null;
-   noncePromise.catch(()=>{});chainPromise?.catch(()=>{});accountsPromise?.catch(()=>{});
+   noncePromise.catch(()=>{});
    const guardPromise=guard();
    const blockPromise=guardPromise.then(canonical=>walletRead({method:'eth_getBlockByNumber',params:[canonical.number,false]}));
    blockPromise.catch(()=>{});
@@ -134,12 +132,13 @@ export async function sendWalletOnce({provider,read,transaction,gasLimit,gasPric
    checkSignal(active);unchanged();
    if(prepared?.needsApproval)return{needsApproval:true,preparation:prepared};
    timing?.('final_guard_start');
-   const [block,nonce,chain,accounts]=await Promise.all([
-    blockPromise,noncePromise,
-    ...(prepare?[chainPromise,accountsPromise]:[]),
-   ]);
-   if(prepare&&(BigInt(chain)!==56n||!same(accounts[0],account)))throw fail('WALLET_CHANGED','钱包网络或账户已改变，请重新核对');
+   const [block,nonce]=await Promise.all([blockPromise,noncePromise]);
    if(!block||!same(block.hash,canonical.hash))throw fail('WRONG_CHAIN','钱包网络与读链节点不一致');
+   // Every slow preparation/nonce/block read must finish before the final
+   // account/network sample. There is no further await before submission,
+   // including on direct sends without a prepare callback.
+   const [chain,accounts]=await Promise.all([walletRead({method:'eth_chainId'}),walletRead({method:'eth_accounts'})]);
+   if(BigInt(chain)!==56n||!same(accounts[0],account))throw fail('WALLET_CHANGED','钱包网络或账户已改变，请重新核对');
    timing?.('final_guard_done');
    checkSignal(active);unchanged();
    if(beforeSubmit&&!beforeSubmit())throw fail('REQUEST_CHANGED','当前选择已改变');

@@ -317,7 +317,7 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
  };
  return engine;
 }
-const publicErrors=new Set(['INVALID_INPUT','NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY','UNSUPPORTED_VERSION','QUOTE_EXPIRED','STALE_BLOCK','BALANCE_UNAVAILABLE','SERVICE_BUSY','RATE_LIMIT','BODY_LIMIT','BODY_TIMEOUT']);
+const publicErrors=new Set(['INVALID_INPUT','NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','TAX_UNVERIFIED','PRICE_IMPACT_TOO_HIGH','POOL_LIQUIDITY','UNSUPPORTED_VERSION','QUOTE_EXPIRED','STALE_BLOCK','BALANCE_UNAVAILABLE','SERVICE_BUSY','RATE_LIMIT','BODY_LIMIT','BODY_TIMEOUT']);
 export function createApi({engine,pool,balancePool=pool,clock=Date.now,maxActive=12,rateLimit=240,allowedOrigins=['http://127.0.0.1:8124','http://localhost:8124','https://fstswap-live.vercel.app','https://fstswap-live-haocutbabas.vercel.app','https://fstswap.pro','https://www.fstswap.pro']}={}){
  const rates=new Map(),activeByRole={quote:0,balances:0},roleLimits={quote:Math.min(8,maxActive),balances:Math.min(4,maxActive)};let active=0;
  const server=createServer({headersTimeout:5000,requestTimeout:22000,maxHeaderSize:8192},async(req,res)=>{
