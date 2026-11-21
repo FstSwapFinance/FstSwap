@@ -1,3 +1,4 @@
+import {measurePhase,countTiming} from './swap-timing.mjs';
 // Server-only read transport. Endpoint URLs remain in this closure and never enter diagnostics.
 const METHODS=new Set(['eth_chainId','eth_getBlockByNumber','eth_call','eth_getBalance']);
 const TERMINAL=new Set(['INVALID_INPUT','RPC_FORBIDDEN','NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','UNSUPPORTED_VERSION','QUOTE_EXPIRED','SERVICE_BUSY']);
@@ -77,7 +78,8 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
   const bootstrap=new Set(coldForeground?candidates.filter(n=>n.failures===0&&fresh(n.chainAt,10000)&&n.head!==null&&fresh(n.headAt,5000)&&fresh(n.lastOk,5000)&&(headLag(n)??0)<=2):[]);
   return candidates.sort((a,b)=>Number(bootstrap.has(b))-Number(bootstrap.has(a))||score(a,kind,rpcClass)-score(b,kind,rpcClass)||states.indexOf(a)-states.indexOf(b));
  }
- async function call(node,payload,signal,isProbe=false){
+ function call(node,payload,signal,isProbe=false){return measurePhase('rpc',()=>physicalCall(node,payload,signal,isProbe));}
+ async function physicalCall(node,payload,signal,isProbe=false){
   if(signal.aborted)throw cancelled(signal);
   if(!payload||!METHODS.has(payload.method))throw fail('RPC_FORBIDDEN');
   if(active>=MAX_ACTIVE)throw fail('SERVICE_BUSY');
@@ -90,7 +92,7 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
   const onAbort=()=>controller.abort(signal.reason);
   signal.addEventListener('abort',onAbort,{once:true});
   const timer=setTimeout(()=>{timedOut=true;controller.abort();},timeoutMs);
-  active++;
+  active++;countTiming('rpc_http');countTiming('rpc_calls');countTiming('rpc_bytes',Buffer.byteLength(body));
   try{
    const response=await abortable(Promise.resolve().then(()=>fetchImpl(node.url,{method:'POST',headers:{'content-type':'application/json'},body,signal:controller.signal})),controller.signal);
    if(!response.ok){
@@ -124,7 +126,8 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
  }
  // One HTTP request may carry the pinned balance call and its canonical header.
  // Two items is the budget. A node that rejects batches is remembered and is not penalized.
- async function callMany(node,payloads,signal,isProbe=false){
+ function callMany(node,payloads,signal,isProbe=false){return measurePhase('rpc',()=>physicalCallMany(node,payloads,signal,isProbe));}
+ async function physicalCallMany(node,payloads,signal,isProbe=false){
   if(signal.aborted)throw cancelled(signal);
   if(!Array.isArray(payloads)||payloads.length<1||payloads.length>2||payloads.some(payload=>!payload||!METHODS.has(payload.method)))throw fail(payloads?.some?.(payload=>payload&&!METHODS.has(payload.method))?'RPC_FORBIDDEN':'INVALID_INPUT');
   if(node.batchSupported===false)throw fail('BATCH_UNSUPPORTED');
@@ -137,7 +140,7 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
   const onAbort=()=>controller.abort(signal.reason);
   signal.addEventListener('abort',onAbort,{once:true});
   const timer=setTimeout(()=>{timedOut=true;controller.abort();},timeoutMs);
-  active++;
+  active++;countTiming('rpc_http');countTiming('rpc_calls',items.length);countTiming('rpc_batches');countTiming('rpc_bytes',Buffer.byteLength(body));
   const unsupported=()=>{const error=fail('BATCH_UNSUPPORTED');node.batchSupported=false;throw error;};
   try{
    const response=await abortable(Promise.resolve().then(()=>fetchImpl(node.url,{method:'POST',headers:{'content-type':'application/json'},body,signal:controller.signal})),controller.signal);

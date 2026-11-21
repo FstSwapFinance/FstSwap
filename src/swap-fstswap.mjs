@@ -123,7 +123,7 @@ export function fstRequest(Interface,{router,account,quote,deadline}){
 
 const noRoute=()=>Object.assign(Error('没有符合流动性要求的完整兑换路线'),{code:'NO_ROUTE'});
 // Quote only pools admitted by the independent-price/depth policy. Every call uses its snapshot block.
-export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],singleHop=false,configVersion='2.0.0',linearV2Only=false,adaptersOff=[],transferTaxes}){
+export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],singleHop=false,configVersion='2.0.0',linearV2Only=false,adaptersOff=[],transferTaxes,count=()=>{}}){
  const input=lower(from),output=lower(to),taken=new Set(used.flatMap(l=>l.poolIds||[]).map(lower));
  const edges=[];
  for(const pool of policy.pools.values()){
@@ -164,14 +164,20 @@ export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],sing
  const quoteKey=(l,a)=>[l.adapter,l.kind,typeof l.path==='string'?l.path:l.path.join(':'),a].join(':').toLowerCase(),cache=new Map();
  async function fill(items){
   const pending=[...new Map(items.filter(({leg,amount})=>amount>0n&&!cache.has(quoteKey(leg,amount))).map(x=>[quoteKey(x.leg,x.amount),x])).values()];
-  for(let start=0;start<pending.length;start+=80){
-   const batch=pending.slice(start,start+80),calls=batch.map(({leg,amount})=>leg.kind==='v3'?[leg.adapter,quoter.encodeFunctionData('quoteExactIn',[leg.path,amount])]:[swapActiveRouter(),router.encodeFunctionData('getAmountsOutVia',[leg.adapter,amount,leg.path])]);
+  for(let start=0;start<pending.length;start+=160){
+   // Same-depth inputs are independent. Observe both physical batches before
+   // propagating any failure, so no started RPC outlives a rejected quote.
+   const settled=await Promise.allSettled([pending.slice(start,start+80),pending.slice(start+80,start+160)].filter(batch=>batch.length).map(async batch=>{
+   count('quote_batches');count('quote_subcalls',batch.length);
+   const calls=batch.map(({leg,amount})=>leg.kind==='v3'?[leg.adapter,quoter.encodeFunctionData('quoteExactIn',[leg.path,amount])]:[swapActiveRouter(),router.encodeFunctionData('getAmountsOutVia',[leg.adapter,amount,leg.path])]);
    const raw=await request({method:'eth_call',params:[{to:'0xcA11bde05977b3631167028862bE2a173976CA11',data:multicall.encodeFunctionData('tryAggregate',[false,calls])},policy.blockNumber]});
    const entries=multicall.decodeFunctionResult('tryAggregate',raw)[0];if(entries.length!==batch.length)throw Error('报价返回不完整');
    batch.forEach(({leg,amount},n)=>{
     let out=0n;try{if(entries[n].success){if(leg.kind==='v3')out=quoter.decodeFunctionResult('quoteExactIn',entries[n].returnData)[0];else{const values=router.decodeFunctionResult('getAmountsOutVia',entries[n].returnData)[0];if(values.length===2&&values[0]===amount)out=values[1];}}}catch{}
     cache.set(quoteKey(leg,amount),out);
    });
+   }));
+   const failure=settled.find(result=>result.status==='rejected');if(failure)throw failure.reason;
   }
  }
  // Parallel direct pools share the same stage; its final branch receives the exact remainder.
@@ -216,18 +222,18 @@ export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],sing
   c.from=from;c.to=to;c.amountIn=amount;c.assertFresh=()=>policy.assertFresh();
  }
  const valid=candidates.filter(c=>c.out>0n&&Number.isFinite(c.impact)).sort((a,b)=>a.out>b.out?-1:a.out<b.out?1:a.legs.length-b.legs.length);
- if(!valid.length)throw noRoute();policy.assertFresh();return{...valid[0],candidates:valid};
+ if(!valid.length)throw noRoute();policy.assertFresh();count('quote_candidates',valid.length);return{...valid[0],candidates:valid};
 }
-export async function quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,slippageBps,singleHop=false,preparedPolicy,contextNodeId}){
+export async function quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,slippageBps,singleHop=false,preparedPolicy,contextNodeId,measure=(_name,work)=>work(),count=()=>{}}){
  const wrap=isWrap(tokenIn,tokenOut);
  const whole=preparedPolicy?await usePreparedPolicy(request,preparedPolicy,{tokenIn,tokenOut,config,contextNodeId}):wrap?null:await readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens:[config.defaultFeeToken]});
  const taxTokens=wrap?[]:[...new Set([tokenIn,tokenOut,...whole.pools.values()].flatMap(value=>typeof value==='string'?[lower(value)]:[lower(value.token0),lower(value.token1)]))];
- const transferTaxes=wrap?new Map():await readTransferTaxes(request,{tokens:taxTokens,blockNumber:whole.blockNumber,timestamp:whole.blockTimestamp??whole.timestamp});
+ const transferTaxes=wrap?new Map():await measure('tax',()=>readTransferTaxes(request,{tokens:taxTokens,blockNumber:whole.blockNumber,timestamp:whole.blockTimestamp??whole.timestamp}));
  const findRoute=async(from,to,amount,used,routeOptions)=>{
 
   if(isWrap(from,to))return{from,to,amountIn:amount,minimum:amount,out:amount,impact:0,legs:[{kind:'wrap',out:amount,amountIn:amount}],assertFresh(){}};
   const policy={...whole,...createPoolPolicy(whole.pools,whole.prices,from,to,{tradeTokenIn:tokenIn})};
-  const routes=await quoteFstRoutes(request,{from,to,amount,used,policy,singleHop,configVersion:config.version,adaptersOff:config.adaptersOff,transferTaxes,...routeOptions});
+  const routes=await quoteFstRoutes(request,{from,to,amount,used,policy,singleHop,configVersion:config.version,adaptersOff:config.adaptersOff,transferTaxes,...routeOptions,count});
   let rejection;
   const valid=routes.candidates.filter(c=>{
    c.minimum=minimum(c.out,slippageBps);

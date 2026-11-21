@@ -8,6 +8,8 @@ import {readFstPoolPolicy,quoteFstSwap,fstServiceQuote} from '../src/swap-fstswa
 import {readTokenBalances} from '../src/swap-balances.mjs';
 import {createReadPool} from './swap-read-pool.mjs';
 import {createRawSnapshot,snapshotReader} from './swap-snapshot-cache.mjs';
+import {createBalanceHeaderCache} from './swap-balance-header.mjs';
+import {createTimingScope,measurePhase,countTiming} from './swap-timing.mjs';
 export {createReadPool};
 
 globalThis.ethers=ethers;
@@ -38,7 +40,7 @@ function pinned(request,block){return p=>{
 export async function computeQuote(request,input,config,poolPolicy,{nodeId}={}){
  const {tokenIn,tokenOut,slippageBps,singleHop}=input,amountIn=BigInt(input.amountIn),feeBps=config.platformFeeBps;
  if(['2.0.0','2.1.0'].includes(config.version)){
-  const q=await quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,slippageBps,singleHop,preparedPolicy:poolPolicy,contextNodeId:nodeId});
+  const q=await quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,slippageBps,singleHop,preparedPolicy:poolPolicy,contextNodeId:nodeId,measure:measurePhase,count:countTiming});
   assertQuoteSafety({tokenIn,tokenOut,amountIn,amountOut:q.minimum,impact:q.impact,quotedAmountIn:q.amountIn,quotedAmountOut:q.out});
   poolPolicy.assertFresh();poolPolicy.assertValue(amountIn,q.minimum);
   return fstServiceQuote(q,{slippageBps,poolCheckedAt:poolPolicy.checkedAt});
@@ -104,12 +106,14 @@ function sharedRead(start,{timeoutMs,onSettled,onAbandoned}={}){
  };
  return entry;
 }
-export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=readSwapConfig,readPolicy=readFstPoolPolicy,calculate=computeQuote,readBalances=readTokenBalances,warmup={}}={}){
+export function createEngine(pool,{balancePool=pool,clock=Date.now,monotonic=()=>performance.now(),readConfig=readSwapConfig,readPolicy=readFstPoolPolicy,calculate=computeQuote,readBalances=readTokenBalances,warmup={}}={}){
  const contexts=new Map(),pendingWarmContexts=new Map(),inflight=new Map(),completedQuotes=new Map(),recentPairs=new Map(),nodeSnapshots=new Map(),invalidSnapshots=new WeakSet();
+ const balanceHeaders=createBalanceHeaderCache({clock,monotonic});
  const warmOptions={enabled:true,intervalMs:3000,activeTtlMs:60000,maxPairs:4,...warmup};
  warmOptions.intervalMs=Math.max(1000,Number(warmOptions.intervalMs)||3000);
  warmOptions.maxPairs=Math.max(1,Math.min(4,Number(warmOptions.maxPairs)||4));
- const defaults=(warmOptions.pairs||[{tokenIn:SWAP_TOKENS.usdt.address.toLowerCase(),tokenOut:FIST}]).slice(0,warmOptions.maxPairs);
+ const usdt=SWAP_TOKENS.usdt.address.toLowerCase();
+ const defaults=(warmOptions.pairs||[{tokenIn:usdt,tokenOut:FIST},{tokenIn:ZERO,tokenOut:usdt},{tokenIn:usdt,tokenOut:ZERO}]).slice(0,warmOptions.maxPairs);
  let foreground=0,warming=null,warmTimer=null;
  const foregroundNodes=new Map();
  const pairKey=input=>[input.tokenIn,input.tokenOut].join(':');
@@ -140,10 +144,10 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
  const foregroundNode=()=>foregroundNodes.size===1?foregroundNodes.keys().next().value:null;
  // New policies retain context()'s captured scope. Keep the previous entry's
  // callbacks in their own scope so successive refreshes cannot form a chain.
- function warmExistingContext(old,key,consumerSignal,nodeId){
+ function warmExistingContext(old,key,consumerSignal,nodeId,{deferPublication=false}={}){
   return old.subscribe(consumerSignal).then(snapshot=>untilAborted(pool.run(async request=>{
-   const canonical=await request({method:'eth_getBlockByNumber',params:[snapshot.block.number,false]});assertRunning(consumerSignal);
-   if(canonical?.hash!==snapshot.block.hash){invalidateSnapshot(snapshot.snapshot);throw fail('STALE_BLOCK');}snapshot.policy.assertFresh();if(clock()>=snapshot.policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');old.warmed=true;return snapshot;
+   const canonical=await measurePhase('canonical',()=>request({method:'eth_getBlockByNumber',params:[snapshot.block.number,false]}));assertRunning(consumerSignal);
+   if(canonical?.hash!==snapshot.block.hash){invalidateSnapshot(snapshot.snapshot);throw fail('STALE_BLOCK');}snapshot.policy.assertFresh();if(clock()>=snapshot.policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');if(!deferPublication)old.warmed=true;return snapshot;
   },consumerSignal,{operation:'warm',nodeId}),consumerSignal)).catch(error=>{if(contexts.get(key)===old)contexts.delete(key);throw error;});
  }
  function settleWarmContext(key,entry,error){
@@ -156,41 +160,71 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
   if(current&&(!current.settled||current.rawSnapshot?.capturedAt>entry.rawSnapshot.capturedAt))return;
   try{boundedSet(contexts,key,entry,32);}catch{/* A full foreground map can decline background retention. */}
  }
- function context(input,consumerSignal,{warm=false,node}={}){
+ function reusableWarmCycle(pairs,nodeId){
+  let snapshot;
+  for(const input of pairs){
+   const old=contexts.get([nodeId,pairKey(input)].join(':'));
+   if(!old||old.signal.aborted||invalidSnapshots.has(old.rawSnapshot)||old.settled&&clock()-old.completedAt>=2500)return false;
+   // A single matching pending foreground may be shared before its header is
+   // known. Multiple pairs can reuse only one already completed raw snapshot.
+   if(pairs.length>1&&(!old.settled||!old.rawSnapshot||snapshot&&snapshot!==old.rawSnapshot))return false;
+   snapshot=old.rawSnapshot;
+  }
+  return true;
+ }
+ function discardWarmCycle(cycle){
+  for(const[key,entry]of cycle.entries)if(pendingWarmContexts.get(key)===entry)pendingWarmContexts.delete(key);
+  cycle.entries.clear();cycle.reused.clear();
+ }
+ function publishWarmCycle(cycle,values,signal){
+  assertRunning(signal);
+  // All pair policies keep their original Oracle and snapshot deadlines. Check
+  // them together after the last discovery before publishing any replacement.
+  for(const value of values){value.policy.assertFresh();if(clock()>=value.policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');}
+  for(const entry of cycle.entries.values())if(entry.signal.aborted||invalidSnapshots.has(entry.rawSnapshot))throw fail('STALE_BLOCK');
+  if(cycle.snapshot)publishSnapshot(cycle.snapshot);
+  for(const[key,entry]of cycle.entries)settleWarmContext(key,entry,null);
+  for(const[key,entry]of cycle.reused)if(contexts.get(key)===entry)entry.warmed=true;
+ }
+ function context(input,consumerSignal,{warm=false,node,warmCycle}={}){
   const nodeId=node?.id||'primary',key=[nodeId,pairKey(input)].join(':'),old=contexts.get(key);
   // Prewarmed data is useful until the next refresh, while its original policy
   // deadline remains authoritative. Ordinary foreground reuse stays at 2.5 s.
-  if(old&&!old.signal.aborted&&!invalidSnapshots.has(old.rawSnapshot)&&(!old.settled||clock()-old.completedAt<(warm?2500:old.warmed?warmOptions.intervalMs+2500:2500))){
-   if(!warm||old.warmed)return old.subscribe(consumerSignal);
-   return warmExistingContext(old,key,consumerSignal,nodeId);
+  if(!warmCycle?.refresh&&old&&!old.signal.aborted&&!invalidSnapshots.has(old.rawSnapshot)&&(!old.settled||clock()-old.completedAt<(warm?2500:old.warmed?warmOptions.intervalMs+2500:2500))){
+   if(warmCycle)warmCycle.reused.set(key,old);
+   if(!warm||old.warmed){countTiming('context_hits');return old.subscribe(consumerSignal);}
+   return warmExistingContext(old,key,consumerSignal,nodeId,{deferPublication:!!warmCycle});
   }
   const pending=pendingWarmContexts.get(key);
   if(pending&&!pending.signal.aborted)return pending.subscribe(consumerSignal);
   let entry;
   entry=sharedRead(signal=>pool.run(async request=>{
    const previous=nodeSnapshots.get(nodeId),age=previous?clock()-previous.capturedAt:Infinity;
-   let snapshot=!warm&&age>=0&&age<8500?previous:null;
+   let snapshot=warmCycle?.snapshot||(!warm&&age>=0&&age<8500?previous:null);
+   if(snapshot&&snapshot.nodeId!==nodeId)throw fail('STALE_BLOCK');
+   if(snapshot)countTiming('snapshot_hits');
    if(!snapshot){
     const capturedAt=clock(),block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertRunning(signal);assertBlock(block,clock);
     snapshot=createRawSnapshot({nodeId,block,capturedAt});
+    if(warmCycle)warmCycle.snapshot=snapshot;
     if(!warm)publishSnapshot(snapshot);
    }
    entry.rawSnapshot=snapshot;
-   const block=snapshot.block,read=pinned(snapshotReader(snapshot,request,{nodeId,signal}),block),config=await readConfig(read,{block});assertRunning(signal);
+   const block=snapshot.block,read=pinned(snapshotReader(snapshot,request,{nodeId,signal}),block),config=await measurePhase('config',()=>readConfig(read,{block}));assertRunning(signal);
    const staged=['2.0.0','2.1.0'].includes(config.version);
-   const policy=await readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:staged?'all':'legacy',extraTokens:staged?[config.defaultFeeToken]:[],block,nodeId,clock,deferCanonical:true});assertRunning(signal);
+   const policy=await measurePhase('policy',()=>readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:staged?'all':'legacy',extraTokens:staged?[config.defaultFeeToken]:[],block,nodeId,clock,deferCanonical:true,measure:measurePhase}));assertRunning(signal);
    const originalFresh=policy.assertFresh;
    policy.checkedAt=Math.min(policy.checkedAt,snapshot.capturedAt);
    policy.assertFresh=()=>{if(invalidSnapshots.has(snapshot))throw fail('STALE_BLOCK');const elapsed=clock()-snapshot.capturedAt;if(elapsed<0||elapsed>20000)throw Object.assign(new Error('流动性检查已过期，请刷新报价'),{code:'POOL_LIQUIDITY',reason:'stale',retryable:true});return originalFresh.call(policy);};
    policy.assertFresh();
-   if(warm){const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(signal);if(canonical?.hash!==block.hash){invalidateSnapshot(snapshot);throw fail('STALE_BLOCK');}policy.assertFresh();if(clock()>=policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');publishSnapshot(snapshot);}
+   if(warm){const canonical=await measurePhase('canonical',()=>request({method:'eth_getBlockByNumber',params:[block.number,false]}));assertRunning(signal);if(canonical?.hash!==block.hash){invalidateSnapshot(snapshot);throw fail('STALE_BLOCK');}policy.assertFresh();if(clock()>=policy.checkedAt+15000)throw fail('QUOTE_EXPIRED');if(!warmCycle)publishSnapshot(snapshot);}
    entry.completedAt=clock();entry.warmed=warm;return{block,config,policy,snapshot};
   },signal,{operation:warm?'warm':'config',nodeId}),{timeoutMs:18000,
-   onSettled:error=>{if(warm)settleWarmContext(key,entry,error);else if(error&&contexts.get(key)===entry)contexts.delete(key);},
+   onSettled:error=>{if(warm){if(!warmCycle||error)settleWarmContext(key,entry,error);}else if(error&&contexts.get(key)===entry)contexts.delete(key);},
    onAbandoned:()=>{const target=warm?pendingWarmContexts:contexts;if(target.get(key)===entry)target.delete(key);}});
   // Keep the previous completed context visible during a background refresh.
   // Its existing age, oracle, snapshot and final canonical checks still apply.
-  try{boundedSet(warm?pendingWarmContexts:contexts,key,entry,32);}catch(error){entry.controller.abort();return Promise.reject(error);}return entry.subscribe(consumerSignal);
+  try{boundedSet(warm?pendingWarmContexts:contexts,key,entry,32);if(warmCycle)warmCycle.entries.set(key,entry);}catch(error){entry.controller.abort();return Promise.reject(error);}return entry.subscribe(consumerSignal);
  }
  function assertCanonical(canonical,block){
   if(!/^0x[0-9a-f]+$/i.test(canonical?.number||'')||!/^0x[0-9a-f]{64}$/i.test(canonical?.hash||'')||!/^0x[0-9a-f]+$/i.test(canonical?.timestamp||'')||canonical.number!==block.number||canonical.hash!==block.hash)throw fail('STALE_BLOCK');
@@ -209,7 +243,7 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
   return untilAborted(pool.run(async(request,node,attemptSignal)=>{
    const activeSignal=attemptSignal||signal;
    if((node?.id||'primary')!==saved.nodeId)throw fail('STALE_BLOCK');
-   const canonical=await request({method:'eth_getBlockByNumber',params:[current.block.number,false]});assertRunning(activeSignal);
+   const canonical=await measurePhase('canonical',()=>request({method:'eth_getBlockByNumber',params:[current.block.number,false]}));assertRunning(activeSignal);
    try{assertCanonical(canonical,current.block);}catch(error){invalidateSnapshot(current.snapshot);throw error;}
    current.policy.assertFresh();
    if(!completionCurrent(saved))return null;
@@ -242,10 +276,10 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
     const nodeId=node?.id||'primary';foregroundNodes.set(nodeId,(foregroundNodes.get(nodeId)||0)+1);
     try{
      if(warming&&warming.nodeId&&warming.nodeId!==nodeId)warming.controller.abort();
-     const {block,config,policy,snapshot}=await context(input,activeSignal,{node});assertRunning(activeSignal);policy.assertFresh();
+     const {block,config,policy,snapshot}=await measurePhase('context',()=>context(input,activeSignal,{node}));assertRunning(activeSignal);policy.assertFresh();
      const read=pinned(snapshotReader(snapshot,request,{nodeId:node?.id||'primary',signal:activeSignal}),block);
-     const q=await untilAborted(calculate(read,input,config,policy,{signal:activeSignal,nodeId:node?.id||'primary',block}),activeSignal);assertRunning(activeSignal);
-     const canonical=await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(activeSignal);
+     const q=await untilAborted(measurePhase('route',()=>calculate(read,input,config,policy,{signal:activeSignal,nodeId:node?.id||'primary',block})),activeSignal);assertRunning(activeSignal);
+     const canonical=await measurePhase('canonical',()=>request({method:'eth_getBlockByNumber',params:[block.number,false]}));assertRunning(activeSignal);
      try{assertCanonical(canonical,block);}catch(error){invalidateSnapshot(snapshot);throw error;}policy.assertFresh();
      const expiresAt=policy.checkedAt+15000;if(clock()>=expiresAt)throw fail('QUOTE_EXPIRED');
      return{nodeId,data:{schema:1,chainId:56,router:swapActiveRouter(),input,config,quote:q,blockNumber:block.number,blockHash:block.hash,quotedAt:clock(),expiresAt}};
@@ -264,11 +298,14 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
    try{boundedSet(inflight,workKey,entry,32);}catch(error){entry.controller.abort();return Promise.reject(error);}
    return entry.subscribe(signal).then(deliver);
   },
-  balances(raw,{signal}={}){
-   const input=balanceInput(raw);if(signal?.aborted)return Promise.reject(abortError(signal));
+  balances(raw,{signal,fresh=false}={}){
+   const input=balanceInput(raw);if(typeof fresh!=='boolean')return Promise.reject(fail('INVALID_INPUT'));if(signal?.aborted)return Promise.reject(abortError(signal));
    const combined=signal?AbortSignal.any([signal,AbortSignal.timeout(12000)]):AbortSignal.timeout(12000);
-   return untilAborted(balancePool.run(async request=>{
-    const block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertRunning(combined);assertBlock(block,clock);
+   return untilAborted(balancePool.run(async(request,node,attemptSignal)=>{
+    const activeSignal=attemptSignal||combined,nodeId=node?.id||'primary';
+    const observation={observedAt:clock(),monotonicAt:monotonic()},cached=fresh?null:balanceHeaders.get(nodeId);
+    if(cached)countTiming('balance_head_hits');
+    const block=cached||await measurePhase('balance_header',()=>request({method:'eth_getBlockByNumber',params:['latest',false]}));assertRunning(activeSignal);assertBlock(block,clock);
     const tokens=input.tokens.map(a=>({key:a===ZERO?'bnb':a,address:a===ZERO?null:a}));
     // The balance call and the hash recheck are one HTTP request on this same node.
     // A rejected batch falls back to the two serial reads; the hash is still required.
@@ -285,27 +322,33 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,readConfig=re
       batched=false;return request(pinnedPayload);
      }
     };
-    const result=await readBalances(anchored,input.account,tokens);assertRunning(combined);
+    const result=await measurePhase('balance_read',()=>readBalances(anchored,input.account,tokens));assertRunning(activeSignal);
     if(!Object.keys(result.balances).length)throw fail('BALANCE_UNAVAILABLE');
-    const canonical=canonicalHeader??await request({method:'eth_getBlockByNumber',params:[block.number,false]});assertRunning(combined);if(canonical?.hash!==block.hash)throw fail('STALE_BLOCK');
+    const canonical=canonicalHeader??await measurePhase('canonical',()=>request({method:'eth_getBlockByNumber',params:[block.number,false]}));assertRunning(activeSignal);if(canonical?.hash!==block.hash){balanceHeaders.invalidate(nodeId,block.hash);throw fail('STALE_BLOCK');}
+    if(!cached)balanceHeaders.remember(nodeId,block,observation);
     return{schema:1,chainId:56,account:input.account,blockNumber:block.number,blockHash:block.hash,readAt:clock(),balances:Object.fromEntries(tokens.filter(t=>result.balances[t.key]!=null).map(t=>[t.address||ZERO,result.balances[t.key].toString()])),failedTokens:tokens.filter(t=>result.failed.includes(t.key)).map(t=>t.address||ZERO)};
    },combined,{operation:'balances'}),combined);
   },
   async warmupOnce(){
    if(!warmOptions.enabled||foreground>0||warming)return false;
-   const pairs=activePairs();if(!pairs.length)return false;const controller=new AbortController(),run={key:null,controller};warming=run;
-   let completed=false;
+   const pairs=activePairs();if(!pairs.length)return false;const controller=new AbortController(),run={key:pairKey(pairs[0]),controller};warming=run;
    try{
-    for(const input of pairs){
-     const key=pairKey(input);if(foreground>0||controller.signal.aborted)break;
-     run.key=key;await pool.run((_request,node)=>{
-      run.nodeId=node?.id||'primary';
-      const activeNode=foregroundNode();
-      if(controller.signal.aborted||foreground>0&&activeNode!==run.nodeId){controller.abort();throw abortError(controller.signal);}
-      return context(input,controller.signal,{warm:true,node});
-     },controller.signal,{operation:'warm'});completed=true;
-    }
-    return completed&&!controller.signal.aborted;
+    return await untilAborted(pool.run(async(_request,node,attemptSignal)=>{
+     run.nodeId=node?.id||'primary';
+     const activeNode=foregroundNode();
+     if(controller.signal.aborted||foreground>0&&activeNode!==run.nodeId){controller.abort();throw abortError(controller.signal);}
+     const signal=attemptSignal?AbortSignal.any([controller.signal,attemptSignal]):controller.signal;
+     const cycle={snapshot:null,refresh:!reusableWarmCycle(pairs,run.nodeId),entries:new Map(),reused:new Map()},values=[];
+     try{
+      for(const input of pairs){
+       if(values.length&&foreground>0||signal.aborted)break;
+       run.key=pairKey(input);
+       values.push(await context(input,signal,{warm:true,node,warmCycle:cycle}));
+      }
+      if(values.length!==pairs.length)return false;
+      publishWarmCycle(cycle,values,signal);return true;
+     }finally{discardWarmCycle(cycle);}
+    },controller.signal,{operation:'warm'}),controller.signal);
    }catch{return false;}finally{if(warming===run)warming=null;}
   },
   startWarmup(){
@@ -321,14 +364,15 @@ const publicErrors=new Set(['INVALID_INPUT','NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QU
 export function createApi({engine,pool,balancePool=pool,clock=Date.now,maxActive=12,rateLimit=240,allowedOrigins=['http://127.0.0.1:8124','http://localhost:8124','https://fstswap-live.vercel.app','https://fstswap-live-haocutbabas.vercel.app','https://fstswap.pro','https://www.fstswap.pro']}={}){
  const rates=new Map(),activeByRole={quote:0,balances:0},roleLimits={quote:Math.min(8,maxActive),balances:Math.min(4,maxActive)};let active=0;
  const server=createServer({headersTimeout:5000,requestTimeout:22000,maxHeaderSize:8192},async(req,res)=>{
-  const started=performance.now(),timeNonce=req.headers['x-fstswap-time-nonce'];
+  const started=performance.now(),timing=createTimingScope(),timeNonce=req.headers['x-fstswap-time-nonce'];
   const origin=req.headers.origin;if(allowedOrigins.includes(origin)){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Methods','POST, GET, OPTIONS');res.setHeader('Access-Control-Allow-Headers','Content-Type, X-Fstswap-Time-Nonce, X-Fstswap-Fresh');res.setHeader('Access-Control-Expose-Headers','X-Fstswap-Time-Nonce, X-Fstswap-Server-Time, Server-Timing');res.setHeader('Access-Control-Max-Age','600');}
   const reply=(status,body)=>{
    if(res.destroyed)return;
    if(status===200&&typeof timeNonce==='string'&&/^[0-9a-f]{32}$/.test(timeNonce)){
     res.setHeader('X-Fstswap-Time-Nonce',timeNonce);res.setHeader('X-Fstswap-Server-Time',String(clock()));
    }
-   res.writeHead(status,{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff','server-timing':'total;dur='+Math.max(0,performance.now()-started).toFixed(1)});res.end(encode(body));
+   const serialized=timing.run(()=>measurePhase('encode',()=>encode(body)));
+   res.writeHead(status,{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff','server-timing':timing.header(Math.max(0,performance.now()-started))});res.end(serialized);
   };
   const routes={'/api/swap/quote':'quote','/api/swap/balances':'balances'};
   if(req.url==='/api/swap/health'&&req.method==='GET'){const health=pool.health();return reply(200,{service:'fstswap-api',version:'1',chainId:56,readOnly:true,router:swapActiveRouter(),adapters:Object.keys(SWAP_ADAPTERS),ready:health.providers.some(p=>p.ready),active,activeByRole:{...activeByRole},pool:health,balancePool:balancePool===pool?health:balancePool.health(),roles:{quote:'pool',balances:'balancePool',shared:balancePool===pool}});}
@@ -349,7 +393,7 @@ export function createApi({engine,pool,balancePool=pool,clock=Date.now,maxActive
    timer=setTimeout(()=>req.destroy(),2000);
    for await(const chunk of req){length+=chunk.length;if(length>16384)throw fail('BODY_LIMIT');chunks.push(chunk);}
    clearTimeout(timer);let body;try{body=JSON.parse(Buffer.concat(chunks).toString())}catch{throw fail('INVALID_INPUT');}
-   reply(200,await engine[action](body,{signal:controller.signal,fresh:req.headers['x-fstswap-fresh']==='1'}));
+   reply(200,await timing.run(()=>engine[action](body,{signal:controller.signal,fresh:req.headers['x-fstswap-fresh']==='1'})));
   }catch(e){const code=publicErrors.has(e.code)?e.code:'SERVICE_UNAVAILABLE';reply(code==='INVALID_INPUT'?400:code==='BODY_LIMIT'?413:422,{error:code,...(e.code==='POOL_LIQUIDITY'&&['data','stale','oracle','price'].includes(e.reason)?{reason:e.reason}:{})});}
   finally{clearTimeout(timer);req.removeListener('aborted',disconnected);res.removeListener('close',disconnected);active--;activeByRole[action]--;}
  });

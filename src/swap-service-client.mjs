@@ -206,7 +206,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
   try{
    const timeRequest=serviceClock.start(timeout),headers={'content-type':'application/json'};
    if(timeRequest.nonce)headers[SERVICE_TIME_NONCE_HEADER]=timeRequest.nonce;
-   if(action==='quote'&&fresh)headers['x-fstswap-fresh']='1';
+   if(fresh)headers['x-fstswap-fresh']='1';
    const timeoutSignal=AbortSignal.timeout(timeout),activeSignal=signal?AbortSignal.any([signal,timeoutSignal]):timeoutSignal;
    const r=await waitForSignal(fetchImpl(base+'/'+action,{method:'POST',headers,body:JSON.stringify(input),signal:activeSignal,credentials,cache:'no-store'}),activeSignal);
    checkCallerSignal(signal);
@@ -269,7 +269,7 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
  async function loadBalances(entry,input){
   const signal=entry.controller.signal,current=()=>entry.lane.get(entry.key)===entry;
   try{
-   const data=await post('balances',input,balanceTimeout,signal,current);checkCallerSignal(signal);
+   const data=await post('balances',input,balanceTimeout,signal,current,{fresh:entry.fresh});checkCallerSignal(signal);
    if(!data){settle(entry,null,null);return;}
    try{
     check(data.schema===1&&data.chainId===56&&data.account===input.account&&HASH.test(data.blockHash)&&/^0x[0-9a-f]+$/i.test(data.blockNumber));
@@ -339,16 +339,17 @@ export function createServiceClient({base='',fetchImpl=globalThis.fetch,clock=Da
    const result=subscribe(entry,signal);void loadQuote(entry,input,binding);
    const data=await result;checkCallerSignal(signal);return data;
   },
-  async balances(account,tokens,{signal}={}){
+  async balances(account,tokens,{signal,fresh=false}={}){
    checkCallerSignal(signal);
    if(!tokens.length||tokens.length>64)return null;
    const input={chainId:56,account:lower(account),tokens:[...new Set(tokens.map(t=>lower(t.address)))].sort()};
-   const key=quoteKey(input);
+   const key=quoteKey({...input,fresh});
+   if(typeof fresh!=='boolean')throw Error('INVALID_SERVICE_INPUT');
    if(!base||cooling('balances'))return null;
    const mapResult=data=>data&&{balances:Object.fromEntries(tokens.filter(t=>data.balances[lower(t.address)]!=null).map(t=>[t.key,data.balances[lower(t.address)]])),failed:tokens.filter(t=>data.failedTokens.includes(lower(t.address))).map(t=>t.key)};
    const existing=balancePending.get(key);
    if(existing){const data=await subscribe(existing,signal);checkCallerSignal(signal);return mapResult(data);}
-   const entry={key,lane:balancePending,controller:new AbortController(),subscribers:new Set(),done:false};
+   const entry={key,lane:balancePending,controller:new AbortController(),subscribers:new Set(),done:false,fresh};
    balancePending.set(key,entry);
    const result=subscribe(entry,signal);void loadBalances(entry,input);const data=await result;checkCallerSignal(signal);return mapResult(data);
   }

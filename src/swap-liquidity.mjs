@@ -95,7 +95,7 @@ export function createPoolPolicy(pools,prices,tokenIn,tokenOut,{tradeTokenIn=tok
  return{pools,prices,main,allows,allowsRoute,assertRoute(legs){if(!allowsRoute(legs))throw fail('池子流动性不足或不是主池，请刷新报价');},assertValue,assert(first,second){if(!allows(first,second))throw fail('池子流动性不足或不是主池，请刷新报价');}};
 }
 
-export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens=[],v3Mode='all',clock=Date.now,deferCanonical=false}){
+export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens=[],v3Mode='all',clock=Date.now,deferCanonical=false,measure=(_name,work)=>work()}){
  const now=clock();
  const E=globalThis.ethers,router=readCodec(E.Interface,SWAP_ABI);
  const iface=readCodec(E.Interface,['function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])',
@@ -133,7 +133,7 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
  // V3 discovery depends on its factory, not on V2 reserves or oracle responses.
  const readV3State=async()=>{
   const knownFactory=readSwapConfigFactory(config,request,block);
-  const [factoryResult]=knownFactory?[[knownFactory]]:await batch([call('0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997','factory')]);
+  const [factoryResult]=knownFactory?[[knownFactory]]:await measure('v3_discovery',()=>batch([call('0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997','factory')]));
   if(!factoryResult||lower(factoryResult[0])===ZERO)throw fail('无法读取 V3 池列表','data',true);
   const v3Specs=[];
   for(let n=0;n<tokens.length;n++)for(let j=n+1;j<tokens.length;j++)for(const fee of[100,500,2500,10000]){
@@ -149,10 +149,10 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
   // and cached intact rather than assuming its balanceOf methods are view.
   const basePool=p=>baseTokens.has(p.a)&&baseTokens.has(p.b);
   v3Specs.sort((a,b)=>Number(!basePool(a))-Number(!basePool(b))||readOrder.get(a.a)-readOrder.get(b.a)||readOrder.get(a.b)-readOrder.get(b.b)||a.fee-b.fee);
-  const addresses=await batch(v3Specs.map(p=>call(factoryResult[0],'getPool',[p.a,p.b,p.fee])));
+  const addresses=await measure('v3_discovery',()=>batch(v3Specs.map(p=>call(factoryResult[0],'getPool',[p.a,p.b,p.fee]))));
   if(addresses.some(r=>!r))throw fail('V3 池发现不完整','data',true);
   const existing=addresses.flatMap((r,n)=>r&&lower(r[0])!==ZERO?[{...v3Specs[n],address:lower(r[0])}]:[]);
-  const states=await batch(existing.flatMap(p=>[call(p.address,'slot0'),call(p.address,'liquidity'),call(p.address,'token0'),call(p.address,'token1'),call(p.a,'balanceOf',[p.address]),call(p.b,'balanceOf',[p.address])]));
+  const states=await measure('v3_state',()=>batch(existing.flatMap(p=>[call(p.address,'slot0'),call(p.address,'liquidity'),call(p.address,'token0'),call(p.address,'token1'),call(p.a,'balanceOf',[p.address]),call(p.b,'balanceOf',[p.address])])));
   if(states.some(r=>!r))throw fail('部分 V3 池读取失败，无法确定主池','data',true);
   const ordered=existing.map((p,n)=>{
    const original=originalSpecs.get(p.id),row=states.slice(n*6,n*6+6);
@@ -167,8 +167,8 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
  // Unknown deployments keep their original query order and cache identity.
  const canonicalV2=lower(swapActiveRouter())===lower(FSTSWAP_CONFIG.router);
  const [oracle,results,v3State]=await Promise.all([
-  batch(FEEDS.flatMap(f=>[call(f.address,'latestRoundData'),call(f.address,'decimals')])),
-  batch(specs.map(p=>call(swapActiveRouter(),'getPairInfo',[p.adapter,...(canonicalV2&&CANONICAL_V2_ADAPTERS.has(lower(p.adapter))?[p.a,p.b].sort():[p.a,p.b]),ZERO],router))),
+  measure('oracle',()=>batch(FEEDS.flatMap(f=>[call(f.address,'latestRoundData'),call(f.address,'decimals')]))),
+  measure('v2',()=>batch(specs.map(p=>call(swapActiveRouter(),'getPairInfo',[p.adapter,...(canonicalV2&&CANONICAL_V2_ADAPTERS.has(lower(p.adapter))?[p.a,p.b].sort():[p.a,p.b]),ZERO],router)))),
   includeV3?readV3State():null,
  ]);
  const prices=new Map(),expiry=[];
@@ -211,7 +211,7 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
    probes.push({pool,a:pool.token0,b:pool.token1,amount:amount0,spot:amount0*pool.sqrt*pool.sqrt/(2n**192n)},
     {pool,a:pool.token1,b:pool.token0,amount:amount1,spot:amount1*(2n**192n)/(pool.sqrt*pool.sqrt)});
   }
-  const quotes=await batch(probes.map(p=>call('0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997','quoteExactInputSingle',[[p.a,p.b,p.amount,p.pool.fee,0n]])));
+  const quotes=await measure('v3_depth',()=>batch(probes.map(p=>call('0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997','quoteExactInputSingle',[[p.a,p.b,p.amount,p.pool.fee,0n]]))));
   for(let n=0;n<probes.length;n+=2){
    const pass=k=>{const p=probes[k],out=quotes[k]?.[0];return out>0n&&p.spot>0n&&out*1000000n*100n>=p.spot*BigInt(1000000-p.pool.fee)*99n;};
    probes[n].pool.depthVerified=pass(n)&&pass(n+1);
