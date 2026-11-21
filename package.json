@@ -6,7 +6,7 @@
   "scripts": {
     "serve": "python3 -m http.server 8124",
     "token-admin": "node admin/token-admin-server.mjs",
-    "test": "node --test --test-concurrency=2 --test-timeout=120000 src/*.test.mjs server/*.test.mjs tests/swap-transfer-tax.test.mjs tests/fstswap-transfer-tax.test.mjs tests/fstswap-tax-preflight.test.mjs tests/fstswap-tax-view.test.mjs",
+    "test": "node --test --test-concurrency=2 --test-timeout=120000 src/*.test.mjs server/*.test.mjs tests/*.test.mjs",
     "test:browser": "node --test --test-concurrency=2 --test-timeout=45000 tests/swap-runtime-routes-dom.test.mjs tests/swap-runtime-published-dom.test.mjs tests/swap-runtime-artifacts.test.mjs tests/swap-route-preload.test.mjs tests/swap-token-keyboard-dom.test.mjs",
     "build": "npm run build --prefix tools/runtime",
     "build:check": "npm run check --prefix tools/runtime"

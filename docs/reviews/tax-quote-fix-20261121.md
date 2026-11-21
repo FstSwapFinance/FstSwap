@@ -81,48 +81,39 @@ BNB/WBNB 包装／解包保持现有版本的费用、单位和保护语义，�
 | 未知币旧毛额 DTO／缺失税 profile | 抛 `TAX_UNVERIFIED`，不进入完成缓存 | 新增客户端回归，含重复查询 |
 | HTTP 422 `TAX_UNVERIFIED` | 不转换成 `null`，不触发本地回退；下一次普通币查询仍可用 | 新增真实客户端 HTTP stub 回归 |
 | 同 key 短缓存 | 仍受原始到期时间和单调时间窗口约束，消费前重验 DTO | 保留原实现；本次未重写缓存策略 |
-| `fresh` | 删除该 key 的完成缓存；按最新基线语义仍可共享相同输入的在途请求 | 未改为强制另起请求；历史“fresh 不共享”断言不能当作本次已通过 |
-| 取消、乱序、切换输入 | 保留请求身份、generation/current、订阅取消与界面 seq 防护 | 本次税字段仍经过原发布入口；更广历史断言的失败单独列明 |
+| `fresh` | 删除该 key 的完成缓存；按最新基线语义仍可共享相同输入的在途请求 | 完成缓存绕过、在途共享、独立 DTO 与订阅取消均已回归；原“fresh 不共享”断言按实际接口契约修正 |
+| 取消、乱序、切换输入 | 保留请求身份、generation/current、订阅取消与界面 seq 防护 | 税字段仍经过原发布入口；客户端、服务端及 DOM 的取消、乱序和切换输入回归全部通过 |
 | 税校验失败后的界面保留报价 | 作为 hard failure 清除旧报价，不继续展示 retained 结果供交易 | 生产代码审查及针对性界面验证 |
 | 一个报价源失败 | 丢弃失败源，只比较其余可执行且已验证净额路线 | 新增路线失败降级测试 |
 | 提交前实现／税状态变化 | fresh 链上重读；与原模型不符则拒绝 | 新增 preflight 回归；没有真实账户成交验收 |
 
 ## 6. 测试与可复现构建
 
-从干净 checkout 安装并验证：
+2026-11-21 后续回归已逐项处理原 29 个失败。分类为 **1 个真实代码缺陷、28 个旧测试依赖／数据／契约漂移**；不能将“23 个在基线也失败”全部解释为旧测试问题。逐项原测试名和处理依据见 [差异及解决清单](tax-quote-legacy-test-delta-20261121.json)，详细说明见 [全量回归报告](tax-quote-regression-resolution-20261121.md)。
+
+`npm test` 现在包含 `src/*.test.mjs`、`server/*.test.mjs`、`tests/*.test.mjs` 全部 **79 个文件**。相关历史测试与两个必需辅助文件已纳入 Git；独立诊断、私密访问工具及本地原始抓取不纳入。`.gitignore` 不再忽略自动化回归；没有按失败列表排除文件，没有 `skip`／`todo`。
+
+| 验证集合 | 结果 | 范围／限制 |
+|---|---:|---|
+| 当前完整 `npm test` | **842/842 通过，0 失败、0 跳过、0 取消** | 包含原历史审计、5 个前期兼容 fixture、税报价和全部浏览器测试；不是原来的 68 项局部入口 |
+| `npm run build`、`npm run build:check` | 通过 | 当前入口 `fst-runtime-boot-VWV6ESW2.mjs`、`fst-runtime-app-NU3KKRFR.mjs`，12 个运行文件；批准的 50..46 历史资源继续逐 blob 验证 |
+| 语法与差异检查 | 通过 | 79 个测试文件和变更发送源码先 `node --check`；辅助文件也校验；`git diff --cached --check` 通过 |
+| 干净 checkout 验证 | **842/842 通过，0 失败、0 跳过、0 取消；独立安装依赖与 build:check 通过** | 保留完整 Git 历史；根目录与 `tools/runtime` 独立离线安装，不使用本地 node_modules 软链接 |
+
+唯一原跳过项目依赖未提交且无法找回的 2026-11-12 原始链上录制。现改为**明确标注的 synthetic 固定区块录制回放**，运行同区块、非零 canonical 储备、缺行拒绝、双向完整策略对照断言；不是恢复了历史真实数据，不作为主网证据。
+
+从干净且具有相关完整 Git 历史的 checkout 运行（本轮使用 Node 24.16.0）：
 
 ```sh
 npm ci
 npm ci --prefix tools/runtime
 npx playwright install chromium
-node --check src/swap-transfer-tax.mjs
-node --check src/swap-fstswap.mjs
-node --check src/swap-service-client.mjs
-node --check src/swap-view.mjs
-node --check server/fstswap-service.mjs
-npm test
-npm run test:browser
-npm run build
+node --check src/swap-send.mjs
 npm run build:check
+npm test
 ```
 
-本次受控套件与历史审计必须分开解释：
-
-| 验证集合 | 结果 | 范围／限制 |
-|---|---:|---|
-| 当前 `npm test` | **68/68 通过** | 普通币、买卖两向税、非 canonical 方向、净额选路、2/3 跳、收费模式、全部六种收费资产、原生币／包装、整数边界、零滑点、DTO、税读取及提交前校验；不是仓库所有历史测试的统称 |
-| `npm run test:browser` | **43/43 通过** | `#/analysis`、`#/swap`、`#/pool`、`#/add`、`#/remove`、`#/my` 六条本地路由、构建产物、按路由加载、PC／手机代币选择与键盘相关验收；不是插件钱包签名或真实交易 |
-| `npm run build:check` | 通过 | 重新生成并检查运行产物；当前入口 `fst-runtime-boot-VWV6ESW2.mjs`、`fst-runtime-app-I7RR35TU.mjs`，12 个运行文件 |
-| 原有本地历史审计 | **73 个文件，758 项：728 通过、29 失败、1 跳过** | 保留旧 fixture／断言的独立兼容性审计，不能声称全量回归全绿 |
-| 其中 23 个失败 | 在 `59b91a5` 基线已存在 | 主要涉及历史 fresh 语义、时钟、百分比／Gas、页面生命周期与旧构建兼容性；仍是已知债务，不能由本补丁测试绿色掩盖 |
-| 其余 6 个失败 | 新增 fail-closed 兼容性差异 | 历史 fixture 用任意 ALT 地址但假定无转账税，现被 `TAX_UNVERIFIED` 拒绝；具体测试名见下方 delta 文件 |
-| 另行调整的 5 个历史本地 fixture | 69/69 通过 | 本地研究性适配，未纳入本 PR；不拿这组结果替代上面的未修改历史审计 |
-
-另以待提交 Git index 导出干净快照，排除工作区软链接和未追踪的历史文件后复核：根目录与 `tools/runtime` 的 `npm ci` 均在离线模式成功；同一快照 `npm test` 68/68、`npm run test:browser` 43/43、`npm run build:check` 通过。说明验收依赖已经进入候选提交，不以原工作区残留文件代替 checkout 可复现性。浏览器二进制仍按上面的 Playwright 安装命令准备。
-
-历史失败差异的可审阅清单：[tax-quote-legacy-test-delta-20261121.json](tax-quote-legacy-test-delta-20261121.json)。其中 `baselineFailCount=23`、`patchFailCount=29`，`patchOnly` 为六项依赖未验证 ALT 的原断言，`baselineOnly=[]`。
-
-为让浏览器检查可在 checkout 后复现，本次纳入原本只在本地 ignored 目录的五个验收文件和一个共用 fixture：`swap-runtime-routes-dom`、`swap-runtime-published-dom`、`swap-runtime-artifacts`、`swap-route-preload`、`swap-token-keyboard-dom` 测试及 `runtime-build-fixture.mjs`；新增 `test:browser` 入口。这里只纳入实际运行并记录的验收，不把其余本地历史修改混进 PR。
+`npm test` 已包含原 `test:browser` 五文件入口及其他 DOM 验收；`npm run test:browser` 保留为定向便捷命令，不重复累加测试数量。历史差分测试通过 `git show` 固定发布提交读取独立基准，浅克隆需先取得相关历史；无 `.git` 的单独源码 archive 不足以执行这部分回归。修改生产源码后须先重新生成 runtime，再检查构建和测试。
 
 ## 7. 报价正确性与性能证据
 
@@ -148,7 +139,7 @@ npm run build:check
 2. 新旧客户端和后端应协调升级。旧客户端严格 DTO whitelist 可能拒绝新增字段并回退旧逻辑；只更新服务端不能宣称所有终端都获得净报价保护。另一个使用 `/api/chain` 的 `fstswap.pro` 需要单独确认，不属于这次实现的自动发布目标。
 3. profile 在客户端是受信接口声明，提交前 fresh recheck 与执行仿真仍不可省略。账户余额、allowance、状态变化、同块其他交易及最终 inclusion 都可能影响真实成交。
 4. 公共健康接口只能确认 service/router/adapters 身份，不能证明后端精确 commit；未来发布应额外提供可核验构建身份，但本次未修改线上配置。
-5. 历史测试仍有未解决失败。它们已与基线及新兼容性差异拆分，不应将本报告的 68/68 或 43/43 写成“仓库全量测试通过”。
+5. 自动化全量回归已通过；缺失的历史真实录制没有恢复，替代用例是明确标注的模拟回放。测试绿色不能替代真实账户仿真、插件钱包验收或主网成交证据。
 6. 本次无部署、无主网交易。回滚候选代码可用普通 Git revert，但若未来已开放新版净报价保护，回滚不能静默恢复为未知收税币的可信毛额报价；应维持拒绝或暂停对应资产，直至有可靠模型。
 
 本报告交付的是待审阅补丁、可复现测试与证据。PR、合并和任何线上发布状态应由后续实际操作与链接单独记录。
