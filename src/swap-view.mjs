@@ -1231,9 +1231,13 @@ export async function mountSwapView(root) {
             try{const canonical=await timeWalletPhase(timing,'warm_canonical',()=>read({method:'eth_getBlockByNumber',params:[warm.block.number,false]}));if(canonical?.hash!==warm.block.hash)return false;warm.policy.assertFresh();return warmNow(warm)<warm.cacheExpiresAt;}catch(error){if(submissionContext.signal.aborted)throw error;return false;}
           })();
           const freshGas=({signal})=>prepareGasOptions({signal,estimate:({signal})=>swapPublicRpc(globalThis.fetch,signal,{priority:'foreground',attempts:2,timeoutMs:8000})({method:'eth_estimateGas',params:[preparedTx]}),gasPrice:({signal})=>swapPublicRpc(globalThis.fetch,signal,{priority:'foreground',attempts:2,timeoutMs:8000})({method:'eth_gasPrice'})});
+          // Only validated settlement-only DTOs can reuse a warm pool policy.
+          // Pair models (even at zero tax) must recheck current tax/state on click;
+          // a canonical old block and a successful simulation cannot prove that.
+          const reuseWarmPolicy=q.taxProfiles===undefined||Array.isArray(q.taxProfiles)&&q.taxProfiles.every(profile=>profile?.kind==='none');
           prepared=await prepareSwapSubmission({minimum:min,signal:submissionContext.signal,
             check:()=>recheckSwapQuote({quote:q,readConfig:()=>timeWalletPhase(timing,'public_config',async()=>readSwapConfig(read,{block:await submissionContext.block()})),
-              readPolicy:currentConfig=>timeWalletPhase(timing,'public_policy',async()=>await warmValid?warm.policy:q.kind === "fstswap"?recheckFstQuote(read,q,currentConfig):readPoolPolicy(read,{...submittedTokens,config:currentConfig}))}),
+              readPolicy:currentConfig=>timeWalletPhase(timing,'public_policy',async()=>await warmValid&&reuseWarmPolicy?warm.policy:q.kind === "fstswap"?recheckFstQuote(read,q,currentConfig):readPoolPolicy(read,{...submittedTokens,config:currentConfig}))}),
             gasOptions:options=>timeWalletPhase(timing,'public_gas',async()=>!warm?.gasReady?freshGas(options):await warmValid?{gasLimit:warm.gasLimit,gasPrice:warm.gasPrice}:freshGas(options)),
             allowance:({signal})=>timeWalletPhase(timing,'public_allowance',()=>showApprovalIfNeeded(q,{signal})),
             simulate:()=>timeWalletPhase(timing,'wallet_simulation',async()=>{

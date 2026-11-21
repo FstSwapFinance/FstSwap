@@ -162,6 +162,47 @@ test('public swap prefetch does not touch wallet provider and is reused only aft
  let allowanceReads=0;f.context.refreshAllowance=async()=>{allowanceReads++;};f.receiptGate.resolve();await f.context.executeSwap(f.q);
  assert.equal(f.events.filter(method=>method==='policy').length,1,'completed pool preparation avoids a rebuild on click');assert.equal(allowanceReads,1);assert.equal(f.events.filter(method=>method==='eth_call').length,1);assert.equal(f.sent.length,1);
 });
+// Controller regression only: fake reads model the same state-change refusal as
+// recheckFstQuote; no wallet, node, or mainnet transaction is used.
+function pairTaxFixture(bps=300n){
+ const f=fixture(),token='0x8a25a5929a18c132eaf47a2b497c86ad00ea5b9e';
+ f.q.tokenOut=token;f.q.stages[0].tokenOut=token;f.q.stages[0].branches[0].path[1]=token;
+ f.q.taxProfiles=[{token,kind:'pair',pair:'0xec6abc1cbaef40878069245c2568401e56c949f1',buyBps:bps,sellBps:bps,codeHash:'7e4601dda4099afdcb91e338cca52a15a77112046876aaf4f13917a8b52693ed',blockNumber:'0x123'}];
+ f.context.outT=()=>({key:'fstsi',address:token,symbol:'FSTSI',decimals:18});
+ f.policyGate.resolve();f.gasGate.resolve();f.receiptGate.resolve();return f;
+}
+for(const bps of [300n,0n])for(const code of ['UNSAFE_QUOTE','TAX_UNVERIFIED'])test(`a warmed pair model at ${bps} bps is rechecked and rejects ${code} on click`,async()=>{
+ const f=pairTaxFixture(bps),read=f.context.recheckFstQuote;let changed=false;
+ f.context.recheckFstQuote=async(...args)=>{const policy=await read(...args);if(changed)throw Object.assign(Error(code),{code});return policy;};
+ f.context.warmPublicSubmission();await tick();await tick();assert.equal(f.events.filter(v=>v==='policy').length,1);
+ changed=true;
+ // The latest simulation still returns 120 >= the 100 minimum in this fixture.
+ await f.context.executeSwap(f.q);
+ assert.equal(f.events.filter(v=>v==='policy').length,2,'click must perform the fresh pair-model check');
+ assert.equal(f.events.filter(v=>v==='eth_call').length,1);assert.equal(f.sent.length,0);assert.ok(f.errors.includes(code));
+});
+test('an unchanged pair model including zero tax is freshly checked while Gas stays prewarmed',async()=>{
+ for(const bps of [300n,0n]){
+  const f=pairTaxFixture(bps);f.context.warmPublicSubmission();await tick();await tick();await f.context.executeSwap(f.q);
+  assert.equal(f.events.filter(v=>v==='policy').length,2);assert.equal(f.events.filter(v=>v==='eth_estimateGas').length,1);assert.equal(f.events.filter(v=>v==='eth_gasPrice').length,1);assert.equal(f.sent.length,1);assert.deepEqual(f.errors,[]);
+ }
+});
+test('ordinary missing, empty and explicit none profiles retain the checked warm pool policy',async()=>{
+ for(const profiles of [undefined,[],[{token:tokenIn,kind:'none'}]]){
+  const f=fixture();if(profiles!==undefined)f.q.taxProfiles=profiles;f.policyGate.resolve();f.gasGate.resolve();f.receiptGate.resolve();
+  f.context.warmPublicSubmission();await tick();await tick();await f.context.executeSwap(f.q);
+  assert.equal(f.events.filter(v=>v==='policy').length,1);assert.equal(f.sent.length,1);
+ }
+});
+test('unrecognized tax profile shapes never qualify for warm policy reuse',async()=>{
+ for(const profiles of [null,{},[null],[{kind:'other'}]]){
+  const f=fixture();f.q.taxProfiles=profiles;f.policyGate.resolve();f.gasGate.resolve();f.receiptGate.resolve();
+  const read=f.context.recheckFstQuote;let invalid=false;
+  f.context.recheckFstQuote=async(...args)=>{const policy=await read(...args);if(invalid)throw Object.assign(Error('TAX_UNVERIFIED'),{code:'TAX_UNVERIFIED'});return policy;};
+  f.context.warmPublicSubmission();await tick();await tick();invalid=true;await f.context.executeSwap(f.q);
+  assert.equal(f.events.filter(v=>v==='policy').length,2);assert.equal(f.sent.length,0);assert.ok(f.errors.includes('TAX_UNVERIFIED'));
+ }
+});
 test('exact approval gas parameters are prepared publicly before the authorization click',async()=>{
  const f=fixture();f.state.allowance=0n;f.gasGate.resolve();f.context.warmPublicSubmission?.();await tick();await tick();
  assert.equal(f.events.filter(method=>method==='eth_estimateGas').length,1);assert.equal(f.events.includes('eth_sendTransaction'),false);

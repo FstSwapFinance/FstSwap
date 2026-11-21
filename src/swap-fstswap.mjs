@@ -86,15 +86,21 @@ export async function buildFstQuote({tokenIn,tokenOut,amountIn,config,slippageBp
   // Bound network work so completed routes stay inside the 20-second pool snapshot.
   // A better output dominates another quote using the same set of pools.
   const seen=new Set(),choices=(first.candidates||[first]).filter(c=>{const key=c.legs.flatMap(l=>l.poolIds||[]).map(lower).sort().join(':');if(seen.has(key))return false;seen.add(key);return true;}).slice(0,12);
-  let cursor=0;
+  let cursor=0;const priceRejections=[];
   await Promise.all(Array.from({length:Math.min(3,choices.length)},async()=>{
-   while(cursor<choices.length){const before=choices[cursor++],charged=before.out*bps/BPS;
+   while(cursor<choices.length){const index=cursor++,before=choices[index],charged=before.out*bps/BPS;
     try{const after=await findRoute(policy.token,tokenOut,before.out-charged,before.legs,routeOptions);complete.push({before,after,charged});}
-    catch(e){if(e.code!=='NO_ROUTE')throw e;}
+    catch(e){
+     if(e.code==='NO_ROUTE')continue;
+     // The independently checked value floor can reject just this candidate.
+     // Snapshot, oracle, data and tax failures still invalidate the whole quote.
+     if(e.code==='POOL_LIQUIDITY'&&e.reason==='price'&&e.retryable!==true){priceRejections[index]=e;continue;}
+     throw e;
+    }
    }
   }));
   complete.sort((a,b)=>a.after.out>b.after.out?-1:a.after.out<b.after.out?1:0);
-  if(!complete.length)throw Object.assign(Error('没有可执行的完整收费路线'),{code:'NO_ROUTE'});
+  if(!complete.length)throw priceRejections.find(Boolean)||Object.assign(Error('没有可执行的完整收费路线'),{code:'NO_ROUTE'});
   const {before,after,charged}=complete[0];fee=charged;segments.push(before,after);
   stages=[...stagesFor(before,tokenIn,policy.token,slippageBps),...stagesFor(after,policy.token,tokenOut,slippageBps)];out=after.out;
  }else{

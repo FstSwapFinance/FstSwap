@@ -284,6 +284,7 @@
       "cleanDependencies": "Independent root and tools/runtime npm ci --offline --ignore-scripts --no-audit --no-fund; no node_modules symlinks; complete Git history and installed Chromium required.",
       "sourceChangesAfterCleanRun": "Documentation only.",
       "deployment": "not performed"
-    }
+    },
+    "verifiedCommit": "cdb4133992c1d10a001c591968efe27fe9b0f815"
   }
 }
