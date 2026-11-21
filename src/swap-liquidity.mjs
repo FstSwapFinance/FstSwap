@@ -29,6 +29,11 @@ export function poolLiquidityUsd(pool,prices){
  // Two-sided depth is capped by the smaller independently valued reserve; an unknown altcoin is valued from the known side only.
  return 2n*known.reduce((a,b)=>a<b?a:b);
 }
+function priceAligned(pool,p0,p1){
+ const a=pool.kind==='v3'?2n**192n*p0:pool.reserves[0]*p0;
+ const b=pool.kind==='v3'?pool.sqrt*pool.sqrt*p1:pool.reserves[1]*p1;
+ return a>0n&&b*100n>=a*98n&&b*100n<=a*102n;
+}
 function fistReferencePrice(pools,prices,tokenIn,tokenOut){
  if(![lower(tokenIn),lower(tokenOut)].some(t=>t!==FIST&&!MAINSTREAM_TOKENS.has(t)))return null;
  const reference=pools.get(key(SWAP_ADAPTERS.fst.adapter,FIST,USDT));
@@ -52,9 +57,7 @@ export function createPoolPolicy(pools,prices,tokenIn,tokenOut,{tradeTokenIn=tok
   const p0=prices.get(pool.token0),p1=prices.get(pool.token1);
   pool.priceAligned=!(references.has(pool.token0)&&!p0||references.has(pool.token1)&&!p1);
   if(references.has(pool.token0)&&references.has(pool.token1)&&p0&&p1){
-   const a=pool.kind==='v3'?2n**192n*p0:pool.reserves[0]*p0;
-   const b=pool.kind==='v3'?pool.sqrt*pool.sqrt*p1:pool.reserves[1]*p1;
-   pool.priceAligned=!!p0&&!!p1&&a>0n&&b*100n>=a*98n&&b*100n<=a*102n;
+   pool.priceAligned=priceAligned(pool,p0,p1);
   }
   for(const alt of alts)if([pool.token0,pool.token1].includes(alt)&&pool.usd>0n){
    const other=pool.token0===alt?pool.token1:pool.token0;
@@ -95,7 +98,7 @@ export function createPoolPolicy(pools,prices,tokenIn,tokenOut,{tradeTokenIn=tok
  return{pools,prices,main,allows,allowsRoute,assertRoute(legs){if(!allowsRoute(legs))throw fail('池子流动性不足或不是主池，请刷新报价');},assertValue,assert(first,second){if(!allows(first,second))throw fail('池子流动性不足或不是主池，请刷新报价');}};
 }
 
-export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens=[],v3Mode='all',clock=Date.now,deferCanonical=false,measure=(_name,work)=>work()}){
+export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens=[],v3Mode='all',clock=Date.now,deferCanonical=false,skipIneligibleDepth=false,measure=(_name,work)=>work()}){
  const now=clock();
  const E=globalThis.ethers,router=readCodec(E.Interface,SWAP_ABI);
  const iface=readCodec(E.Interface,['function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])',
@@ -202,8 +205,12 @@ export async function readPoolPolicy(request,{tokenIn,tokenOut,config,extraToken
   // A high current-tick L or out-of-range balances alone do not establish executable depth.
   // Probe $500 in both directions through QuoterV2, which traverses initialized ticks.
   const probes=[];
+  const mainstreamOnly=skipIneligibleDepth&&tokens.every(t=>MAINSTREAM_TOKENS.has(t));
   for(const pool of pools.values())if(pool.kind==='v3'){
    const p0=prices.get(pool.token0),p1=prices.get(pool.token1),usd=500n*SCALE;
+   // These pools fail the existing admission rules for every fee and trade
+   // segment. Keep their state rows, but do not simulate a trade on them.
+   if(mainstreamOnly&&p0&&p1&&(poolLiquidityUsd(pool,prices)<=MIN_POOL_USD*SCALE||!priceAligned(pool,p0,p1)))continue;
    let amount0=p0?usd*SCALE/p0:null,amount1=p1?usd*SCALE/p1:null;
    if(amount0==null&&amount1!=null)amount0=amount1*(2n**192n)/(pool.sqrt*pool.sqrt);
    if(amount1==null&&amount0!=null)amount1=amount0*pool.sqrt*pool.sqrt/(2n**192n);

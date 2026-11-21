@@ -186,11 +186,25 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,monotonic=()=
   for(const[key,entry]of cycle.entries)settleWarmContext(key,entry,null);
   for(const[key,entry]of cycle.reused)if(contexts.get(key)===entry)entry.warmed=true;
  }
- function context(input,consumerSignal,{warm=false,node,warmCycle}={}){
+ function reusableContext(entry,maxAge){
+  if(!entry||entry.signal.aborted||invalidSnapshots.has(entry.rawSnapshot))return false;
+  const age=clock()-entry.completedAt;
+  return !entry.settled||age>=0&&age<maxAge;
+ }
+ function recentSnapshot(nodeId){
+  const snapshot=nodeSnapshots.get(nodeId);
+  const age=snapshot?clock()-snapshot.capturedAt:Infinity;
+  return age>=0&&age<8500?snapshot:null;
+ }
+ function needsQuoteHeader(input,nodeId){
+  const key=[nodeId,pairKey(input)].join(':'),old=contexts.get(key);
+  return !reusableContext(old,old?.warmed?warmOptions.intervalMs+2500:2500)&&!reusableContext(pendingWarmContexts.get(key),Infinity)&&!recentSnapshot(nodeId);
+ }
+ function context(input,consumerSignal,{warm=false,node,warmCycle,bootstrap}={}){
   const nodeId=node?.id||'primary',key=[nodeId,pairKey(input)].join(':'),old=contexts.get(key);
   // Prewarmed data is useful until the next refresh, while its original policy
   // deadline remains authoritative. Ordinary foreground reuse stays at 2.5 s.
-  if(!warmCycle?.refresh&&old&&!old.signal.aborted&&!invalidSnapshots.has(old.rawSnapshot)&&(!old.settled||clock()-old.completedAt<(warm?2500:old.warmed?warmOptions.intervalMs+2500:2500))){
+  if(!warmCycle?.refresh&&reusableContext(old,!warm&&old?.warmed?warmOptions.intervalMs+2500:2500)){
    if(warmCycle)warmCycle.reused.set(key,old);
    if(!warm||old.warmed){countTiming('context_hits');return old.subscribe(consumerSignal);}
    return warmExistingContext(old,key,consumerSignal,nodeId,{deferPublication:!!warmCycle});
@@ -199,12 +213,13 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,monotonic=()=
   if(pending&&!pending.signal.aborted)return pending.subscribe(consumerSignal);
   let entry;
   entry=sharedRead(signal=>pool.run(async request=>{
-   const previous=nodeSnapshots.get(nodeId),age=previous?clock()-previous.capturedAt:Infinity;
-   let snapshot=warmCycle?.snapshot||(!warm&&age>=0&&age<8500?previous:null);
+   let snapshot=warmCycle?.snapshot||(!warm?recentSnapshot(nodeId):null);
    if(snapshot&&snapshot.nodeId!==nodeId)throw fail('STALE_BLOCK');
    if(snapshot)countTiming('snapshot_hits');
    if(!snapshot){
-    const capturedAt=clock(),block=await request({method:'eth_getBlockByNumber',params:['latest',false]});assertRunning(signal);assertBlock(block,clock);
+    const capturedAt=bootstrap?.observedAt??clock();
+    const block=bootstrap?.block??await request({method:'eth_getBlockByNumber',params:['latest',false]});
+    assertRunning(signal);assertBlock(block,clock);
     snapshot=createRawSnapshot({nodeId,block,capturedAt});
     if(warmCycle)warmCycle.snapshot=snapshot;
     if(!warm)publishSnapshot(snapshot);
@@ -212,7 +227,7 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,monotonic=()=
    entry.rawSnapshot=snapshot;
    const block=snapshot.block,read=pinned(snapshotReader(snapshot,request,{nodeId,signal}),block),config=await measurePhase('config',()=>readConfig(read,{block}));assertRunning(signal);
    const staged=['2.0.0','2.1.0'].includes(config.version);
-   const policy=await measurePhase('policy',()=>readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:staged?'all':'legacy',extraTokens:staged?[config.defaultFeeToken]:[],block,nodeId,clock,deferCanonical:true,measure:measurePhase}));assertRunning(signal);
+   const policy=await measurePhase('policy',()=>readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:staged?'all':'legacy',extraTokens:staged?[config.defaultFeeToken]:[],block,nodeId,clock,deferCanonical:true,skipIneligibleDepth:staged,measure:measurePhase}));assertRunning(signal);
    const originalFresh=policy.assertFresh;
    policy.checkedAt=Math.min(policy.checkedAt,snapshot.capturedAt);
    policy.assertFresh=()=>{if(invalidSnapshots.has(snapshot))throw fail('STALE_BLOCK');const elapsed=clock()-snapshot.capturedAt;if(elapsed<0||elapsed>20000)throw Object.assign(new Error('流动性检查已过期，请刷新报价'),{code:'POOL_LIQUIDITY',reason:'stale',retryable:true});return originalFresh.call(policy);};
@@ -269,14 +284,14 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,monotonic=()=
      }catch(error){assertRunning(sharedSignal);}
      if(completedQuotes.get(key)===saved)completedQuotes.delete(key);
     }
-    const completed=await untilAborted(pool.run(async(request,node,attemptSignal)=>{
+    const completed=await untilAborted(pool.run(async(request,node,attemptSignal,bootstrap)=>{
     // Consumers share the quote lifetime; each provider attempt owns its context
     // subscription so a hedge winner releases only the losing attempt's work.
     const activeSignal=attemptSignal||sharedSignal;
     const nodeId=node?.id||'primary';foregroundNodes.set(nodeId,(foregroundNodes.get(nodeId)||0)+1);
     try{
      if(warming&&warming.nodeId&&warming.nodeId!==nodeId)warming.controller.abort();
-     const {block,config,policy,snapshot}=await measurePhase('context',()=>context(input,activeSignal,{node}));assertRunning(activeSignal);policy.assertFresh();
+     const {block,config,policy,snapshot}=await measurePhase('context',()=>context(input,activeSignal,{node,bootstrap}));assertRunning(activeSignal);policy.assertFresh();
      const read=pinned(snapshotReader(snapshot,request,{nodeId:node?.id||'primary',signal:activeSignal}),block);
      const q=await untilAborted(measurePhase('route',()=>calculate(read,input,config,policy,{signal:activeSignal,nodeId:node?.id||'primary',block})),activeSignal);assertRunning(activeSignal);
      const canonical=await measurePhase('canonical',()=>request({method:'eth_getBlockByNumber',params:[block.number,false]}));assertRunning(activeSignal);
@@ -284,7 +299,7 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,monotonic=()=
      const expiresAt=policy.checkedAt+15000;if(clock()>=expiresAt)throw fail('QUOTE_EXPIRED');
      return{nodeId,data:{schema:1,chainId:56,router:swapActiveRouter(),input,config,quote:q,blockNumber:block.number,blockHash:block.hash,quotedAt:clock(),expiresAt}};
     }finally{const active=(foregroundNodes.get(nodeId)||1)-1;if(active)foregroundNodes.set(nodeId,active);else foregroundNodes.delete(nodeId);}
-    },sharedSignal,{hedge:true,operation:'quote'}),sharedSignal);assertRunning(sharedSignal);
+    },sharedSignal,{hedge:true,operation:'quote',bootstrapLatest:({id})=>needsQuoteHeader(input,id)}),sharedSignal);assertRunning(sharedSignal);
     const data=structuredClone(completed.data);
     if(!fresh&&inflight.get(workKey)===entry&&entry.consumers.size){
      const completedAt=clock();assertRunning(sharedSignal);
@@ -301,11 +316,14 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,monotonic=()=
   balances(raw,{signal,fresh=false}={}){
    const input=balanceInput(raw);if(typeof fresh!=='boolean')return Promise.reject(fail('INVALID_INPUT'));if(signal?.aborted)return Promise.reject(abortError(signal));
    const combined=signal?AbortSignal.any([signal,AbortSignal.timeout(12000)]):AbortSignal.timeout(12000);
-   return untilAborted(balancePool.run(async(request,node,attemptSignal)=>{
+   const started={observedAt:clock(),monotonicAt:monotonic()};
+   return untilAborted(balancePool.run(async(request,node,attemptSignal,bootstrap)=>{
     const activeSignal=attemptSignal||combined,nodeId=node?.id||'primary';
-    const observation={observedAt:clock(),monotonicAt:monotonic()},cached=fresh?null:balanceHeaders.get(nodeId);
+    // Every balance miss owns its latest header RPC, so a joined older guard
+    // cannot restart that header's monotonic age at this caller's later start.
+    const observation=bootstrap?(bootstrap.observedAt>=started.observedAt?started:null):{observedAt:clock(),monotonicAt:monotonic()},cached=fresh?null:balanceHeaders.get(nodeId);
     if(cached)countTiming('balance_head_hits');
-    const block=cached||await measurePhase('balance_header',()=>request({method:'eth_getBlockByNumber',params:['latest',false]}));assertRunning(activeSignal);assertBlock(block,clock);
+    const block=cached||bootstrap?.block||await measurePhase('balance_header',()=>request({method:'eth_getBlockByNumber',params:['latest',false]}));assertRunning(activeSignal);assertBlock(block,clock);
     const tokens=input.tokens.map(a=>({key:a===ZERO?'bnb':a,address:a===ZERO?null:a}));
     // The balance call and the hash recheck are one HTTP request on this same node.
     // A rejected batch falls back to the two serial reads; the hash is still required.
@@ -325,9 +343,9 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,monotonic=()=
     const result=await measurePhase('balance_read',()=>readBalances(anchored,input.account,tokens));assertRunning(activeSignal);
     if(!Object.keys(result.balances).length)throw fail('BALANCE_UNAVAILABLE');
     const canonical=canonicalHeader??await measurePhase('canonical',()=>request({method:'eth_getBlockByNumber',params:[block.number,false]}));assertRunning(activeSignal);if(canonical?.hash!==block.hash){balanceHeaders.invalidate(nodeId,block.hash);throw fail('STALE_BLOCK');}
-    if(!cached)balanceHeaders.remember(nodeId,block,observation);
+    if(!cached&&observation)balanceHeaders.remember(nodeId,block,observation);
     return{schema:1,chainId:56,account:input.account,blockNumber:block.number,blockHash:block.hash,readAt:clock(),balances:Object.fromEntries(tokens.filter(t=>result.balances[t.key]!=null).map(t=>[t.address||ZERO,result.balances[t.key].toString()])),failedTokens:tokens.filter(t=>result.failed.includes(t.key)).map(t=>t.address||ZERO)};
-   },combined,{operation:'balances'}),combined);
+   },combined,{operation:'balances',bootstrapLatest:({id})=>fresh||!balanceHeaders.get(id),freshBootstrap:true}),combined);
   },
   async warmupOnce(){
    if(!warmOptions.enabled||foreground>0||warming)return false;

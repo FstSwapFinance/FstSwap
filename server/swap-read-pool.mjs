@@ -165,9 +165,11 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
    const elapsed=clock()-started;
    for(const item of stats)observe(item,elapsed,clock());
    node.batchSupported=true;
+   const chainItem=items.find(item=>item.method==='eth_chainId');
+   const verifiedHead=!chainItem||byId.get(chainItem.id).result==='0x38';
    for(const item of items){
     const result=byId.get(item.id).result;
-    if(item.method==='eth_getBlockByNumber'&&item.params?.[0]==='latest'&&/^0x[0-9a-f]+$/i.test(result?.number)){node.head=BigInt(result.number);node.headAt=clock();}
+    if(verifiedHead&&item.method==='eth_getBlockByNumber'&&item.params?.[0]==='latest'&&/^0x[0-9a-f]+$/i.test(result?.number)){node.head=BigInt(result.number);node.headAt=clock();}
    }
    return items.map(item=>byId.get(item.id).result);
   }catch(error){
@@ -179,21 +181,44 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
    throw fail('UPSTREAM_UNAVAILABLE');
   }finally{active--;clearTimeout(timer);signal.removeEventListener('abort',onAbort);}
  }
- function verifyChain(node,signal,isProbe){
+ const bootstrapResult=(block,observedAt)=>Object.freeze({block:Object.freeze({number:block?.number,hash:block?.hash,timestamp:block?.timestamp}),observedAt});
+ async function readBootstrap(node,signal,isProbe){
+  const observedAt=clock(),block=await call(node,{method:'eth_getBlockByNumber',params:['latest',false]},signal,isProbe);
+  if(signal.aborted)throw cancelled(signal);
+  return bootstrapResult(block,observedAt);
+ }
+ function verifyChain(node,signal,isProbe,wantsBootstrap=false,freshBootstrap=false){
   if(signal.aborted)return Promise.reject(cancelled(signal));
   const age=node.chainAt===null?Infinity:clock()-node.chainAt;
-  if(!isProbe&&age>=0&&age<10000)return Promise.resolve();
-  // Ordinary operations share only an in-flight guard, with their own right to
-  // cancel. A fixed background probe always measures a new physical chain read.
-  let entry=isProbe?null:node.chainGuard;
+  if(!isProbe&&age>=0&&age<10000)return wantsBootstrap?readBootstrap(node,signal,isProbe):Promise.resolve(null);
+  // Ordinary operations share the in-flight guard, with their own right to
+  // cancel. An opted-in leader may include a completed primitive latest header;
+  // neither the header nor its reader is cached after this guard settles.
+  // A fixed background probe always measures a new physical chain read.
+  let entry=isProbe?null:node.chainGuard,created=false;
   if(!entry||entry.controller.signal.aborted){
-   entry={controller:new AbortController(),consumers:new Set(),settled:false,failureRecorded:false};
+   created=true;
+   entry={controller:new AbortController(),consumers:new Set(),settled:false,failureRecorded:false,bootstrap:wantsBootstrap};
    if(!isProbe)node.chainGuard=entry;
    entry.promise=Promise.resolve().then(async()=>{
-    const chain=await call(node,{method:'eth_chainId',params:[]},entry.controller.signal,isProbe);
+    let chain,verifiedAt,bootstrap=null;
+    if(entry.bootstrap){
+     const observedAt=clock();
+     try{
+      const [value,block]=await callMany(node,[{method:'eth_chainId',params:[]},{method:'eth_getBlockByNumber',params:['latest',false]}],entry.controller.signal,isProbe);
+      chain=value;bootstrap=bootstrapResult(block,observedAt);
+     }catch(error){
+      if(error.code!=='BATCH_UNSUPPORTED')throw error;
+      chain=await call(node,{method:'eth_chainId',params:[]},entry.controller.signal,isProbe);
+      if(chain!=='0x38')throw fail('WRONG_CHAIN');
+      verifiedAt=clock();
+      bootstrap=await readBootstrap(node,entry.controller.signal,isProbe);
+     }
+    }else chain=await call(node,{method:'eth_chainId',params:[]},entry.controller.signal,isProbe);
     if(entry.controller.signal.aborted)throw cancelled(entry.controller.signal);
     if(chain!=='0x38')throw fail('WRONG_CHAIN');
-    node.chainAt=clock();sync(node);
+    node.chainAt=verifiedAt??clock();sync(node);
+    return bootstrap;
    }).catch(error=>{
     if(!entry.controller.signal.aborted)Object.defineProperty(error,CHAIN_GUARD_FAILURE,{value:entry});
     throw error;
@@ -203,7 +228,7 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
    // An upstream implementation may settle after its last consumer canceled.
    entry.promise.catch(()=>{});
   }
-  return new Promise((resolve,reject)=>{
+  const verified=new Promise((resolve,reject)=>{
    const consumer={},leave=()=>{signal.removeEventListener('abort',abort);return entry.consumers.delete(consumer);};
    const abort=()=>{
     if(!leave())return;
@@ -217,6 +242,9 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
    entry.promise.then(value=>{if(leave())resolve(value);},error=>{if(leave())reject(error);});
    if(signal.aborted)abort();
   });
+  // A fresh reader joining an older guard shares only its chain proof. Its own
+  // latest RPC must begin after that reader arrived, even within the same ms.
+  return wantsBootstrap?verified.then(bootstrap=>bootstrap&&(!freshBootstrap||created)?bootstrap:readBootstrap(node,signal,isProbe)):verified;
  }
  function recordFailure(node,error){
   const guard=error[CHAIN_GUARD_FAILURE];
@@ -230,6 +258,8 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
   run(operation,signal=new AbortController().signal,options={}){
    if(signal.aborted)return Promise.reject(cancelled(signal));
    if(typeof operation!=='function')return Promise.reject(fail('INVALID_INPUT'));
+   if(options.bootstrapLatest!==undefined&&typeof options.bootstrapLatest!=='boolean'&&typeof options.bootstrapLatest!=='function')return Promise.reject(fail('INVALID_INPUT'));
+   if(options.freshBootstrap!==undefined&&typeof options.freshBootstrap!=='boolean')return Promise.reject(fail('INVALID_INPUT'));
    const nodeId=options.nodeId;
    if(nodeId!==undefined&&!states.some(n=>n.id===nodeId))return Promise.reject(fail('INVALID_INPUT'));
    const isProbe=options[PROBE_READ]===true;
@@ -272,9 +302,12 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
      const attempt=(async()=>{
       const request=payload=>call(node,payload,controller.signal,isProbe);
       request.batch=payloads=>callMany(node,payloads,controller.signal,isProbe);
-      await verifyChain(node,controller.signal,isProbe);
+      // Opt-in callers receive {block, observedAt} as the fourth argument. The
+      // timestamp precedes the physical header RPC, including a cold batch.
+      const wantsBootstrap=!isProbe&&(typeof options.bootstrapLatest==='function'?options.bootstrapLatest({id:node.id})===true:options.bootstrapLatest===true);
+      const bootstrap=await (wantsBootstrap?measurePhase('bootstrap',()=>verifyChain(node,controller.signal,isProbe,true,options.freshBootstrap===true)):verifyChain(node,controller.signal,isProbe));
       if(controller.signal.aborted)throw cancelled(controller.signal);
-      return operation(request,node.public,controller.signal);
+      return operation(request,node.public,controller.signal,wantsBootstrap?bootstrap:null);
      })();
      abortable(attempt,controller.signal).then(result=>{
       if(settled)return;

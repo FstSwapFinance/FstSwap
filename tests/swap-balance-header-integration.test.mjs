@@ -25,7 +25,7 @@ const body=account=>({chainId:56,account,tokens:[Z,T]});
 test('warm balance reads remove only the header round while reading each account balance again',async()=>{
  const f=fixture(),first=await f.engine.balances(body(A)),afterFirst=f.http.length;
  const second=await f.engine.balances(body(B));
- assert.equal(afterFirst,3,'chain guard, latest, then balance/canonical batch');
+ assert.equal(afterFirst,2,'chain/latest bootstrap batch, then balance/canonical batch');
  assert.equal(f.http.length-afterFirst,1,'a warm completed header removes one HTTP round');
  assert.deepEqual(first.balances,{[Z]:'7',[T]:'7'});assert.deepEqual(second.balances,{[Z]:'9',[T]:'9'});
  assert.equal(first.blockHash,second.blockHash);assert.equal(f.http.at(-1).length,2);

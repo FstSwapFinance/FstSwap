@@ -1,0 +1,30 @@
+{
+  "exact-balances.json.gz": {
+    "sha256": "3aed0f18923a88fd8b1771cb8565ee568e4b59d594e34c1b7070ad4369a7e3de",
+    "bytes": 64485
+  },
+  "exact-bnb.json.gz": {
+    "sha256": "562c872bfeddfcdf492fc02beb0d28890376615dc336206cf1baaf86d1732f8f",
+    "bytes": 107581
+  },
+  "before-ordinary-guard-fix.json.gz": {
+    "sha256": "6226729e311cba1676f8c3f265bc0391d137b030f268ecc9f2df6659008d5832",
+    "bytes": 264494
+  },
+  "pre-review-run.json.gz": {
+    "sha256": "2164cd9b97649afd17bfa07831cd9d33185b8847412133876ca2f762257ee508",
+    "bytes": 263711
+  },
+  "baseline-probe.json.gz": {
+    "sha256": "9b873c63849045b16d4593f16fa657500d2007202c71e4a4d4be3a5e1b2639b8",
+    "bytes": 77479
+  },
+  "public-transport-selection.json.gz": {
+    "sha256": "b8e6385ed92c81f0fc34c6b4165fbf007c8a91c8336618acd5b199f793260452",
+    "bytes": 9665
+  },
+  "tests.log.gz": {
+    "sha256": "cf8feb6131b3f661764c5c00e88e8ecfa2a83b4a0e1823b1312372302dba5b8b",
+    "bytes": 93778
+  }
+}
