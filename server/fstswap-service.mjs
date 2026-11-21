@@ -9,6 +9,7 @@ import {readTokenBalances} from '../src/swap-balances.mjs';
 import {createReadPool} from './swap-read-pool.mjs';
 import {createRawSnapshot,snapshotReader} from './swap-snapshot-cache.mjs';
 import {createBalanceHeaderCache} from './swap-balance-header.mjs';
+import {createQuotePipeline} from './swap-quote-pipeline.mjs';
 import {createTimingScope,measurePhase,countTiming} from './swap-timing.mjs';
 export {createReadPool};
 
@@ -37,10 +38,10 @@ function pinned(request,block){return p=>{
  if(p.method==='eth_getBlockByNumber'&&p.params[0]==='latest')return Promise.resolve({...block});
  return request({...p,params:p.method==='eth_call'?[p.params[0],block.number]:p.method==='eth_getBalance'?[p.params[0],block.number]:p.params});
 };}
-export async function computeQuote(request,input,config,poolPolicy,{nodeId}={}){
+export async function computeQuote(request,input,config,poolPolicy,{nodeId,quotePipeline}={}){
  const {tokenIn,tokenOut,slippageBps,singleHop}=input,amountIn=BigInt(input.amountIn),feeBps=config.platformFeeBps;
  if(['2.0.0','2.1.0'].includes(config.version)){
-  const q=await quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,slippageBps,singleHop,preparedPolicy:poolPolicy,contextNodeId:nodeId,measure:measurePhase,count:countTiming});
+  const q=await quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,slippageBps,singleHop,preparedPolicy:poolPolicy,contextNodeId:nodeId,quotePipeline,measure:measurePhase,count:countTiming});
   assertQuoteSafety({tokenIn,tokenOut,amountIn,amountOut:q.minimum,impact:q.impact,quotedAmountIn:q.amountIn,quotedAmountOut:q.out});
   poolPolicy.assertFresh();poolPolicy.assertValue(amountIn,q.minimum);
   return fstServiceQuote(q,{slippageBps,poolCheckedAt:poolPolicy.checkedAt});
@@ -293,7 +294,8 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,monotonic=()=
      if(warming&&warming.nodeId&&warming.nodeId!==nodeId)warming.controller.abort();
      const {block,config,policy,snapshot}=await measurePhase('context',()=>context(input,activeSignal,{node,bootstrap}));assertRunning(activeSignal);policy.assertFresh();
      const read=pinned(snapshotReader(snapshot,request,{nodeId:node?.id||'primary',signal:activeSignal}),block);
-     const q=await untilAborted(measurePhase('route',()=>calculate(read,input,config,policy,{signal:activeSignal,nodeId:node?.id||'primary',block})),activeSignal);assertRunning(activeSignal);
+     const quotePipeline=createQuotePipeline(request,input,config,block.number);
+     const q=await untilAborted(measurePhase('route',()=>calculate(read,input,config,policy,{signal:activeSignal,nodeId,block,quotePipeline})),activeSignal);assertRunning(activeSignal);
      const canonical=await measurePhase('canonical',()=>request({method:'eth_getBlockByNumber',params:[block.number,false]}));assertRunning(activeSignal);
      try{assertCanonical(canonical,block);}catch(error){invalidateSnapshot(snapshot);throw error;}policy.assertFresh();
      const expiresAt=policy.checkedAt+15000;if(clock()>=expiresAt)throw fail('QUOTE_EXPIRED');

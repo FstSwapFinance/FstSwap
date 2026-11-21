@@ -4,6 +4,7 @@ const METHODS=new Set(['eth_chainId','eth_getBlockByNumber','eth_call','eth_getB
 const TERMINAL=new Set(['INVALID_INPUT','RPC_FORBIDDEN','NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','UNSUPPORTED_VERSION','QUOTE_EXPIRED','SERVICE_BUSY']);
 const KNOWN=new Set([...TERMINAL,'STALE_BLOCK','BALANCE_UNAVAILABLE','WRONG_CHAIN','UPSTREAM_UNAVAILABLE','UPSTREAM_TIMEOUT','UPSTREAM_LIMIT','UPSTREAM_RATE_LIMIT','REQUEST_ABORTED','REQUEST_TIMEOUT']);
 const LIMIT=2*1024*1024,MAX_ACTIVE=48,MAX_ATTEMPTS=3;
+const SIMULATION_TIMEOUT=1500,SIMULATION_RETRY=10000;
 let globalHedges=0;
 const INTERNAL_ERROR=Symbol('read-pool-error'),PROBE_READ=Symbol('fixed-background-probe'),CHAIN_GUARD_FAILURE=Symbol('physical-chain-guard-failure');
 const PROBE_TOKEN='0x55d398326f99059ff775485246999027b3197955',PROBE_DATA='0x313ce567',MEASUREMENT_TTL=300000;
@@ -79,7 +80,7 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
   return candidates.sort((a,b)=>Number(bootstrap.has(b))-Number(bootstrap.has(a))||score(a,kind,rpcClass)-score(b,kind,rpcClass)||states.indexOf(a)-states.indexOf(b));
  }
  function call(node,payload,signal,isProbe=false){return measurePhase('rpc',()=>physicalCall(node,payload,signal,isProbe));}
- async function physicalCall(node,payload,signal,isProbe=false){
+ async function physicalCall(node,payload,signal,isProbe=false,simulation=false){
   if(signal.aborted)throw cancelled(signal);
   if(!payload||!METHODS.has(payload.method))throw fail('RPC_FORBIDDEN');
   if(active>=MAX_ACTIVE)throw fail('SERVICE_BUSY');
@@ -87,11 +88,11 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
   let body;
   try{body=JSON.stringify({jsonrpc:'2.0',id,method:payload.method,params:payload.params??[]});}catch{throw fail('INVALID_INPUT');}
   if(Buffer.byteLength(body)>LIMIT)throw fail('UPSTREAM_LIMIT');
-  const stats=(isProbe?node.probeRequests:node.requests)[payload.method]??=metric();
+  const stats=(isProbe?node.probeRequests:node.requests)[simulation?'quoteSimulation':payload.method]??=metric();
   const started=clock(),controller=new AbortController();let timedOut=false;
   const onAbort=()=>controller.abort(signal.reason);
   signal.addEventListener('abort',onAbort,{once:true});
-  const timer=setTimeout(()=>{timedOut=true;controller.abort();},timeoutMs);
+  const timer=setTimeout(()=>{timedOut=true;controller.abort();},simulation?Math.min(timeoutMs,SIMULATION_TIMEOUT):timeoutMs);
   active++;countTiming('rpc_http');countTiming('rpc_calls');countTiming('rpc_bytes',Buffer.byteLength(body));
   try{
    const response=await abortable(Promise.resolve().then(()=>fetchImpl(node.url,{method:'POST',headers:{'content-type':'application/json'},body,signal:controller.signal})),controller.signal);
@@ -123,6 +124,25 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
    if(error?.[INTERNAL_ERROR])throw error;
    throw fail('UPSTREAM_UNAVAILABLE');
   }finally{active--;clearTimeout(timer);signal.removeEventListener('abort',onAbort);}
+ }
+ // Creation-style eth_call is optional. Keep its failures separate from the
+ // ordinary read path, while honoring node-wide rate limits and cancellation.
+ async function simulateQuote(node,payload,signal,decode){
+  if(signal.aborted)throw cancelled(signal);
+  const delay=(node.simulationRetryAt??0)-clock();
+  if(delay>0&&delay<=SIMULATION_RETRY)return null;
+  countTiming('quote_pipeline_attempts');
+  let raw;
+  try{raw=await measurePhase('rpc',()=>physicalCall(node,payload,signal,false,true));}
+  catch(error){
+   if(signal.aborted||!['UPSTREAM_UNAVAILABLE','UPSTREAM_TIMEOUT','UPSTREAM_LIMIT'].includes(error.code))throw error;
+  }
+  if(signal.aborted)throw cancelled(signal);
+  const result=raw===undefined?null:decode(raw);
+  if(result!==null)return result;
+  node.simulationRetryAt=clock()+SIMULATION_RETRY;
+  countTiming('quote_pipeline_fallbacks');
+  return null;
  }
  // One HTTP request may carry the pinned balance call and its canonical header.
  // Two items is the budget. A node that rejects batches is remembered and is not penalized.
@@ -302,6 +322,7 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
      const attempt=(async()=>{
       const request=payload=>call(node,payload,controller.signal,isProbe);
       request.batch=payloads=>callMany(node,payloads,controller.signal,isProbe);
+      if(!isProbe)request.quoteSimulation=(payload,decode=value=>value)=>simulateQuote(node,payload,controller.signal,decode);
       // Opt-in callers receive {block, observedAt} as the fourth argument. The
       // timestamp precedes the physical header RPC, including a cold batch.
       const wantsBootstrap=!isProbe&&(typeof options.bootstrapLatest==='function'?options.bootstrapLatest({id:node.id})===true:options.bootstrapLatest===true);

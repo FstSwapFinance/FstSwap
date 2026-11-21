@@ -3,8 +3,8 @@ import {AsyncLocalStorage} from 'node:async_hooks';
 // Low-cardinality, request-local diagnostics. Durations can overlap; their sum
 // is not total latency. No URLs, addresses, errors or caller names enter headers.
 const activeTiming=new AsyncLocalStorage();
-const phases=new Set(['bootstrap','context','config','policy','route','canonical','balance_header','balance_read','rpc','encode','oracle','v2','v3_discovery','v3_state','v3_depth','tax']);
-const counters=new Set(['rpc_calls','rpc_http','rpc_batches','rpc_bytes','context_hits','snapshot_hits','balance_head_hits','quote_batches','quote_subcalls','quote_candidates']);
+const phases=new Set(['bootstrap','context','config','policy','route','quote_pipeline','canonical','balance_header','balance_read','rpc','encode','oracle','v2','v3_discovery','v3_state','v3_depth','tax']);
+const counters=new Set(['rpc_calls','rpc_http','rpc_batches','rpc_bytes','context_hits','snapshot_hits','balance_head_hits','quote_batches','quote_subcalls','quote_candidates','quote_pipeline_attempts','quote_pipeline_hits','quote_pipeline_fallbacks']);
 const finite=value=>Number.isFinite(value)&&value>=0;
 const now=scope=>{try{const value=scope.clock();return finite(value)?value:null;}catch{return null;}};
 function record(scope,name,start){

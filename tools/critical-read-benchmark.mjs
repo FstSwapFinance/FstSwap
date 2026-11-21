@@ -7,6 +7,8 @@ import {resolve,dirname} from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {ethers} from 'ethers';
 import {benchmarkCodec,createSyntheticServiceFixture,createSyntheticLaneFixture} from './critical-read-benchmark-fixtures.mjs';
+import {isConstructorCall,constructorRequest,constructorResult,summarizeConstructors} from './critical-read-constructor-trace.mjs';
+import {multicallRouteResults,constructorRouteResults,compareRouteResults} from './critical-read-route-diff.mjs';
 
 globalThis.ethers=ethers;
 const here=resolve(dirname(fileURLToPath(import.meta.url)),'..'),args=process.argv.slice(2),options={};
@@ -15,7 +17,7 @@ for(let n=0;n<args.length;n++){
  options[key]=inline??(args[n+1]&&!args[n+1].startsWith('--')?args[++n]:true);
 }
 if(options.help){
- console.log('node tools/critical-read-benchmark.mjs --mode public|synthetic|all --baseline /absolute/archive --baseline-commit d22667a --candidate /absolute/worktree --samples 3 --rpc https://bsc-rpc.publicnode.com --cases balances,quotes,warm,lanes,bnb --balance-modes cold,hot,fresh --sides baseline,candidate --output /tmp/fstswap-critical-read.json\nThe narrow bnb case runs 0.001 BNB cold, an explicitly costed one-pair warmup, first warm 0.001 BNB, then changed 0.0011 BNB. Public RPC is restricted to https://bsc-rpc.publicnode.com or https://bsc-dataseed.bnbchain.org without credentials, query, fragment or nonstandard port. A fresh genuine header pins each paired sample; wall clocks and quote expiry remain real. Synthetic uses invented responses, fixed --delay-ms 40, plus controlled release gates. No config/env/private endpoints/wallet/signing/transactions are read or used.');process.exit(0);
+ console.log('node tools/critical-read-benchmark.mjs --mode public|synthetic|all --baseline /absolute/archive --baseline-commit d22667a --candidate /absolute/worktree --samples 3 --rpc https://bsc-rpc.publicnode.com --cases balances,quotes,warm,lanes,bnb --bnb-modes cold,warm-first,warm-changed --balance-modes cold,hot,fresh --sides baseline,candidate --output /tmp/fstswap-critical-read.json\nThe narrow bnb case runs 0.001 BNB cold, an explicitly costed one-pair warmup, first warm 0.001 BNB, then changed 0.0011 BNB. Use --bnb-modes cold,warm-first to omit changed amount. Constructor calls are traced separately; their EVM subcalls are opaque and returned uniqueCalls are labeled reported. Public RPC is restricted to https://bsc-rpc.publicnode.com or https://bsc-dataseed.bnbchain.org without credentials, query, fragment or nonstandard port. A fresh genuine header pins each paired sample; wall clocks and quote expiry remain real. Synthetic uses invented responses, fixed --delay-ms 40, plus controlled release gates. No config/env/private endpoints/wallet/signing/transactions are read or used.');process.exit(0);
 }
 const mode=String(options.mode||'synthetic'),samples=Number(options.samples||3),delayMs=Number(options['delay-ms']??40),output=resolve(String(options.output||'/tmp/fstswap-critical-read-benchmark.json'));
 if(!['public','synthetic','all'].includes(mode)||!Number.isInteger(samples)||samples<1||samples>10||!Number.isFinite(delayMs)||delayMs<0||delayMs>1000)throw Error('Invalid benchmark options');
@@ -24,9 +26,11 @@ if(typeof options.baseline!=='string'||!options.baseline)throw Error('An explici
 const baselineRoot=resolve(options.baseline),candidateRoot=resolve(String(options.candidate||here));
 const cases=new Set(String(options.cases||'balances,quotes,warm,lanes').split(',')),sides=String(options.sides||'baseline,candidate').split(',');
 const baselineCommit=String(options['baseline-commit']||'d22667a'),balanceModes=String(options['balance-modes']||'cold,hot,fresh').split(',');
+const bnbModes=String(options['bnb-modes']||'cold,warm-first,warm-changed').split(',');
 if(sides.some(x=>!['baseline','candidate'].includes(x)))throw Error('Invalid sides');
 if([...cases].some(x=>!['balances','quotes','warm','lanes','bnb'].includes(x)))throw Error('Invalid cases');
 if(!/^[0-9a-f]{7,40}$/i.test(baselineCommit)||balanceModes.some(x=>!['cold','hot','fresh'].includes(x))||new Set(balanceModes).size!==balanceModes.length||balanceModes.includes('hot')&&!balanceModes.includes('cold'))throw Error('Invalid baseline commit or balance modes');
+if(bnbModes.some(x=>!['cold','warm-first','warm-changed'].includes(x))||new Set(bnbModes).size!==bnbModes.length||bnbModes.includes('warm-changed')&&!bnbModes.includes('warm-first'))throw Error('Invalid BNB modes');
 const publicEndpoint=new URL(String(options.rpc||'https://bsc-rpc.publicnode.com'));
 if(publicEndpoint.protocol!=='https:'||!['bsc-rpc.publicnode.com','bsc-dataseed.bnbchain.org'].includes(publicEndpoint.hostname)||publicEndpoint.username||publicEndpoint.password||publicEndpoint.search||publicEndpoint.hash||publicEndpoint.port||publicEndpoint.pathname!=='/')throw Error('Only the supported public HTTPS RPC origins are allowed');
 const ACCOUNT='0x3D91889209f9ca69b7Cb73D7a8C463f4deFB5c15',ZERO=ethers.ZeroAddress;
@@ -34,8 +38,9 @@ const storage=new AsyncLocalStorage(),wire=value=>JSON.parse(JSON.stringify(valu
 const stable=value=>JSON.stringify(wire(value)),sha=value=>createHash('sha256').update(value).digest('hex'),hash=value=>sha(stable(value)),round=n=>Math.round(n*100)/100;
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms)),turn=()=>new Promise(resolve=>setImmediate(resolve));
 const report={schema:1,createdAt:new Date().toISOString(),baselineCommit,mode,samples,delayMs,balanceModes,roots:{baseline:baselineRoot,candidate:candidateRoot},publicEndpoint:mode==='synthetic'?null:publicEndpoint.origin,scope:{public:'Genuine public BSC read-only RPC. A fresh paired sample pins an actual block; Date.now, snapshot ages and quote expiry are never changed. Errors and incomplete balances are excluded from valid-result latency statistics.',synthetic:'Invented contract responses and balances with real production reader/engine/route code, fixed transport delay, and an independent controlled gate experiment. Not public-network speed or mainnet readiness.',cold:'Cold means a new engine and provider pool, not a new Node process, TCP/TLS connection, OS DNS cache or zero ABI codec cache. Each quote pair gets its own cold engine before completed/new-amount/fresh variants.',warmup:'The full warm case configures the same three explicit pairs on both sides. The narrow bnb case configures only BNB/USDT, costs warmup separately, and measures the first 0.001 BNB quote plus a new 0.0011 BNB amount. No warmup timer is started.',instrumentation:'Both sides buffer actual transport bodies for matching diagnostics. Stage callback durations and overlapping RPC durations are separate; phase sums are not end-to-end latency. rpcItemStages.participatingHttp can overlap when one physical HTTP carries multiple item classes; sum physical stages/http for the actual request total.',wallet:'No wallet, private key, signing, broadcast, deployment, remote config, .env or SSH access.'},runs:[],laneRuns:[],comparisons:[]};
+report.bnbModes=bnbModes;report.scope.constructor='No-to eth_call attempts, including errors and malformed returns, are retained. innerCalls counts ABI-decoded Multicall children only; constructor EVM calls are opaque. Returned uniqueCalls is reported telemetry, not independently observed inner execution.';
 
-const sourceFiles=['server/fstswap-service.mjs','server/swap-read-pool.mjs','server/swap-snapshot-cache.mjs','server/swap-balance-header.mjs','server/swap-timing.mjs','src/swap-aggregator.mjs','src/swap-fstswap.mjs','src/swap-liquidity.mjs','src/swap-balances.mjs','src/swap-transfer-tax.mjs','src/swap-read-codec.mjs','src/swap-service-client.mjs'];
+const sourceFiles=['server/fstswap-service.mjs','server/swap-read-pool.mjs','server/swap-snapshot-cache.mjs','server/swap-balance-header.mjs','server/swap-timing.mjs','server/swap-quote-pipeline.mjs','server/swap-quote-pipeline-bytecode.mjs','src/swap-aggregator.mjs','src/swap-fstswap.mjs','src/swap-liquidity.mjs','src/swap-balances.mjs','src/swap-transfer-tax.mjs','src/swap-read-codec.mjs','src/swap-service-client.mjs'];
 async function sourceHashes(root){
  const pairs=await Promise.all(sourceFiles.map(async file=>{try{return[file,sha(await readFile(resolve(root,file)))];}catch(error){if(error.code==='ENOENT')return[file,null];throw error;}}));
  return Object.fromEntries(pairs);
@@ -44,7 +49,8 @@ async function load(root){
  const serviceSource=await readFile(resolve(root,'server/fstswap-service.mjs'),'utf8'),query=serviceSource.match(/swap-fstswap\.mjs([^']*)'/)?.[1]||'';
  const [service,aggregator,fst]=await Promise.all([import(pathToFileURL(resolve(root,'server/fstswap-service.mjs')).href),import(pathToFileURL(resolve(root,'src/swap-aggregator.mjs')).href+query),import(pathToFileURL(resolve(root,'src/swap-fstswap.mjs')).href+query)]);
  let timing=null;try{timing=await import(pathToFileURL(resolve(root,'server/swap-timing.mjs')).href);}catch(error){if(error.code!=='ERR_MODULE_NOT_FOUND')throw error;}
- return {service,aggregator,fst,timing,sourceSha256:sha(serviceSource),sourceHashes:await sourceHashes(root)};
+ let creationBytecode=null;try{creationBytecode=(await import(pathToFileURL(resolve(root,'server/swap-quote-pipeline-bytecode.mjs')).href)).SWAP_QUOTE_PIPELINE_BYTECODE;}catch(error){if(error.code!=='ERR_MODULE_NOT_FOUND')throw error;}
+ return {service,aggregator,fst,timing,creationBytecode,sourceSha256:sha(serviceSource),sourceHashes:await sourceHashes(root)};
 }
 const modules={};for(const side of sides)modules[side]=await load(side==='baseline'?baselineRoot:candidateRoot);
 report.serviceHashes=Object.fromEntries(sides.map(side=>[side,modules[side].sourceSha256]));
@@ -58,6 +64,7 @@ function decodeChildren(codec,payload){
 function classify(items,children){
  const names=new Set(children.map(c=>c.method));
  if(items.length>1)return [...new Set(items.map(p=>classify([p],children.filter(c=>c.rpcId===p.id))))].sort().join('+');
+ if(isConstructorCall(items[0]))return 'constructor';
  if(items.some(p=>p.method==='eth_getBlockByNumber'))return items[0].params[0]==='latest'?'latest_header':'canonical';
  if(names.has('platformFeeBps'))return 'config';
  if(names.has('latestRoundData'))return 'oracle';
@@ -75,6 +82,7 @@ function makeTransport(module,{network,block,fixture}){
   const parsed=JSON.parse(request.body),items=Array.isArray(parsed)?parsed:[parsed],children=items.flatMap(p=>decodeChildren(codec,p).map(c=>({...c,rpcId:p.id}))),category=classify(items,children);
   const rpcItems=items.map(p=>{const nested=children.filter(c=>c.rpcId===p.id);return{method:p.method,category:classify([p],nested),innerCalls:nested.length};});
   const start=performance.now(),event={startMs:start,methods:items.map(p=>p.method),category,rpcItems,innerCalls:children.length,childMethods:[...new Set(children.map(c=>c.method))],childQueryHash:hash(children.map(c=>[c.target,c.data]).sort()),quoteQueries:category.split('+').includes('route')?children.filter(c=>['quoteExactIn','getAmountsOutVia'].includes(c.method)).map(c=>[c.target,c.data]):[],requestBytes:Buffer.byteLength(request.body),batch:items.length>1,logicalParams:items.filter(p=>p.method==='eth_getBlockByNumber').map(p=>p.params[0]),phase:storage.getStore()||null};
+  const constructors=items.filter(isConstructorCall);event.constructorRequests=constructors.map(p=>({...constructorRequest(p),inputSha256:sha(p.params[0].data||'')}));
   events.push(event);active++;maxActive=Math.max(maxActive,active);
   try{
    let body,status=200,headers={'content-type':'application/json'};
@@ -87,10 +95,15 @@ function makeTransport(module,{network,block,fixture}){
     if(request.signal?.aborted)throw request.signal.reason;
     const rows=items.map(p=>({jsonrpc:'2.0',id:p.id,result:fixture.result(p)}));body=JSON.stringify(Array.isArray(parsed)?rows:rows[0]);
    }
-   event.status=status;event.responseBytes=Buffer.byteLength(body);
-   try{const data=JSON.parse(body);event.errors=(Array.isArray(data)?data:[data]).filter(p=>p.error).map(p=>({code:p.error.code,message:p.error.message}));}catch{event.invalidJson=true;}
+   event.transportElapsedMs=round(performance.now()-start);event.status=status;event.responseBytes=Buffer.byteLength(body);
+   try{
+    const data=JSON.parse(body),responses=Array.isArray(data)?data:[data];event.errors=responses.filter(p=>p.error).map(p=>({code:p.error.code,message:p.error.message}));event.constructorResults=constructors.map(p=>constructorResult(p,responses.find(r=>r?.id===p.id),{httpStatus:status}));
+    event.routeCallResults=items.flatMap(p=>multicallRouteResults(codec,p,responses.find(r=>r?.id===p.id)));
+    event.constructorRoutePlans=constructors.map(p=>constructorRouteResults(codec,p,responses.find(r=>r?.id===p.id),module.creationBytecode,module.aggregator));
+    event.routeCallResults.push(...event.constructorRoutePlans.flatMap(p=>p.calls));
+   }catch{event.invalidJson=true;}
    return new Response(body,{status,headers});
-  }catch(error){event.error=error.message;if(error.cause)event.errorCause={code:error.cause.code,message:error.cause.message};throw error;}finally{event.elapsedMs=round(performance.now()-start);event.endMs=performance.now();active--;}
+  }catch(error){event.error=error.message;if(error.cause)event.errorCause={code:error.cause.code,message:error.cause.message};throw error;}finally{if(!event.constructorResults)event.constructorResults=constructors.map(p=>constructorResult(p,null,{httpStatus:event.status,transportError:event.error,invalidJson:event.invalidJson}));event.elapsedMs=round(performance.now()-start);event.endMs=performance.now();active--;}
  };
  return {events,fetchImpl,get maxActive(){return maxActive;}};
 }
@@ -103,12 +116,13 @@ async function genuineHeader(){
 function summarize(events){
  const intervals=events.map(e=>[e.startMs,e.endMs]).filter(e=>e.every(Number.isFinite)).sort((a,b)=>a[0]-b[0]);let occupied=0,end=-Infinity;
  for(const [start,stop]of intervals){occupied+=Math.max(0,stop-Math.max(start,end));end=Math.max(end,stop);}
- const stages={};for(const event of events){const s=stages[event.category]??={http:0,rpc:0,inner:0,requestBytes:0,elapsedSumMs:0};s.http++;s.rpc+=event.methods.length;s.inner+=event.innerCalls;s.requestBytes+=event.requestBytes;s.elapsedSumMs=round(s.elapsedSumMs+event.elapsedMs);}
- const rpcItemStages={};for(const event of events){const seen=new Set();for(const item of event.rpcItems){const s=rpcItemStages[item.category]??={rpc:0,inner:0,participatingHttp:0};s.rpc++;s.inner+=item.innerCalls;if(!seen.has(item.category)){seen.add(item.category);s.participatingHttp++;}}}
+ const stages=Object.create(null);for(const event of events){const s=stages[event.category]??={http:0,rpc:0,inner:0,requestBytes:0,elapsedSumMs:0};s.http++;s.rpc+=event.methods.length;s.inner+=event.innerCalls;s.requestBytes+=event.requestBytes;s.elapsedSumMs=round(s.elapsedSumMs+event.elapsedMs);}
+ const rpcItemStages=Object.create(null);for(const event of events){const seen=new Set();for(const item of event.rpcItems){const s=rpcItemStages[item.category]??={rpc:0,inner:0,participatingHttp:0};s.rpc++;s.inner+=item.innerCalls;if(!seen.has(item.category)){seen.add(item.category);s.participatingHttp++;}}}
  const boundaries=events.flatMap(e=>[[e.startMs,1],[e.endMs,-1]]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);let active=0,max=0;for(const [,delta]of boundaries){active+=delta;max=Math.max(max,active);}
  const routeBoundaries=events.filter(e=>e.category.split('+').includes('route')).flatMap(e=>[[e.startMs,1],[e.endMs,-1]]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);let routeActive=0,routeMax=0;for(const [,delta]of routeBoundaries){routeActive+=delta;routeMax=Math.max(routeMax,routeActive);}
  const quoted=events.flatMap(e=>e.quoteQueries||[]).sort((a,b)=>stable(a).localeCompare(stable(b)));
- return {http:events.length,rpc:events.reduce((n,e)=>n+e.methods.length,0),innerCalls:events.reduce((n,e)=>n+e.innerCalls,0),httpBatches:events.filter(e=>e.batch).length,requestBytes:events.reduce((n,e)=>n+e.requestBytes,0),maxActiveHttp:max,maxActiveRouteBatches:routeMax,networkOccupiedMs:round(occupied),quoteQueryCount:quoted.length,quoteQueryHash:hash(quoted),latestHeaderHttp:events.filter(e=>e.logicalParams.includes('latest')).length,stages,rpcItemStages};
+ const constructor=summarizeConstructors(events);
+ return {http:events.length,rpc:events.reduce((n,e)=>n+e.methods.length,0),innerCalls:events.reduce((n,e)=>n+e.innerCalls,0),innerCallCountComplete:constructor.attempts===0,constructor,regularRouteBatches:events.filter(e=>e.category.split('+').includes('route')).length,httpBatches:events.filter(e=>e.batch).length,requestBytes:events.reduce((n,e)=>n+e.requestBytes,0),maxActiveHttp:max,maxActiveRouteBatches:routeMax,networkOccupiedMs:round(occupied),quoteQueryCount:quoted.length,quoteQueryHash:hash(quoted),latestHeaderHttp:events.filter(e=>e.logicalParams.includes('latest')).length,stages,rpcItemStages};
 }
 function extract(value,operation){
  if(operation==='warmup')return {warmed:value===true};
@@ -138,6 +152,7 @@ async function measure({side,network,sample,scenario,operation,input,options,con
  }catch(error){row.ok=false;row.error={code:error.code||error.name,message:error.message,reason:error.reason};}
  row.elapsedMs=round(performance.now()-started);row.rpc=summarize(context.transport.events.slice(from));row.wrapperStagesMs=Object.fromEntries(Object.entries(context.phases).map(([name,n])=>[name,round(n-(prior[name]||0))]));row.runtimeTiming=scope?.snapshot()||null;
  row.events=context.transport.events.slice(from).map(({startMs,endMs,quoteQueries,...e})=>({...e,startOffsetMs:round(startMs-started),endOffsetMs:round(endMs-started)}));
+ row.routeCallResults=context.transport.events.slice(from).flatMap(e=>e.routeCallResults||[]);
  report.runs.push(row);console.log(JSON.stringify({network,side,sample,scenario,ok:row.ok,ms:row.elapsedMs,http:row.rpc.http,rpc:row.rpc.rpc,inner:row.rpc.innerCalls,error:row.error?.code}));await persist();return row;
 }
 async function flow(side,network,sample,group,anchor){
@@ -151,11 +166,13 @@ async function flow(side,network,sample,group,anchor){
    for(const mode of balanceModes)await run('balance-'+mode,'balances',body,{fresh:mode==='fresh'});
   }else if(group==='bnb'){
    const body=input(ZERO,U,'1000000000000000');
-   await run('quote-bnb-usdt-cold','quote',body);
-   context.engine.stopWarmup();context={...makeEngine(module,transport,{pairs:[{tokenIn:ZERO,tokenOut:U}]}),transport};
-   await run('warm-bnb-usdt-pair','warmup');
-   await run('quote-bnb-usdt-warm-first','quote',body);
-   await run('quote-bnb-usdt-warm-changed','quote',{...body,amountIn:'1100000000000000'});
+   if(bnbModes.includes('cold'))await run('quote-bnb-usdt-cold','quote',body);
+   if(bnbModes.includes('warm-first')){
+    context.engine.stopWarmup();context={...makeEngine(module,transport,{pairs:[{tokenIn:ZERO,tokenOut:U}]}),transport};
+    await run('warm-bnb-usdt-pair','warmup');
+    await run('quote-bnb-usdt-warm-first','quote',body);
+    if(bnbModes.includes('warm-changed'))await run('quote-bnb-usdt-warm-changed','quote',{...body,amountIn:'1100000000000000'});
+   }
   }else if(group==='quotes'){
    for(const [id,body]of [['usdt-fist',input(U,F)],['bnb-usdt',input(ZERO,U,'1000000000000000')]]){
     if(id==='bnb-usdt'){context.engine.stopWarmup();context={...makeEngine(module,transport),transport};}
@@ -207,7 +224,8 @@ const keys=[...new Set(report.runs.filter(r=>r.side).map(r=>[r.network,r.scenari
 for(const key of keys){
  const rows=report.runs.filter(r=>[r.network,r.scenario,r.sample].join('|')===key),before=rows.find(r=>r.side==='baseline'),after=rows.find(r=>r.side==='candidate');if(!before||!after)continue;
  const a=before.result,b=after.result,bothValid=before.ok&&after.ok;
- report.comparisons.push({key,bothValid,httpDelta:after.rpc.http-before.rpc.http,rpcDelta:after.rpc.rpc-before.rpc.rpc,elapsedDeltaMs:round(after.elapsedMs-before.elapsedMs),sameBlock:bothValid&&a.blockHash? a.blockHash===b.blockHash:null,sameNet:bothValid&&a.netOut?a.netOut===b.netOut:null,sameMinimum:bothValid&&a.minimum?a.minimum===b.minimum:null,sameFee:bothValid&&a.lpFee?stable([a.lpFee,a.feeToken,a.feeMode])===stable([b.lpFee,b.feeToken,b.feeMode]):null,sameSelected:bothValid&&a.selectedHash?a.selectedHash===b.selectedHash:null,sameBalances:bothValid&&a.balances?stable(a.balances)===stable(b.balances):null,quoteQueryFootprintEqual:before.rpc.quoteQueryHash===after.rpc.quoteQueryHash});
+ const routeCallDiff=compareRouteResults(before.routeCallResults||[],after.routeCallResults||[]);
+ report.comparisons.push({key,bothValid,httpDelta:after.rpc.http-before.rpc.http,rpcDelta:after.rpc.rpc-before.rpc.rpc,elapsedDeltaMs:round(after.elapsedMs-before.elapsedMs),sameBlock:bothValid&&a.blockHash? a.blockHash===b.blockHash:null,sameNet:bothValid&&a.netOut?a.netOut===b.netOut:null,sameMinimum:bothValid&&a.minimum?a.minimum===b.minimum:null,sameFee:bothValid&&a.lpFee?stable([a.lpFee,a.feeToken,a.feeMode])===stable([b.lpFee,b.feeToken,b.feeMode]):null,sameSelected:bothValid&&a.selectedHash?a.selectedHash===b.selectedHash:null,sameBalances:bothValid&&a.balances?stable(a.balances)===stable(b.balances):null,quoteQueryFootprintEqual:before.rpc.quoteQueryHash===after.rpc.quoteQueryHash,routeCallDiff,sameRouteCallOutputs:routeCallDiff.available?routeCallDiff.same:null});
 }
 for(const kind of ['gate','delay'])for(let sample=0;sample<samples;sample++){
  const a=report.laneRuns.find(r=>r.side==='baseline'&&r.kind===kind&&r.sample===sample),b=report.laneRuns.find(r=>r.side==='candidate'&&r.kind===kind&&r.sample===sample);if(a&&b)report.comparisons.push({key:'synthetic-lanes-'+kind+'|'+sample,bothValid:a.ok&&b.ok,sameCandidates:a.candidateHash===b.candidateHash,sameNet:a.out===b.out,httpDelta:b.http-a.http,innerDelta:b.innerCalls-a.innerCalls,elapsedDeltaMs:round(b.elapsedMs-a.elapsedMs)});
@@ -220,7 +238,7 @@ for(const key of [...new Set(report.runs.filter(r=>r.side).map(r=>[r.network,r.s
 }
 report.sourceHashesAtFinish=Object.fromEntries(await Promise.all(sides.map(async side=>[side,await sourceHashes(side==='baseline'?baselineRoot:candidateRoot)])));
 report.sourceStateUnchanged=sides.every(side=>stable(report.sourceHashesAtImport[side])===stable(report.sourceHashesAtFinish[side]));
-report.findings={validRuns:report.runs.filter(r=>r.ok).length,failedRuns:report.runs.filter(r=>!r.ok).length,validPublicRuns:report.runs.filter(r=>r.network==='public'&&r.ok).length,failedPublicRuns:report.runs.filter(r=>r.network==='public'&&!r.ok).length,validSyntheticRuns:report.runs.filter(r=>r.network==='synthetic'&&r.ok).length,failedSyntheticRuns:report.runs.filter(r=>r.network==='synthetic'&&!r.ok).length,invariantFailures:report.comparisons.filter(c=>c.bothValid&&['sameBlock','sameNet','sameMinimum','sameFee','sameSelected','sameBalances','sameCandidates'].some(k=>c[k]===false))};
+report.findings={validRuns:report.runs.filter(r=>r.ok).length,failedRuns:report.runs.filter(r=>!r.ok).length,validPublicRuns:report.runs.filter(r=>r.network==='public'&&r.ok).length,failedPublicRuns:report.runs.filter(r=>r.network==='public'&&!r.ok).length,validSyntheticRuns:report.runs.filter(r=>r.network==='synthetic'&&r.ok).length,failedSyntheticRuns:report.runs.filter(r=>r.network==='synthetic'&&!r.ok).length,invariantFailures:report.comparisons.filter(c=>c.bothValid&&['sameBlock','sameNet','sameMinimum','sameFee','sameSelected','sameBalances','sameCandidates','sameRouteCallOutputs'].some(k=>c[k]===false))};
 report.finishedAt=new Date().toISOString();await persist();
 const md=['# FstSwap 关键只读路径基准','',`生成时间：${report.createdAt}。基线：\`${baselineCommit}\`。每侧样本：${samples}。`, '',
  '真实公网与合成延迟结果分别列出。公网每组使用新取得的真实区块固定读取高度，仍向原节点读取 canonical hash；没有替换 Date.now 或延长 quote expiry。失败和余额缺项不计为有效样本。阶段耗时会重叠，不能相加解释为总耗时。冷态指新 engine/provider pool，进程、TCP/TLS、DNS 和纯 ABI 缓存可能已热；各报价 pair 独立冷起。', '',

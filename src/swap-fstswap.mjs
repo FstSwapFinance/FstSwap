@@ -122,8 +122,33 @@ export function fstRequest(Interface,{router,account,quote,deadline}){
 }
 
 const noRoute=()=>Object.assign(Error('没有符合流动性要求的完整兑换路线'),{code:'NO_ROUTE'});
+function pipelineQuoteCache(result,routes,splits,amount,quoteKey){
+ if(!result||result.routeOutputs?.length!==routes.length||result.splitOutputs?.length!==splits.length)return null;
+ const entries=new Map();
+ function remember(leg,input,output){
+  if(typeof output!=='bigint'||output<=0n)return false;
+  const key=quoteKey(leg,input);
+  if(entries.has(key)&&entries.get(key)!==output)return false;
+  entries.set(key,output);
+  return true;
+ }
+ for(const [n,legs] of routes.entries()){
+  const outputs=result.routeOutputs[n];
+  if(outputs?.length!==legs.length)return null;
+  let input=amount;
+  for(const [depth,leg] of legs.entries()){
+   if(!remember(leg,input,outputs[depth]))return null;
+   input=outputs[depth];
+  }
+ }
+ for(const [n,split] of splits.entries()){
+  const outputs=result.splitOutputs[n];
+  if(outputs?.length!==split.length||!split.every(({leg,amount},index)=>remember(leg,amount,outputs[index])))return null;
+ }
+ return entries;
+}
 // Quote only pools admitted by the independent-price/depth policy. Every call uses its snapshot block.
-export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],singleHop=false,configVersion='2.0.0',linearV2Only=false,adaptersOff=[],transferTaxes,count=()=>{}}){
+export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],singleHop=false,configVersion='2.0.0',linearV2Only=false,adaptersOff=[],transferTaxes,quotePipeline,count=()=>{}}){
  const input=lower(from),output=lower(to),taken=new Set(used.flatMap(l=>l.poolIds||[]).map(lower));
  const edges=[];
  for(const pool of policy.pools.values()){
@@ -188,6 +213,16 @@ export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],sing
   const a=amount*BigInt(weight)/BPS,b=amount-a;if(a===0n||b===0n)continue;
   splits.push([{leg:direct[i],amount:a,weight},{leg:direct[j],amount:b,weight:10000-weight}]);
  }
+ // Only verified no-tax amounts can be carried from one hop to the next
+ // inside the simulator. A rejected result leaves the regular cache empty.
+ if(quotePipeline&&routes.some(legs=>legs.length>1)&&routeTokens.every(token=>transferTaxes.get(lower(token)).kind==='none')){
+  const result=await quotePipeline({from,to,routes,splits,amount,blockNumber:policy.blockNumber});
+  const primed=pipelineQuoteCache(result,routes,splits,amount,quoteKey);
+  if(primed){
+   count('quote_pipeline_hits');
+   for(const [key,output] of primed)cache.set(key,output);
+  }
+ }
  const work=routes.map(legs=>({legs,quoted:[],out:amount}));
  for(let depth=0;depth<3;depth++){
   const items=work.filter(r=>r.out>0n&&r.legs[depth]).map(r=>({leg:r.legs[depth],amount:funding(r.legs,depth,r.out)}));
@@ -224,7 +259,7 @@ export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],sing
  const valid=candidates.filter(c=>c.out>0n&&Number.isFinite(c.impact)).sort((a,b)=>a.out>b.out?-1:a.out<b.out?1:a.legs.length-b.legs.length);
  if(!valid.length)throw noRoute();policy.assertFresh();count('quote_candidates',valid.length);return{...valid[0],candidates:valid};
 }
-export async function quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,slippageBps,singleHop=false,preparedPolicy,contextNodeId,measure=(_name,work)=>work(),count=()=>{}}){
+export async function quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,slippageBps,singleHop=false,preparedPolicy,contextNodeId,quotePipeline,measure=(_name,work)=>work(),count=()=>{}}){
  const wrap=isWrap(tokenIn,tokenOut);
  const whole=preparedPolicy?await usePreparedPolicy(request,preparedPolicy,{tokenIn,tokenOut,config,contextNodeId}):wrap?null:await readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens:[config.defaultFeeToken]});
  const taxTokens=wrap?[]:[...new Set([tokenIn,tokenOut,...whole.pools.values()].flatMap(value=>typeof value==='string'?[lower(value)]:[lower(value.token0),lower(value.token1)]))];
@@ -233,7 +268,7 @@ export async function quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,sli
 
   if(isWrap(from,to))return{from,to,amountIn:amount,minimum:amount,out:amount,impact:0,legs:[{kind:'wrap',out:amount,amountIn:amount}],assertFresh(){}};
   const policy={...whole,...createPoolPolicy(whole.pools,whole.prices,from,to,{tradeTokenIn:tokenIn})};
-  const routes=await quoteFstRoutes(request,{from,to,amount,used,policy,singleHop,configVersion:config.version,adaptersOff:config.adaptersOff,transferTaxes,...routeOptions,count});
+  const routes=await quoteFstRoutes(request,{from,to,amount,used,policy,singleHop,configVersion:config.version,adaptersOff:config.adaptersOff,transferTaxes,...routeOptions,quotePipeline,count});
   let rejection;
   const valid=routes.candidates.filter(c=>{
    c.minimum=minimum(c.out,slippageBps);

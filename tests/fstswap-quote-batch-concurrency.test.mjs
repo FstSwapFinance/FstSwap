@@ -14,7 +14,7 @@ const turn=()=>new Promise(resolve=>setImmediate(resolve));
 
 // Only the external multicall RPC is controlled. Route construction, ABI
 // decoding, cache association, tax funding and result selection remain real.
-function fixture({revertLane}={}){
+function fixture({revertLane,laneCount=170,quotePipeline,configVersion='2.0.0',taxModel}={}){
  const pools=new Map(),models=new Map(),calls=[];
  const add=(lane,depth,token0,token1,kind,adapter)=>{
   const address=addr(10000+lane*3+depth),fee=100;
@@ -23,14 +23,17 @@ function fixture({revertLane}={}){
   const path=kind==='v3'?'0x'+token0.slice(2)+fee.toString(16).padStart(6,'0')+token1.slice(2):[token0,token1].join(':');
   models.set(kind+':'+path,{lane,depth});
  };
- for(let lane=1;lane<=170;lane++){
+ for(let lane=1;lane<=laneCount;lane++){
   const a=addr(20000+lane),b=addr(30000+lane);
   add(lane,0,IN,a,'v2',SWAP_ADAPTERS.fst.adapter);
-  add(lane,1,a,b,'v3',SWAP_ADAPTERS.v3.adapter);
+  if(configVersion==='2.1.0')add(lane,1,a,b,'v2',SWAP_ADAPTERS.fst.adapter);
+  else add(lane,1,a,b,'v3',SWAP_ADAPTERS.v3.adapter);
   add(lane,2,b,OUT,'v2',SWAP_ADAPTERS.pancake.adapter);
  }
  const policy={pools,blockNumber:BLOCK,allowsRoute:()=>true,assertFresh(){}};
  const transferTaxes=new Map([...pools.values()].flatMap(p=>[p.token0,p.token1]).map(token=>[token,{kind:'none'}]));
+ if(taxModel===null)transferTaxes.delete(IN);
+ else if(taxModel)transferTaxes.set(IN,taxModel);
  let active=0,maxActive=0;
  const request=async({method,params})=>{
   assert.equal(method,'eth_call');assert.equal(params[1],BLOCK);
@@ -59,8 +62,41 @@ function fixture({revertLane}={}){
   }finally{record.settled=true;active--;}
  };
  return{calls,get active(){return active;},get maxActive(){return maxActive;},
-  quote:()=>quoteFstRoutes(request,{from:IN,to:OUT,amount:10000n,policy,configVersion:'2.0.0',transferTaxes})};
+  quote:()=>quoteFstRoutes(request,{from:IN,to:OUT,amount:10000n,policy,configVersion,transferTaxes,quotePipeline})};
 }
+
+test('a complete pipeline result replaces all three amount RPCs and preserves candidate quantities',async()=>{
+ const baseline=fixture({laneCount:4}),before=observe(baseline.quote());
+ await drain(baseline,before);assert.ifError(before.error);assert.equal(baseline.calls.length,3);
+ let invocations=0;
+ const fast=fixture({laneCount:4,quotePipeline:async({routes,splits,amount,blockNumber})=>{
+  invocations++;assert.equal(amount,10000n);assert.equal(blockNumber,BLOCK);assert.deepEqual(splits,[]);
+  return{routeOutputs:routes.map((legs,n)=>legs.map((_,depth)=>BigInt((depth+1)*10000+n+1))),splitOutputs:[]};
+ }});
+ const after=observe(fast.quote());await drain(fast,after);assert.ifError(after.error);
+ assert.equal(invocations,1);assert.equal(fast.calls.length,0);
+ const wire=q=>JSON.stringify(q,(_,v)=>typeof v==='bigint'?v.toString():v);
+ assert.equal(wire(after.value),wire(before.value));
+});
+
+test('an incomplete pipeline result cannot prime even its successful prefix',async()=>{
+ let invocations=0;
+ const f=fixture({laneCount:4,quotePipeline:async()=>{
+  invocations++;return{routeOutputs:[[5000n,6000n,7000n],[],[],[]],splitOutputs:[]};
+ }});
+ const state=observe(f.quote());await drain(f,state);assert.ifError(state.error);
+ assert.equal(invocations,1);assert.equal(f.calls.length,3);assert.equal(state.value.out,30004n);
+});
+
+test('unverified and pair-tax models cannot enter the zero-tax pipeline',async()=>{
+ const quotePipeline=()=>assert.fail('nonstandard transfer-tax model reached the pipeline');
+ const unknown=fixture({laneCount:4,configVersion:'2.1.0',taxModel:null,quotePipeline});
+ await assert.rejects(unknown.quote(),{code:'TAX_UNVERIFIED'});
+ assert.equal(unknown.calls.length,0);
+ const pair=fixture({laneCount:4,configVersion:'2.1.0',taxModel:{kind:'pair',pair:addr(55),buyBps:300n,sellBps:300n},quotePipeline});
+ const quote=observe(pair.quote());await drain(pair,quote);assert.ifError(quote.error);
+ assert.equal(pair.calls.length,3);assert.equal(quote.value.out,30004n);
+});
 
 function observe(promise){
  const state={settled:false};
