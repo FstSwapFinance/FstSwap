@@ -1,59 +1,44 @@
 {
   "schema": 2,
   "previousRelease": {
-    "release": "50",
-    "sourceCommit": "47ccfb1ed65091a649ceff450baf9a0d321384a8",
-    "sourceManifestSHA256": "e9eed2dbbebade4249d6277af74bae07d24dce43dcc427205663545584d1dc10",
+    "release": "51",
+    "sourceCommit": "ca0b065329ff7326c711284e5db9f127dd818352",
+    "sourceManifestSHA256": "1a533e0e6563cd1fce7631de278d827ded44e5cf1508a6f7f5f1f8492db9c6fa",
     "files": [
       {
-        "path": "src/fst-runtime-app-26A4CJHY.mjs",
-        "sha256": "edb33890c82e20e85a27d05510840c0ecd3cdf8bac8b5f26610e7bee83a53c51",
+        "path": "src/fst-runtime-app-SHIXGBN7.mjs",
+        "sha256": "5d61553c9199b06e5141cd9c7bdce476acd7f9a0da76f4371b68ec9642c96545",
         "bytes": 2388
       },
       {
-        "path": "src/fst-runtime-boot-YLCXWZ6J.mjs",
-        "sha256": "a77d25d39dc3a3c17b37189154d6ec5bf1d133aea5f8b15090b4ec45bcd43d15",
+        "path": "src/fst-runtime-boot-MKWCCQ4Y.mjs",
+        "sha256": "001b29aa3483606f92ada6dfe387d55ced71d25f3cac5281ee6086a122a4a163",
         "bytes": 987
       },
       {
-        "path": "src/fst-runtime-chunk-2CUUJZM4.mjs",
-        "sha256": "34486e11dbfeeb23e7190868de90a71d3c040aeb4d7ea61ae9ba2d8d9861bf6b",
-        "bytes": 1772
-      },
-      {
-        "path": "src/fst-runtime-chunk-53AND2NI.mjs",
-        "sha256": "4f4316ca15c7fad2ab824c324e41d62a2b89474424840a24054bc1ee8eb4b5a4",
-        "bytes": 79514
-      },
-      {
-        "path": "src/fst-runtime-chunk-6HQJHWV4.mjs",
-        "sha256": "9f7a01cade2f5fb8887d0eb1715749ec0d4c70c42b455577b949d81eb667fa92",
-        "bytes": 368
-      },
-      {
-        "path": "src/fst-runtime-chunk-7V4WEEP4.mjs",
-        "sha256": "db9a46b7d2ace6f18078e6e2cc567440578186c97b2642dfc53666569eb606dd",
-        "bytes": 30486
-      },
-      {
-        "path": "src/fst-runtime-chunk-BPCWPOWV.mjs",
-        "sha256": "bd3bb3d23c10bbe194f51d08df2dc745e6d40b6bb745b0f1cb2ffb6b6e3837fd",
-        "bytes": 20558
-      },
-      {
-        "path": "src/fst-runtime-chunk-IKLPOYVM.mjs",
-        "sha256": "b81fe0987135fcfcd786bc90e130a33eb42d0c2b5e9e0b0752911d0b5b84dbd2",
-        "bytes": 4184
-      },
-      {
-        "path": "src/fst-runtime-chunk-K7NXNS2G.mjs",
-        "sha256": "fd863de65ab5a48ec1b2237f1c810f483a6c78967e7f3e49424e807cc9be64c2",
+        "path": "src/fst-runtime-chunk-4EKI6X6S.mjs",
+        "sha256": "d31a4df987dd08055c08c2b96579df631df89bb06e2b0ff55ce60c64e0f1a1af",
         "bytes": 175
       },
       {
-        "path": "src/fst-runtime-chunk-NB5FRNHD.mjs",
-        "sha256": "fa459bb13761383d40887daed1af65574668f0786c94e3c314562737dc861ce8",
-        "bytes": 83392
+        "path": "src/fst-runtime-chunk-BRNL46H2.mjs",
+        "sha256": "a4293b9f9c5f3be036cf2173b03a00d6506c51639ae174fc18580094fa645611",
+        "bytes": 368
+      },
+      {
+        "path": "src/fst-runtime-chunk-C42SNE5S.mjs",
+        "sha256": "66edb05cd64ea5e0b7e9dfd3fc3e07d703b6e76d7e4d708ea836ca9a41a06ce9",
+        "bytes": 225681
+      },
+      {
+        "path": "src/fst-runtime-chunk-CYNJKFEG.mjs",
+        "sha256": "e19917fc81abd7dcc5ddc427b73791b817c3a24842711961c0ed0d30f4e848ab",
+        "bytes": 20558
+      },
+      {
+        "path": "src/fst-runtime-chunk-LUB46JJC.mjs",
+        "sha256": "172acc805ce46378e6c67236e133465cde08778b2987f806bf46935cacd34379",
+        "bytes": 1772
       },
       {
         "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
@@ -61,9 +46,24 @@
         "bytes": 1203
       },
       {
-        "path": "src/fst-runtime-chunk-RCUWY2GN.mjs",
-        "sha256": "4361dce70c6c3779219942936051885327d42a4c8a4f91359de1ccee8cf9b01e",
-        "bytes": 225681
+        "path": "src/fst-runtime-chunk-T4Z564JW.mjs",
+        "sha256": "319cdb70994c22c8dca3e121898a426d49a44f0c02200c480d3a578a1b0b7e96",
+        "bytes": 6036
+      },
+      {
+        "path": "src/fst-runtime-chunk-W4MLU7ST.mjs",
+        "sha256": "cf870194b9b8db20737961c1d0c0fbd9c714545caef3705ea2cff6d7e73dd260",
+        "bytes": 86158
+      },
+      {
+        "path": "src/fst-runtime-chunk-Y4OEBOJE.mjs",
+        "sha256": "aaa40a859ff1a8934b971f744cc1b4c314d203bcb4768ad50df77fffff8ccaa9",
+        "bytes": 30676
+      },
+      {
+        "path": "src/fst-runtime-chunk-ZUL4SC3U.mjs",
+        "sha256": "ccdac14d13da44b71a51bbf494bcaad68dd8d511fb47c2fea68846543b0bf80f",
+        "bytes": 94141
       },
       {
         "path": "assets/vendor/fst-ethers-AC8C3F0501B5B74B.js",
@@ -81,13 +81,100 @@
         "bytes": 15342
       },
       {
-        "path": "src/fst-style-ui-364A0CC26AEEF259.css",
-        "sha256": "364a0cc26aeef25944245fe64fb2892d18232daa8caa7201bdb8d1524e759dea",
-        "bytes": 10257
+        "path": "src/fst-style-ui-690FD771A639484B.css",
+        "sha256": "690fd771a639484b84b0f16852a4c5e9edfad71725e6fd7d8a6786f2b4b1f0ed",
+        "bytes": 15084
       }
     ]
   },
   "retainedReleases": [
+    {
+      "release": "50",
+      "sourceCommit": "47ccfb1ed65091a649ceff450baf9a0d321384a8",
+      "sourceManifestSHA256": "e9eed2dbbebade4249d6277af74bae07d24dce43dcc427205663545584d1dc10",
+      "files": [
+        {
+          "path": "src/fst-runtime-app-26A4CJHY.mjs",
+          "sha256": "edb33890c82e20e85a27d05510840c0ecd3cdf8bac8b5f26610e7bee83a53c51",
+          "bytes": 2388
+        },
+        {
+          "path": "src/fst-runtime-boot-YLCXWZ6J.mjs",
+          "sha256": "a77d25d39dc3a3c17b37189154d6ec5bf1d133aea5f8b15090b4ec45bcd43d15",
+          "bytes": 987
+        },
+        {
+          "path": "src/fst-runtime-chunk-2CUUJZM4.mjs",
+          "sha256": "34486e11dbfeeb23e7190868de90a71d3c040aeb4d7ea61ae9ba2d8d9861bf6b",
+          "bytes": 1772
+        },
+        {
+          "path": "src/fst-runtime-chunk-53AND2NI.mjs",
+          "sha256": "4f4316ca15c7fad2ab824c324e41d62a2b89474424840a24054bc1ee8eb4b5a4",
+          "bytes": 79514
+        },
+        {
+          "path": "src/fst-runtime-chunk-6HQJHWV4.mjs",
+          "sha256": "9f7a01cade2f5fb8887d0eb1715749ec0d4c70c42b455577b949d81eb667fa92",
+          "bytes": 368
+        },
+        {
+          "path": "src/fst-runtime-chunk-7V4WEEP4.mjs",
+          "sha256": "db9a46b7d2ace6f18078e6e2cc567440578186c97b2642dfc53666569eb606dd",
+          "bytes": 30486
+        },
+        {
+          "path": "src/fst-runtime-chunk-BPCWPOWV.mjs",
+          "sha256": "bd3bb3d23c10bbe194f51d08df2dc745e6d40b6bb745b0f1cb2ffb6b6e3837fd",
+          "bytes": 20558
+        },
+        {
+          "path": "src/fst-runtime-chunk-IKLPOYVM.mjs",
+          "sha256": "b81fe0987135fcfcd786bc90e130a33eb42d0c2b5e9e0b0752911d0b5b84dbd2",
+          "bytes": 4184
+        },
+        {
+          "path": "src/fst-runtime-chunk-K7NXNS2G.mjs",
+          "sha256": "fd863de65ab5a48ec1b2237f1c810f483a6c78967e7f3e49424e807cc9be64c2",
+          "bytes": 175
+        },
+        {
+          "path": "src/fst-runtime-chunk-NB5FRNHD.mjs",
+          "sha256": "fa459bb13761383d40887daed1af65574668f0786c94e3c314562737dc861ce8",
+          "bytes": 83392
+        },
+        {
+          "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
+          "sha256": "ed55af36405c9a04a2c2e001ca9ebae8d7903b63657f9c6c6eedbb4f9e46b5a5",
+          "bytes": 1203
+        },
+        {
+          "path": "src/fst-runtime-chunk-RCUWY2GN.mjs",
+          "sha256": "4361dce70c6c3779219942936051885327d42a4c8a4f91359de1ccee8cf9b01e",
+          "bytes": 225681
+        },
+        {
+          "path": "assets/vendor/fst-ethers-AC8C3F0501B5B74B.js",
+          "sha256": "ac8c3f0501b5b74bde475efc7380c249edfd91c803609ad95123e6a0f715ab53",
+          "bytes": 64895
+        },
+        {
+          "path": "src/fst-style-official-18C307AA4B0169AD.css",
+          "sha256": "18c307aa4b0169ad465ba6acc6d1e3945b281d21defb3dcb9167d3a1d6547b8d",
+          "bytes": 77440
+        },
+        {
+          "path": "src/fst-style-manage-290228132083803C.css",
+          "sha256": "290228132083803c2ca41f0a8998f5c612ec60bcf087367b4df6578817ec6df3",
+          "bytes": 15342
+        },
+        {
+          "path": "src/fst-style-ui-364A0CC26AEEF259.css",
+          "sha256": "364a0cc26aeef25944245fe64fb2892d18232daa8caa7201bdb8d1524e759dea",
+          "bytes": 10257
+        }
+      ]
+    },
     {
       "release": "49",
       "sourceCommit": "6ff1c56f6cb9e0b7afce9b19bc0d7cb973e72209",

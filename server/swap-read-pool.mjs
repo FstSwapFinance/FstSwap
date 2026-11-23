@@ -1,4 +1,5 @@
 import {measurePhase,countTiming} from './swap-timing.mjs';
+import {BNCB,BNCB_BEACON,BNCB_IMPLEMENTATION} from '../src/swap-transfer-tax.mjs';
 // Server-only read transport. Endpoint URLs remain in this closure and never enter diagnostics.
 const METHODS=new Set(['eth_chainId','eth_getBlockByNumber','eth_call','eth_getBalance']);
 const TERMINAL=new Set(['INVALID_INPUT','RPC_FORBIDDEN','NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','TAX_UNVERIFIED','PRICE_IMPACT_TOO_HIGH','UNSUPPORTED_VERSION','QUOTE_EXPIRED','SERVICE_BUSY']);
@@ -8,11 +9,11 @@ const SIMULATION_TIMEOUT=1500,SIMULATION_RETRY=10000;
 let globalHedges=0;
 const INTERNAL_ERROR=Symbol('read-pool-error'),PROBE_READ=Symbol('fixed-background-probe'),CHAIN_GUARD_FAILURE=Symbol('physical-chain-guard-failure');
 const PROBE_TOKEN='0x55d398326f99059ff775485246999027b3197955',PROBE_DATA='0x313ce567',MEASUREMENT_TTL=300000;
-// The tax model verifies this token's runtime bytecode at the quote block.
-const FSTSI_TAX_TOKEN='0x8a25a5929a18c132eaf47a2b497c86ad00ea5b9e';
+// Only fixed transfer-model runtimes may be read at the quote block.
+const TAX_CODE_ADDRESSES=new Set(['0x8a25a5929a18c132eaf47a2b497c86ad00ea5b9e',BNCB,BNCB_BEACON,BNCB_IMPLEMENTATION]);
 function pinnedTaxCodeCall(payload){
  return payload.method==='eth_getCode'&&Array.isArray(payload.params)&&payload.params.length===2
-  &&typeof payload.params[0]==='string'&&payload.params[0].toLowerCase()===FSTSI_TAX_TOKEN
+  &&typeof payload.params[0]==='string'&&TAX_CODE_ADDRESSES.has(payload.params[0].toLowerCase())
   &&typeof payload.params[1]==='string'&&/^0x(?:0|[1-9a-f][0-9a-f]*)$/i.test(payload.params[1]);
 }
 const fail=(code,extra)=>Object.assign(new Error(code),{code,[INTERNAL_ERROR]:true},extra);

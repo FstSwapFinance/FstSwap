@@ -37,11 +37,11 @@ test('route preload manifests contain only the current closure and preserve the 
  assert.equal(m.files.filter(f=>f.inputs.some(i=>i.includes('swap-service-client.mjs'))).length,1);
  const html=(await read('index.html')).toString();assert.equal((html.match(/rel="modulepreload" href=/g)||[]).length,0,'static full-route preload tags must not compete with the selected route');assert.match(html,/data-fst-runtime-preload/);assert.match(html,/hashchange/);assert.ok(html.indexOf('fst-runtime-preloads:start')<html.indexOf('<link rel="stylesheet"'));
 });
-test('compatibility retains actual Git releases50,49,48,47,46 with source-manifest and historical blob proof',async()=>{
+test('compatibility retains Git releases 51 through 46 with source-manifest and historical blob proof',async()=>{
  const run=promisify(execFile),gitBlob=async(commit,path)=>(await run('git',['show',commit+':'+path],{cwd:fileURLToPath(root),encoding:'buffer',maxBuffer:4*1024*1024})).stdout;
  // Independent oracle: fixed shipped commits, not the generated current
  // compatibility metadata or a copy of its declared file hashes.
- const shipped=[['50','47ccfb1ed65091a649ceff450baf9a0d321384a8'],['49','6ff1c56f6cb9e0b7afce9b19bc0d7cb973e72209'],['48','d3507a30243ff243cd91dafbc30ada2f0fb02b6f'],['47','bf7594819c31ddb39d7c491bc2b315eef3efd174'],['46','43e2a07b5999e26c8e05693643a4d19dd3cf79ff']];
+ const shipped=[['51','ca0b065329ff7326c711284e5db9f127dd818352'],['50','47ccfb1ed65091a649ceff450baf9a0d321384a8'],['49','6ff1c56f6cb9e0b7afce9b19bc0d7cb973e72209'],['48','d3507a30243ff243cd91dafbc30ada2f0fb02b6f'],['47','bf7594819c31ddb39d7c491bc2b315eef3efd174'],['46','43e2a07b5999e26c8e05693643a4d19dd3cf79ff']];
  const oracle=[];
  for(const [release,sourceCommit]of shipped){
   const bytes=await gitBlob(sourceCommit,'src/fst-runtime-manifest.json'),historical=JSON.parse(bytes);

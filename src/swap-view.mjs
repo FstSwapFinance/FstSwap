@@ -856,7 +856,7 @@ export async function mountSwapView(root) {
     if(remote){q={...remote.quote,serviceMeta:{...remote},serviceExpiresAt:remote.expiresAt};delete q.serviceMeta.quote;}
     else{
       const config=await quoteContext.config();
-      if(!['2.0.0','2.1.0'].includes(config.version))throw missing();
+      if(!['2.0.0','2.1.0','2.2.0'].includes(config.version))throw missing();
       q=await quoteFstSwap((payload)=>transactionRead(payload,{signal}),{...input,config});
     }
     if(q.amountIn!==amount)throw Object.assign(Error("Native quote amount changed"),{code:"UNSAFE_QUOTE"});
@@ -960,14 +960,14 @@ export async function mountSwapView(root) {
       const config = await consume(quoteContext.config());
       assertCurrent();
       state.config = config;
-      if(!['2.0.0','2.1.0'].includes(config.version)){
+      if(!['2.0.0','2.1.0','2.2.0'].includes(config.version)){
         poolPolicy=await readPoolPolicy(localRead,{tokenIn:ti.address,tokenOut:to.address,config,v3Mode:config.version==='1.11'?'legacy':'all'});
         assertCurrent();
       }
       const feeBps = feeBpsNow();
       const policy = swapFeePolicy(ti.address, to.address, state.config?.defaultFeeToken);
       const feeAsset = Object.values(TOKENS).find(t => (t.address || ZERO).toLowerCase() === policy.token.toLowerCase()) || TOKENS.usdt;
-      if (["2.0.0","2.1.0"].includes(state.config?.version)) {
+      if (["2.0.0","2.1.0","2.2.0"].includes(state.config?.version)) {
         q = await quoteFstSwap(localRead, { tokenIn: ti.address, tokenOut: to.address, amountIn: amount, config: state.config, slippageBps: settings.slippageBps, singleHop: settings.singleHop });
         assertCurrent();
         q.feeAsset = resolveFeeAsset(q.feeToken,TOKENS);
@@ -1084,7 +1084,7 @@ export async function mountSwapView(root) {
     if(!identity||!Number.isFinite(identity.expiresAt)||identity.expiresAt<=quoteNow(q)+1200||!main.isConnected||document.hidden||navigator.onLine===false||state.transactionBusy||activeBalanceReads||quoteFlow.running?.()||approvals.pending(approvalIdentity())||!['fstswap','v10'].includes(q.kind))return false;
     if(inT()?.key!=='bnb'&&state.allowance==null)return false;
     const kind=needsApproval()?'approve':'swap',account=wallet.account,minimum=minOut(q),deadline=Math.floor(quoteNow(q)/1000)+settings.deadlineMinutes*60;
-    if(kind==='swap'&&(q.kind!=='fstswap'||!['2.0.0','2.1.0'].includes(q.serviceMeta?.config?.version)))return false;
+    if(kind==='swap'&&(q.kind!=='fstswap'||!['2.0.0','2.1.0','2.2.0'].includes(q.serviceMeta?.config?.version)))return false;
     let transaction;try{checkServiceQuote(q);transaction=Object.freeze(kind==='approve'?swapApproveRequest(ethers.Interface,{account,token:inT().address,spender:spender()}):swapTransaction(q,deadline,account));}catch{return false;}
     const started=submissionWarmup.start(identity,async({signal})=>{
       const startedAt=quoteNow(q);
