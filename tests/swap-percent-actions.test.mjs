@@ -50,6 +50,7 @@ async function fixture(t,{input='usdt',balance='123456789123456789123',connected
   const popup=options=>popups.push(options),cancelSubmissionWarm=()=>{},renderBottom=()=>{},renderTrade=()=>{},refreshPairPrice=async()=>{};
   const scheduleQuote=delay=>scheduled.push(delay);
   const limitAmountDecimals=eval('('+amountFunctions.limitAmountDecimals+')');
+  const formatPaymentInput=eval('('+amountFunctions.formatPaymentInput+')');
   const formatAmountInput=eval('('+amountFunctions.formatAmountInput+')');
   const balanceFraction=eval('('+amountFunctions.balanceFraction+')');
   const quoteFieldState=eval('('+displayFunctions.quoteFieldState+')'),balanceFieldState=eval('('+displayFunctions.balanceFieldState+')');
@@ -72,7 +73,7 @@ async function fixture(t,{input='usdt',balance='123456789123456789123',connected
    capture:percent=>oldAction=main.querySelector('#swap-currency-input [data-percent="'+percent+'"]'),
    invokeOld:()=>oldAction.click(),
   };
- },{template:TPL,input,balance,connected,error,panelCode,panelsCode,handlerCode,applyCode,cancelCode,nativeHandlerCode,nativeSource,gasFailure,estimateFailure,deferEstimate,amountFunctions:Object.fromEntries(['formatAmountInput','limitAmountDecimals','balanceFraction'].map(key=>[key,amount[key].toString()])),displayFunctions:{quoteFieldState:quoteFieldState.toString(),balanceFieldState:balanceFieldState.toString()},presentedCode});
+ },{template:TPL,input,balance,connected,error,panelCode,panelsCode,handlerCode,applyCode,cancelCode,nativeHandlerCode,nativeSource,gasFailure,estimateFailure,deferEstimate,amountFunctions:Object.fromEntries(['formatAmountInput','formatPaymentInput','limitAmountDecimals','balanceFraction'].map(key=>[key,amount[key].toString()])),displayFunctions:{quoteFieldState:quoteFieldState.toString(),balanceFieldState:balanceFieldState.toString()},presentedCode});
  t.after(()=>assert.deepEqual(pageErrors,[],'native panel fixture has no JavaScript errors'));
  return page;
 }
@@ -103,6 +104,24 @@ test('a six-decimal token uses its own precision without losing Max remainder',a
   const page=await fixture(t,{input:'fist',balance:'49208878'});await action(page,percent).click();const s=await snapshot(page);
   assert.equal(s.amount,full);assert.equal(s.display,display);assert.deepEqual(s.scheduled,[0]);assert.equal(s.walletCalls,0);
  }
+});
+test('a positive Max smaller than four displayed decimals never looks like a zero payment',async t=>{
+ const page=await fixture(t,{input:'fist',balance:'9'});
+ await action(page,100).click();
+ const input=page.locator('#swap-currency-input input');
+ assert.equal((await snapshot(page)).amount,'0.000009');
+ assert.equal(await input.inputValue(),'0.000009');
+ assert.equal(await input.getAttribute('title'),'0.000009');
+});
+test('a panel refresh keeps the cursor and selection within the payment amount',async t=>{
+ const page=await fixture(t);
+ await page.evaluate(()=>{
+  window.__swapPercent.setAmount('12.3456');window.__swapPercent.render();
+  const input=document.querySelector('#swap-currency-input input');
+  input.focus();input.setSelectionRange(1,4,'backward');
+  window.__swapPercent.render();
+ });
+ assert.deepEqual(await page.locator('#swap-currency-input input').evaluate(input=>[document.activeElement===input,input.selectionStart,input.selectionEnd,input.selectionDirection]),[true,1,4,'backward']);
 });
 test('BNB fractions reserve current route Gas and price headroom instead of fixed 0.01 BNB',async t=>{
  const expected=[[25,'0.003988743275'],[50,'0.00797748655'],[75,'0.011966229825'],[100,'0.0159549731']];

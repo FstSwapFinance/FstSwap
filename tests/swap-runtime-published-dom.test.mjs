@@ -178,3 +178,22 @@ test('published async boot quotes while all three stylesheets, UI template and e
  f.respond(0);await f.page.waitForFunction(()=>document.querySelector('#swap-page button.kePVKR')?.innerText==='1 FIST = 0.25 USDT');
  assert.equal(f.posts.length,1);await noWalletOrRaw(f);
 });
+
+test('switching trading direction requests the exact amount behind a tiny displayed quote',async t=>{
+ const f=await fixture(t);await f.waitQuotes(1);
+ f.releaseUI();f.releaseEthers();await hydrated(f);
+ f.respond(0);
+ const input=f.page.locator('#swap-currency-input input');
+ const output=f.page.locator('#swap-currency-output input');
+ await input.fill('2');await f.waitQuotes(2);
+ f.respond(1,{out:9n});
+ await f.page.waitForFunction(()=>document.querySelector('#swap-currency-output input')?.dataset.quoteState==='ready');
+ assert.equal(await output.inputValue(),'<0.0001');
+ await f.page.locator('#swap-page .hDVbXn').click();
+ await f.page.waitForFunction(({F,U})=>window.__runtimeReads.some(({body})=>{
+  const request=JSON.parse(body||'{}');
+  return request.tokenIn===F&&request.tokenOut===U&&request.amountIn==='9';
+ }),{F,U});
+ assert.equal(await input.inputValue(),'0.000009');
+ await noWalletOrRaw(f);
+});

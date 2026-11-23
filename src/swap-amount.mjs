@@ -4,6 +4,10 @@ export function limitAmountDecimals(value, places = 4) {
  const dot=text.indexOf('.');
  return dot<0?text:text.slice(0,dot+1+places);
 }
+export function formatPaymentInput(value) {
+ const shortened=limitAmountDecimals(value);
+ return /[1-9]/.test(value)&&!/[1-9]/.test(shortened)?value:shortened;
+}
 export function formatAmountInput(value, decimals) {
  const raw=BigInt(value).toString().padStart(decimals+1,'0');
  if(!decimals)return raw;

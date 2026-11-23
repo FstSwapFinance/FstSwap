@@ -24,7 +24,7 @@ test('verified swap receipt performs one fresh three-token read, then header sha
   balanceRequest:request,swapPublicRpc:()=>request,renderHeader(){},renderPanels(){},renderBottom(){},
   activeBalanceReads:0,submissionWarmup:{pending:()=>false},queueSubmissionWarm(){},page:{inKey:'usdt',outKey:'fist'},TOKENS:{usdt,fist,bnb},ORDER:['usdt','fist','bnb'],main:{isConnected:true},
   otherBalances:{pause(){},schedule(){}},refreshAllowance:async()=>{},
-  hash:'0x'+'33'.repeat(32),submittedAccount:account,expectedRequest:{},submittedTokens:{},min:1n,q:{amountIn:1n,feeToken:usdt.address,lpFee:0n},receiptReads:{read(){},dispose(){}},
+  hash:'0x'+'33'.repeat(32),submittedAccount:account,submittedProvider:provider,summary:'Fixture swap',popup(){},expectedRequest:{},submittedTokens:{},min:1n,q:{amountIn:1n,feeToken:usdt.address,lpFee:0n},receiptReads:{read(){},dispose(){}},
   swapV10Ready:()=>true,waitReceipt:()=>receipt.promise,readV10Receipt:()=>verified.promise,
  };
  vm.createContext(context);
@@ -34,7 +34,11 @@ test('verified swap receipt performs one fresh three-token read, then header sha
  let controller=view.match(/waitReceipt\(hash, submittedAccount, undefined, receiptReads\.read\)\.then\(async \(\) => \{[\s\S]*?\n      \}\)/)[0];
  // This test-only variant replays the original observed bug without editing the
  // production source, providing independent RED evidence for the receipt flow.
- if(process.env.FST_RECEIPT_REVIEW_VARIANT==='legacy-double-fresh')controller=controller.replace('await refreshBalances(); refreshNativeBalance();','refreshBalances(); refreshNativeBalance({fresh:true});');
+ if(process.env.FST_RECEIPT_REVIEW_VARIANT==='legacy-double-fresh'){
+  const sequential='await Promise.resolve().then(() => refreshBalances()).catch(() => {});\n        if (stillViewingAccount()) await Promise.resolve().then(() => refreshNativeBalance()).catch(() => {});';
+  assert.ok(controller.includes(sequential),'the RED variant must actually replace current sequential refreshes');
+  controller=controller.replace(sequential,'refreshBalances(); refreshNativeBalance({fresh:true});');
+ }
  const completion=vm.runInContext(controller,context);receipt.resolve();await flush();assert.equal(jobs.length,1,'receipt result verification must finish before any fresh balance work');
  verified.resolve();await flush();assert.equal(jobs.length,2);
  assert.deepEqual(jobs[1].tokens.map(token=>token.key),['usdt','fist','bnb'],'the one post-receipt physical batch must contain both page tokens and Gas balance');

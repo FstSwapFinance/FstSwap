@@ -105,7 +105,7 @@ test('swap shares the verified fresh page batch with header while add and remove
  const positions=[...pool.matchAll(/tx\.waitReceipt\(hash\)\.then\(async \(\) => \{[\s\S]*?\}\)(?=\s*\.catch)/g)].map(m=>m[0]);
  assert.ok(swap);assert.equal(positions.length,2);
  for(const[name,controller]of[['swap',swap],['add',positions[0]],['remove',positions[1]]])await t.test(name,async()=>{
-  const calls=[],context={Promise,hash:'0x'+'33'.repeat(32),submittedAccount:A,expectedRequest:{},submittedTokens:{},min:1n,q:{amountIn:1n,feeToken:A,lpFee:0n},receiptReads:{read(){}},pl:{},main:{isConnected:true},
+  const calls=[],provider={},context={Promise,hash:'0x'+'33'.repeat(32),submittedAccount:A,submittedProvider:provider,wallet:{account:A,provider},summary:'Fixture swap',popup(){},expectedRequest:{},submittedTokens:{},min:1n,q:{amountIn:1n,feeToken:A,lpFee:0n},receiptReads:{read(){}},pl:{},main:{isConnected:true},
    swapV10Ready:()=>true,readV10Receipt:async()=>calls.push('receipt-verified'),waitReceipt:()=>Promise.resolve(),tx:{waitReceipt:()=>Promise.resolve()},
    rememberPool:()=>{},loadPool:async()=>calls.push('pool-loaded'),loadAccount:async()=>calls.push('account-loaded'),load:async()=>calls.push('position-loaded'),refreshBalances:()=>calls.push('balances'),render(){},
    refreshNativeBalance:options=>calls.push({fresh:options?.fresh}),

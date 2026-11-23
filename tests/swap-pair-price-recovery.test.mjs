@@ -102,7 +102,8 @@ test('changing single-hop while a unit price is visible clears it and requests t
 });
 test('selected token metadata changes cancel the old unit price and reprice using the new precision',async()=>{
  const f=fixture();let changed;
- Object.assign(f.context,{onTokensChanged(fn){changed=fn;return()=>{};},selectedTokenIdentity:()=>JSON.stringify(f.pair),selectedTokenSignature:JSON.stringify(f.pair),render(){f.context.selectedTokenSignature=f.context.selectedTokenIdentity();},renderPanels(){},renderBottom(){},scheduleQuote(){}});
+ Object.assign(f.state,{balances:{},balanceErrors:{},balancePending:{}});
+ Object.assign(f.context,{page:{inKey:'usdt',outKey:'fist'},balanceRequests:new Map(),refreshBalances(){},onTokensChanged(fn){changed=fn;return()=>{};},selectedTokenIdentity:()=>JSON.stringify(f.pair),selectedTokenSignature:JSON.stringify(f.pair),render(){f.context.selectedTokenSignature=f.context.selectedTokenIdentity();},renderPanels(){},renderBottom(){},scheduleQuote(){}});
  vm.runInContext(slice('  const stopTokens=onTokensChanged(', '  const stopApprovals ='),f.context);await f.refresh();
  changed();await tick();assert.equal(f.calls.length,1,'unrelated metadata updates must not restart the selected unit price');
  f.pair[0]={...f.pair[0],decimals:6};changed();await tick();assert.equal(f.calls.length,2,'selected-token precision changes must own a new unit-price read');assert.equal(f.calls[1].input.amountIn,10n**6n);assert.equal(f.calls[1].options.fresh,true);assert.ok(f.state.preview);

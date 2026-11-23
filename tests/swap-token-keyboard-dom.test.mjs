@@ -6,7 +6,7 @@ const root=new URL('../',import.meta.url),origin='https://fst-keyboard.test';
 let browser;
 before(async()=>{browser=await chromium.launch({headless:true});});
 after(async()=>{await browser?.close();});
-async function fixture(t,{width,route,selector}){
+async function fixture(t,{width,route,selector,keyboardHeight=480}){
  const context=await browser.newContext({viewport:{width,height:932},locale:'en-US'}),page=await context.newPage(),errors=[];t.after(()=>context.close());page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>{localStorage.setItem('fstswap_wallet_choice','disconnected');localStorage.setItem('swap_language','en');});
  await page.route('**/*',async request=>{
@@ -15,7 +15,8 @@ async function fixture(t,{width,route,selector}){
   try{return request.fulfill({body:await readFile(new URL(path,root)),contentType:/\.(mjs|js)$/.test(path)?'application/javascript':path.endsWith('.css')?'text/css':path.endsWith('.json')?'application/json':path.endsWith('.svg')?'image/svg+xml':'text/html'});}catch{return request.fulfill({status:404,body:''});}
  });
  await page.goto(origin+'/'+route,{waitUntil:'networkidle'});await page.locator(selector).click();await page.locator('#token-search-input').focus();
- await page.setViewportSize({width,height:480});await page.waitForTimeout(100);
+ await page.setViewportSize({width,height:keyboardHeight});
+ await page.waitForFunction(()=>document.querySelector('.fst-token-dialog')?.classList.contains('fst-keyboard-open'));
  return{page,errors};
 }
 for(const width of[320,521])for(const scenario of[
@@ -41,4 +42,30 @@ for(const width of[320,521])for(const scenario of[
  await page.locator('.fst-keyboard-dismiss').click();await page.setViewportSize({width,height:932});await page.waitForTimeout(50);
  assert.equal(await page.locator('.fst-token-dialog').evaluate(el=>el.classList.contains('fst-keyboard-open')),false,'restored viewport must exit the compressed layout');
  await page.keyboard.press('Escape');assert.equal(await page.locator('reach-portal').count(),0);assert.deepEqual(errors,[]);
+});
+
+for(const entry of[
+ {route:'#/swap',selector:'#swap-currency-output .open-currency-select-button'},
+ {route:'#/add/v2/BNB/0xc9882def23bc42d53895b8361d0b1edc7570bc6a',selector:'#add-liquidity-input-tokenb .open-currency-select-button'},
+])test(`320px ${entry.route.split('/')[1]} picker reaches the last token above a short keyboard`,async t=>{
+ const width=320,height=300;
+ const {page,errors}=await fixture(t,{width,...entry,keyboardHeight:height});
+ const dialog=page.locator('.fst-token-dialog'),results=dialog.locator('.fst-token-results');
+ const sizing=await results.evaluate(el=>{
+  const box=el.getBoundingClientRect();
+  const rows=[...el.querySelectorAll('[role=button]')];
+  return {within:el.scrollWidth<=el.clientWidth,height:box.height,
+   visible:rows.filter(row=>row.getBoundingClientRect().bottom<=box.bottom).length};
+ });
+ assert.ok(sizing.within&&sizing.visible>=3,JSON.stringify(sizing));
+ const footer=dialog.getByRole('button',{name:'Manage Token Lists'});
+ const footerBox=await footer.boundingBox();
+ assert.ok(footerBox&&footerBox.y+footerBox.height<=height);
+ const last=results.locator('[role=button]').last();
+ await last.scrollIntoViewIfNeeded();
+ const symbol=await last.locator('.css-8mokm4').textContent();
+ await last.click();
+ await page.waitForFunction(({selector,symbol})=>document.querySelector(selector)?.textContent.includes(symbol),{selector:entry.selector,symbol});
+ assert.equal(await page.locator('reach-portal').count(),0);
+ assert.deepEqual(errors,[]);
 });

@@ -51,9 +51,11 @@ test('real authorization renderer resolves the approval template and returns to 
   const inT=()=>({key:'usdt',symbol:'USDT'}),inputError=()=>'',applyTokenLogo=()=>{},renderPoolLink=()=>{},openWalletModal=()=>{};
   globalThis.approvalsClicked=0;const approve=()=>approvalsClicked++,handleSwapClick=()=>{};
   let bottom=document.createElement('div');document.querySelector('#root').append(bottom);
-  eval(source+'\nrenderBottom();globalThis.sufficient=()=>{state.allowance=100n;renderBottom();};');
+  eval(source+'\nrenderBottom();globalThis.sufficient=()=>{state.allowance=100n;renderBottom();};globalThis.busy=value=>{state.transactionBusy=value;renderBottom();};');
  },bottom);
  assert.equal(await page.locator('#swap-button').isDisabled(),true);const approve=page.locator('#root button:not(#swap-button)');
  assert.equal(await approve.count(),1);assert.equal(await approve.isEnabled(),true);await approve.click();assert.equal(await page.evaluate(()=>approvalsClicked),1);
+ await page.evaluate(()=>busy(true));assert.equal(await approve.isDisabled(),true);assert.equal(await page.locator('#swap-button').getAttribute('aria-busy'),'true');
+ await page.evaluate(()=>busy(false));assert.equal(await approve.isEnabled(),true);
  await page.evaluate(()=>sufficient());assert.equal(await page.locator('#swap-button').isEnabled(),true);assert.equal(await page.locator('#root button:not(#swap-button)').count(),0);assert.deepEqual(errors,[]);
 });

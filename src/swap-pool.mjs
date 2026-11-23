@@ -276,6 +276,7 @@ export async function mountPoolPage(root, route) {
 async function mountPoolList(root, request) {
   const wallet = useWallet();
   const main = tpl("pool");
+  main.classList.add("fst-liquidity-page");
   mountFrame(root, "pool", main);
   const reads = chainReads(request);
   const holder = main.querySelector(".bWHOHv");
@@ -328,6 +329,7 @@ async function mountPoolList(root, request) {
 async function mountFind(root, request) {
   const wallet = useWallet();
   const main = tpl("pool_find");
+  main.classList.add("fst-liquidity-page");
   mountFrame(root, "pool", main);
   const reads = chainReads(request);
   const sel = { a: "bnb", b: null };
@@ -383,6 +385,7 @@ async function mountAdd(root, request, parts) {
     field: "a", typed: "", pr: null, pool: null, poolLoading: true, poolError: false, balances: {}, allowance: {}, approving: {},
   };
   const main = tpl("add");
+  main.classList.add("fst-liquidity-page");
   mountFrame(root, "pool", main);
   const settings = bindSettings(main);
   const $ = (s) => main.querySelector(s);
@@ -640,6 +643,7 @@ async function mountRemove(root, request, parts) {
   const tx = txHelpers(wallet, request);
   const st = { a: parts[2] ? keyFromId(parts[2]) : "usdt", b: parts[3] ? keyFromId(parts[3]) : "fist", pct: 0, pr: null, lp: 0n, allowance: null, approving: false };
   const main = tpl("remove");
+  main.classList.add("fst-liquidity-page");
   mountFrame(root, "pool", main);
   bindSettings(main);
   const $ = (s) => main.querySelector(s);
@@ -657,6 +661,7 @@ async function mountRemove(root, request, parts) {
   const pctText = $(".css-1dy6e9l");
   const amountRows = main.querySelectorAll(".exvWjX .dcfoDv > .jmNfaf");
   const rateBox = main.querySelector('div[style="padding: 10px 20px;"]');
+  rateBox.classList.add("fst-liquidity-rate");
 
   // 代币符号 / 图标
   [[st.a, "#remove-liquidity-tokena-symbol"], [st.b, "#remove-liquidity-tokenb-symbol"]].forEach(([k, sel]) => {
