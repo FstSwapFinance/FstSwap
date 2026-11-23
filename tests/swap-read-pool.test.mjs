@@ -49,7 +49,7 @@ test('wrong-chain nodes never execute an operation and cannot become healthy thr
 
 test('terminal quote and nonretryable pool errors retain identity without provider failover or penalty',async t=>{
  const f=fixture(t,call=>call.payload.method==='eth_chainId'?'0x38':'0x1');
- for(const code of ['NO_ROUTE','UNSAFE_QUOTE','POOL_LIQUIDITY','POOL_POLICY']){
+ for(const code of ['NO_ROUTE','UNSAFE_QUOTE','TAX_UNVERIFIED','POOL_LIQUIDITY','POOL_POLICY']){
   const expected=Object.assign(error(code),{reason:'price',retryable:false});let attempts=0;
   await assert.rejects(f.pool.run(async r=>{attempts++;await r(read);throw expected;},signal().signal),e=>e===expected);
   assert.equal(attempts,1);
@@ -147,6 +147,24 @@ test('transport only permits the read allowlist and retains the response size an
  await assert.rejects(f.pool.run(r=>r({method:'eth_sendRawTransaction',params:['0x']}),signal().signal),{code:'RPC_FORBIDDEN'});
  assert.equal(f.calls.length,1);
  await assert.rejects(f.pool.run(r=>r(read),signal().signal),{code:'UPSTREAM_LIMIT'});
+});
+
+test('the tax runtime read allows only the fixed FSTSI contract at an explicit block outside batches',async t=>{
+ const token='0x8a25a5929a18c132eaf47a2b497c86ad00ea5b9e';
+ const block='0x8094e65';
+ const codeRead={method:'eth_getCode',params:[token,block]};
+ const f=fixture(t,call=>call.payload.method==='eth_chainId'?'0x38':'0x6080',{endpoints:urls.slice(0,1)});
+ const run=operation=>f.pool.run(operation,signal().signal,{operation:'quote'});
+ assert.equal(await run(request=>request(codeRead)),'0x6080');
+ assert.deepEqual(f.calls.map(({payload})=>payload.method),['eth_chainId','eth_getCode']);
+ assert.deepEqual(f.calls.at(-1).payload.params,codeRead.params);
+
+ for(const params of [[read.params[0].to,block],[token,'latest'],[token,135000000],[token],[token,block,'extra']]){
+  await assert.rejects(run(request=>request({method:'eth_getCode',params})),{code:'RPC_FORBIDDEN'});
+ }
+ await assert.rejects(run(request=>request.batch([codeRead])),{code:'RPC_FORBIDDEN'});
+ assert.equal(f.calls.length,2,'rejected bytecode requests must never reach the provider');
+ assert.equal(f.pool.health().providers[0].failures,0);
 });
 
 test('transport cannot impersonate a safe internal error to leak its URL',async t=>{

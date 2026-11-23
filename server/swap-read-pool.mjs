@@ -1,13 +1,20 @@
 import {measurePhase,countTiming} from './swap-timing.mjs';
 // Server-only read transport. Endpoint URLs remain in this closure and never enter diagnostics.
 const METHODS=new Set(['eth_chainId','eth_getBlockByNumber','eth_call','eth_getBalance']);
-const TERMINAL=new Set(['INVALID_INPUT','RPC_FORBIDDEN','NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','PRICE_IMPACT_TOO_HIGH','UNSUPPORTED_VERSION','QUOTE_EXPIRED','SERVICE_BUSY']);
+const TERMINAL=new Set(['INVALID_INPUT','RPC_FORBIDDEN','NO_ROUTE','NO_FEE_ROUTE','UNSAFE_QUOTE','TAX_UNVERIFIED','PRICE_IMPACT_TOO_HIGH','UNSUPPORTED_VERSION','QUOTE_EXPIRED','SERVICE_BUSY']);
 const KNOWN=new Set([...TERMINAL,'STALE_BLOCK','BALANCE_UNAVAILABLE','WRONG_CHAIN','UPSTREAM_UNAVAILABLE','UPSTREAM_TIMEOUT','UPSTREAM_LIMIT','UPSTREAM_RATE_LIMIT','REQUEST_ABORTED','REQUEST_TIMEOUT']);
 const LIMIT=2*1024*1024,MAX_ACTIVE=48,MAX_ATTEMPTS=3;
 const SIMULATION_TIMEOUT=1500,SIMULATION_RETRY=10000;
 let globalHedges=0;
 const INTERNAL_ERROR=Symbol('read-pool-error'),PROBE_READ=Symbol('fixed-background-probe'),CHAIN_GUARD_FAILURE=Symbol('physical-chain-guard-failure');
 const PROBE_TOKEN='0x55d398326f99059ff775485246999027b3197955',PROBE_DATA='0x313ce567',MEASUREMENT_TTL=300000;
+// The tax model verifies this token's runtime bytecode at the quote block.
+const FSTSI_TAX_TOKEN='0x8a25a5929a18c132eaf47a2b497c86ad00ea5b9e';
+function pinnedTaxCodeCall(payload){
+ return payload.method==='eth_getCode'&&Array.isArray(payload.params)&&payload.params.length===2
+  &&typeof payload.params[0]==='string'&&payload.params[0].toLowerCase()===FSTSI_TAX_TOKEN
+  &&typeof payload.params[1]==='string'&&/^0x(?:0|[1-9a-f][0-9a-f]*)$/i.test(payload.params[1]);
+}
 const fail=(code,extra)=>Object.assign(new Error(code),{code,[INTERNAL_ERROR]:true},extra);
 const terminal=e=>TERMINAL.has(e?.code)||(typeof e?.code==='string'&&e.code.startsWith('POOL')&&e.retryable!==true);
 const cancelled=signal=>fail(signal?.reason?.name==='TimeoutError'||signal?.reason?.code==='REQUEST_TIMEOUT'?'REQUEST_TIMEOUT':'REQUEST_ABORTED');
@@ -82,7 +89,7 @@ export function createReadPool(endpoints,{fetchImpl=fetch,timeoutMs=4500,clock=D
  function call(node,payload,signal,isProbe=false){return measurePhase('rpc',()=>physicalCall(node,payload,signal,isProbe));}
  async function physicalCall(node,payload,signal,isProbe=false,simulation=false){
   if(signal.aborted)throw cancelled(signal);
-  if(!payload||!METHODS.has(payload.method))throw fail('RPC_FORBIDDEN');
+  if(!payload||(!METHODS.has(payload.method)&&!pinnedTaxCodeCall(payload)))throw fail('RPC_FORBIDDEN');
   if(active>=MAX_ACTIVE)throw fail('SERVICE_BUSY');
   const id=++nextId;
   let body;
