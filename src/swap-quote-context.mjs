@@ -14,7 +14,7 @@ export function createQuoteContext(request,{readConfig=readSwapConfig,readPolicy
  }
  async function get(tokenIn,tokenOut) {
   const current=await config();
-  if(['2.0.0','2.1.0'].includes(current.version))return{config:current,poolPolicy:null};
+  if(['2.0.0','2.1.0','2.2.0'].includes(current.version))return{config:current,poolPolicy:null};
   const key=JSON.stringify([String(tokenIn).toLowerCase(),String(tokenOut).toLowerCase(),current],(_,v)=>typeof v==='bigint'?v.toString():v);
   let entry=snapshots.get(key);
   if(entry?.value){

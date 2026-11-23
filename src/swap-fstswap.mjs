@@ -1,20 +1,38 @@
 // FstSwap staged versions: exact-input only, one fee on the real main route.
 import {SWAP_ADAPTERS,SWAP_ABI,swapActiveRouter} from './swap-aggregator.mjs?v=mainnet-20261113-50';
-import {readTransferTaxes,transferTaxBps,transferNet,transferModelsFromWire} from './swap-transfer-tax.mjs';
+import {BNCB,readTransferTaxes,transferTaxBps,transferNet,transferModelsFromWire} from './swap-transfer-tax.mjs';
 import {readPoolPolicy,createPoolPolicy} from './swap-liquidity.mjs?v=mainnet-20261113-50';
 const ZERO='0x'+'00'.repeat(20),BPS=10000n;
 const lower=x=>String(x||ZERO).toLowerCase();
 export const FST_FEE_ASSETS=Object.freeze({BNB:ZERO,USDT:'0x55d398326f99059ff775485246999027b3197955',FIST:'0xc9882def23bc42d53895b8361d0b1edc7570bc6a',WBNB:'0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',ETH:'0x2170ed0880ac9a755fd29b2688956bd959f933f8',USDC:'0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d'});
 const fees=new Set(Object.values(FST_FEE_ASSETS));
 export function fstRequiresLinearV2(version,tokens,adapters=SWAP_ADAPTERS,adaptersOff=[]) {
- if(version!=='2.1.0')return false;
+ if(!['2.1.0','2.2.0'].includes(version))return false;
  const known=new Set([...fees,...Object.entries(adapters).filter(([key])=>!adaptersOff.includes(key)).map(([,a])=>lower(a.weth))]);
+ if(version==='2.2.0')known.add(BNCB);
  return tokens.some(token=>!known.has(lower(token)));
 }
 const stageTokens=stages=>stages.flatMap(s=>[s.tokenIn,s.tokenOut,...s.branches.flatMap(b=>b.kind===1?[b.v3Path?.slice(0,42),'0x'+b.v3Path?.slice(48)]:b.path)]);
+const bncbPeers=new Set([ZERO,FST_FEE_ASSETS.WBNB,FST_FEE_ASSETS.USDT]);
+const bncbPeer=(input,output)=>input===BNCB?output:output===BNCB?input:null;
+function bncbStageSupported(stage,adapters){
+ const branch=stage.branches[0],input=lower(stage.tokenIn),output=lower(stage.tokenOut);
+ if(stage.branches.length!==1||branch.kind!==1||branch.weightBps!==10000||!adapters.v3||lower(branch.adapter)!==lower(adapters.v3.adapter))return false;
+ if(!bncbPeers.has(bncbPeer(input,output))||!/^0x[0-9a-f]{86}$/i.test(branch.v3Path))return false;
+ const path=branch.v3Path.toLowerCase(),canonical=token=>token===ZERO?FST_FEE_ASSETS.WBNB:token;
+ return path.slice(0,42)===canonical(input)&&'0x'+path.slice(48)===canonical(output);
+}
+export function fstSupportsTopology(stages,config,adapters=SWAP_ADAPTERS){
+ const tokens=stageTokens(stages);
+ if(fstRequiresLinearV2(config.version,tokens,adapters,config.adaptersOff)&&stages.some(s=>s.branches.length!==1||s.branches[0].kind!==0))return false;
+ if(config.version!=='2.2.0'||!tokens.some(token=>lower(token)===BNCB))return true;
+ const edgeIndex=lower(stages[0]?.tokenIn)===BNCB?0:lower(stages.at(-1)?.tokenOut)===BNCB?stages.length-1:-1;
+ return edgeIndex>=0&&stages.every((stage,index)=>index===edgeIndex
+  ? bncbStageSupported(stage,adapters)
+  : !stageTokens([stage]).some(token=>lower(token)===BNCB));
+}
 function assertTopology(stages,config) {
- if(fstRequiresLinearV2(config.version,stageTokens(stages),SWAP_ADAPTERS,config.adaptersOff)&&stages.some(s=>s.branches.length!==1||s.branches[0].kind!==0))
-  throw Object.assign(Error('此代币路线仅支持连续的 V2 单池兑换'),{code:'UNSAFE_QUOTE'});
+ if(!fstSupportsTopology(stages,config))throw Object.assign(Error('此代币路线与合约执行规则不符'),{code:'UNSAFE_QUOTE'});
 }
 export const FST_ABI=[
  'function swapExactInput((address tokenIn,address tokenOut,uint256 amountIn,uint256 minOut,address recipient,uint256 deadline,address feeToken,uint256 configVersion) params,(address tokenIn,address tokenOut,uint256 minOut,(address adapter,uint8 kind,uint16 weightBps,address[] path,bytes v3Path)[] branches)[] stages) payable returns(uint256 received)',
@@ -37,7 +55,7 @@ const validHeader=b=>/^0x[0-9a-f]+$/i.test(b?.number||'')&&/^0x[0-9a-f]{64}$/i.t
 // Node identity plus the pinned header binds reuse across separate quote attempts.
 export async function readFstPoolPolicy(request,options){
  const {config,block,nodeId,clock=Date.now}=options;
- if(!['2.0.0','2.1.0'].includes(config?.version))return readPoolPolicy(request,options);
+ if(!['2.0.0','2.1.0','2.2.0'].includes(config?.version))return readPoolPolicy(request,options);
  if(!validHeader(block)||typeof nodeId!=='string')throw unsafePrepared();
  let policy;
  if(isWrap(options.tokenIn,options.tokenOut)){
@@ -74,7 +92,7 @@ function stagesFor(segment,from,to,slippage){
   branches:stage.legs.map(leg=>({adapter:leg.adapter,kind:leg.kind==='v3'?1:0,weightBps:leg.weightBps||10000,path:leg.kind==='v3'?[]:leg.path,v3Path:leg.kind==='v3'?leg.path:'0x'}))}));
 }
 export async function buildFstQuote({tokenIn,tokenOut,amountIn,config,slippageBps,findRoute}){
- if(!['2.0.0','2.1.0'].includes(config?.version)||amountIn<=0n||slippageBps<0||slippageBps>=10000)throw Error('FstSwap 报价配置无效');
+ if(!['2.0.0','2.1.0','2.2.0'].includes(config?.version)||amountIn<=0n||slippageBps<0||slippageBps>=10000)throw Error('FstSwap 报价配置无效');
  tokenIn=lower(tokenIn);tokenOut=lower(tokenOut);
  const bps=BigInt(config.platformFeeBps);if(bps<0n||bps>100n)throw Error('费率无效');
  const policy=fstFeePolicy(tokenIn,tokenOut,config.defaultFeeToken),segments=[];let fee=0n,stages=[],out;
@@ -122,6 +140,17 @@ export function fstRequest(Interface,{router,account,quote,deadline}){
 }
 
 const noRoute=()=>Object.assign(Error('没有符合流动性要求的完整兑换路线'),{code:'NO_ROUTE'});
+function bncbPoolEligible(pool,bncbTrade){
+ const peer=bncbPeer(lower(pool.token0),lower(pool.token1));
+ return peer===null||bncbTrade&&pool.kind==='v3'&&bncbPeers.has(peer);
+}
+function routePoolPolicy(whole,from,to,version,tradeTokenIn){
+ const bncbTrade=lower(from)===BNCB||lower(to)===BNCB;
+ const pools=version==='2.2.0'&&bncbTrade
+  ? new Map([...whole.pools].filter(([,pool])=>bncbPoolEligible(pool,true)))
+  : whole.pools;
+ return createPoolPolicy(pools,whole.prices,from,to,{tradeTokenIn});
+}
 function pipelineQuoteCache(result,routes,splits,amount,quoteKey){
  if(!result||result.routeOutputs?.length!==routes.length||result.splitOutputs?.length!==splits.length)return null;
  const entries=new Map();
@@ -150,9 +179,11 @@ function pipelineQuoteCache(result,routes,splits,amount,quoteKey){
 // Quote only pools admitted by the independent-price/depth policy. Every call uses its snapshot block.
 export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],singleHop=false,configVersion='2.0.0',linearV2Only=false,adaptersOff=[],transferTaxes,quotePipeline,count=()=>{}}){
  const input=lower(from),output=lower(to),taken=new Set(used.flatMap(l=>l.poolIds||[]).map(lower));
+ const bncbTrade=configVersion==='2.2.0'&&(input===BNCB||output===BNCB);
  const edges=[];
  for(const pool of policy.pools.values()){
   if(taken.has(lower(pool.address)))continue;
+  if(configVersion==='2.2.0'&&!bncbPoolEligible(pool,bncbTrade))continue;
   const dex=Object.values(SWAP_ADAPTERS).find(d=>lower(d.adapter)===lower(pool.adapter));if(!dex||adaptersOff.includes(dex.key)||(linearV2Only&&pool.kind!=='v2'))continue;
   for(const [a,b] of [[pool.token0,pool.token1],[pool.token1,pool.token0]]){
    const tokenIn=input===ZERO&&lower(a)===lower(dex.weth)?ZERO:lower(a);
@@ -176,9 +207,9 @@ export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],sing
  }
  visit(input,[],new Set([input]));if(!routes.length)throw noRoute();
  const routeTokens=[...new Set(routes.flatMap(legs=>legs.flatMap(l=>[l.tokenIn,l.tokenOut])))];
- transferTaxes??=await readTransferTaxes(request,{tokens:routeTokens,blockNumber:policy.blockNumber,timestamp:policy.blockTimestamp??policy.timestamp});
+ transferTaxes??=await readTransferTaxes(request,{tokens:routeTokens,blockNumber:policy.blockNumber,timestamp:policy.blockTimestamp??policy.timestamp,version:configVersion});
  for(const token of routeTokens)if(!transferTaxes.has(lower(token)))throw Object.assign(Error('无法可靠核对代币转账税'),{code:'TAX_UNVERIFIED'});
- if(configVersion!=='2.1.0'&&[...transferTaxes.values()].some(model=>model.kind==='pair'))throw Object.assign(Error('此执行版本无法可靠核对收税币到账'),{code:'TAX_UNVERIFIED'});
+ if(!['2.1.0','2.2.0'].includes(configVersion)&&[...transferTaxes.values()].some(model=>model.kind==='pair'))throw Object.assign(Error('此执行版本无法可靠核对收税币到账'),{code:'TAX_UNVERIFIED'});
  const tax=(token,from,to)=>Number(transferTaxBps(transferTaxes.get(lower(token)),lower(from),lower(to)));
  const neutral=swapActiveRouter();
  const funding=(legs,depth,budget)=>depth===0?transferNet(budget,BigInt(tax(legs[depth].tokenIn,neutral,legs[depth].poolIds[0]))):budget;
@@ -208,7 +239,7 @@ export async function quoteFstRoutes(request,{from,to,amount,policy,used=[],sing
  // Parallel direct pools share the same stage; its final branch receives the exact remainder.
  // Their inputs are known before any route response, so include them in the
  // first layer rather than waiting for every dependent multi-hop layer.
- const direct=routes.filter(r=>r.length===1&&!linearV2Only&&!fstRequiresLinearV2(configVersion,[r[0].tokenIn,r[0].tokenOut,...(r[0].kind==='v3'?[]:r[0].path)],SWAP_ADAPTERS,adaptersOff)).map(r=>r[0]),splits=[];
+ const direct=routes.filter(r=>r.length===1&&!bncbTrade&&!linearV2Only&&!fstRequiresLinearV2(configVersion,[r[0].tokenIn,r[0].tokenOut,...(r[0].kind==='v3'?[]:r[0].path)],SWAP_ADAPTERS,adaptersOff)).map(r=>r[0]),splits=[];
  for(let i=0;i<direct.length;i++)for(let j=i+1;j<direct.length;j++)for(const weight of[2500,5000,7500]){
   const a=amount*BigInt(weight)/BPS,b=amount-a;if(a===0n||b===0n)continue;
   splits.push([{leg:direct[i],amount:a,weight},{leg:direct[j],amount:b,weight:10000-weight}]);
@@ -263,11 +294,11 @@ export async function quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,sli
  const wrap=isWrap(tokenIn,tokenOut);
  const whole=preparedPolicy?await usePreparedPolicy(request,preparedPolicy,{tokenIn,tokenOut,config,contextNodeId}):wrap?null:await readPoolPolicy(request,{tokenIn,tokenOut,config,extraTokens:[config.defaultFeeToken]});
  const taxTokens=wrap?[]:[...new Set([tokenIn,tokenOut,...whole.pools.values()].flatMap(value=>typeof value==='string'?[lower(value)]:[lower(value.token0),lower(value.token1)]))];
- const transferTaxes=wrap?new Map():await measure('tax',()=>readTransferTaxes(request,{tokens:taxTokens,blockNumber:whole.blockNumber,timestamp:whole.blockTimestamp??whole.timestamp}));
+ const transferTaxes=wrap?new Map():await measure('tax',()=>readTransferTaxes(request,{tokens:taxTokens,blockNumber:whole.blockNumber,timestamp:whole.blockTimestamp??whole.timestamp,version:config.version}));
  const findRoute=async(from,to,amount,used,routeOptions)=>{
 
   if(isWrap(from,to))return{from,to,amountIn:amount,minimum:amount,out:amount,impact:0,legs:[{kind:'wrap',out:amount,amountIn:amount}],assertFresh(){}};
-  const policy={...whole,...createPoolPolicy(whole.pools,whole.prices,from,to,{tradeTokenIn:tokenIn})};
+  const policy={...whole,...routePoolPolicy(whole,from,to,config.version,tokenIn)};
   const routes=await quoteFstRoutes(request,{from,to,amount,used,policy,singleHop,configVersion:config.version,adaptersOff:config.adaptersOff,transferTaxes,...routeOptions,quotePipeline,count});
   let rejection;
   const valid=routes.candidates.filter(c=>{
@@ -281,7 +312,7 @@ export async function quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,sli
  };
  const q=await buildFstQuote({tokenIn,tokenOut,amountIn,config,slippageBps,findRoute});
  whole?.assertValue(q.amountIn,q.minimum);whole?.assertFresh();q.assertFresh();q.poolCheckedAt=whole?.checkedAt??Date.now();
- q.quoteModel='net-transfer-v1';q.taxProfiles=[...transferTaxes].filter(([token,model])=>model.kind==='pair'&&q.stages.some(stage=>[lower(stage.tokenIn),lower(stage.tokenOut)].includes(token))).map(([token,model])=>({token,...model}));return q;
+ q.quoteModel='net-transfer-v1';q.taxProfiles=[...transferTaxes].filter(([token,model])=>model.kind!=='none'&&q.stages.some(stage=>[lower(stage.tokenIn),lower(stage.tokenOut)].includes(token))).map(([token,model])=>({token,...model}));return q;
 }
 // Keep the public DTO bounded and unambiguous. Pool objects, candidate routes and
 // closure-based checks stay server-side; executable stages are cross-checked by
@@ -298,11 +329,13 @@ export function fstServiceQuote(quote,{slippageBps,poolCheckedAt=quote.poolCheck
   stages:quote.stages.map(s=>({tokenIn:lower(s.tokenIn),tokenOut:lower(s.tokenOut),minOut:s.minOut,branches:s.branches.map(b=>({adapter:lower(b.adapter),kind:b.kind,weightBps:b.weightBps,path:b.path.map(lower),v3Path:b.v3Path.toLowerCase()}))})),segments};
 }
 export function validateFstQuote(quote,config,policy,{transferTaxes}={}){
- if(!['2.0.0','2.1.0'].includes(config.version)||BigInt(config.feeConfigVersion)!==BigInt(quote.configVersion))throw Error('收费配置已变化，请刷新报价');
+ if(!['2.0.0','2.1.0','2.2.0'].includes(config.version)||BigInt(config.feeConfigVersion)!==BigInt(quote.configVersion))throw Error('收费配置已变化，请刷新报价');
  if(transferTaxes){
-  const shape=entries=>JSON.stringify(entries.filter(([,m])=>m.kind==='pair').map(([token,m])=>[token,m.pair,String(m.buyBps),String(m.sellBps),m.codeHash]).sort());
+  const shape=entries=>JSON.stringify(entries.filter(([,m])=>m.kind!=='none').map(([token,m])=>[
+   token,m.kind,m.pair,String(m.buyBps),String(m.sellBps),m.codeHash,m.beaconCodeHash,m.implementationCodeHash,
+  ]).sort());
   const tokens=[...new Set([quote.tokenIn,quote.tokenOut,...quote.stages.flatMap(s=>[s.tokenIn,s.tokenOut])].map(lower))];
-  const expected=transferModelsFromWire(quote.taxProfiles||[],{tokens,blockNumber:quote.taxProfiles?.[0]?.blockNumber||policy.blockNumber});
+  const expected=transferModelsFromWire(quote.taxProfiles||[],{tokens,blockNumber:quote.taxProfiles?.[0]?.blockNumber||policy.blockNumber,version:config.version});
   if(shape([...expected])!==shape([...transferTaxes].filter(([token])=>tokens.includes(token))))throw Object.assign(Error('代币转账税已变化，请重新获取报价'),{code:'UNSAFE_QUOTE'});
  }
  const fee=fstFeePolicy(quote.tokenIn,quote.tokenOut,config.defaultFeeToken);
@@ -310,7 +343,7 @@ export function validateFstQuote(quote,config,policy,{transferTaxes}={}){
  assertTopology(quote.stages,config);
  if(isWrap(quote.tokenIn,quote.tokenOut)&&quote.stages.length===1&&quote.stages[0].branches[0].kind===2)return{assert(){},assertValue(){},assertFresh(){}};
  for(const s of quote.segments){
-  const part=createPoolPolicy(policy.pools,policy.prices,s.from,s.to,{tradeTokenIn:quote.tokenIn});part.assertRoute(s.legs);part.assertValue(s.amountIn,s.minimum);
+  const part=routePoolPolicy(policy,s.from,s.to,config.version,quote.tokenIn);part.assertRoute(s.legs);part.assertValue(s.amountIn,s.minimum);
  }
  policy.assertValue(quote.amountIn,quote.minimum);policy.assertFresh();
  return{assert(){},assertValue:(a,b)=>policy.assertValue(a,b),assertFresh:()=>policy.assertFresh()};
@@ -318,6 +351,6 @@ export function validateFstQuote(quote,config,policy,{transferTaxes}={}){
 export async function recheckFstQuote(request,quote,config){
  const policy=isWrap(quote.tokenIn,quote.tokenOut)?null:await readPoolPolicy(request,{tokenIn:quote.tokenIn,tokenOut:quote.tokenOut,config,extraTokens:[config.defaultFeeToken]});
  const tokens=[...new Set([quote.tokenIn,quote.tokenOut,...quote.stages.flatMap(s=>[s.tokenIn,s.tokenOut])].map(lower))];
- const transferTaxes=policy?await readTransferTaxes(request,{tokens,blockNumber:policy.blockNumber,timestamp:policy.blockTimestamp}):undefined;
+ const transferTaxes=policy?await readTransferTaxes(request,{tokens,blockNumber:policy.blockNumber,timestamp:policy.blockTimestamp,version:config.version}):undefined;
  return validateFstQuote(quote,config,policy,{transferTaxes});
 }

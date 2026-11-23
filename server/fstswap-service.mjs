@@ -40,7 +40,7 @@ function pinned(request,block){return p=>{
 };}
 export async function computeQuote(request,input,config,poolPolicy,{nodeId,quotePipeline}={}){
  const {tokenIn,tokenOut,slippageBps,singleHop}=input,amountIn=BigInt(input.amountIn),feeBps=config.platformFeeBps;
- if(['2.0.0','2.1.0'].includes(config.version)){
+ if(['2.0.0','2.1.0','2.2.0'].includes(config.version)){
   const q=await quoteFstSwap(request,{tokenIn,tokenOut,amountIn,config,slippageBps,singleHop,preparedPolicy:poolPolicy,contextNodeId:nodeId,quotePipeline,measure:measurePhase,count:countTiming});
   assertQuoteSafety({tokenIn,tokenOut,amountIn,amountOut:q.minimum,impact:q.impact,quotedAmountIn:q.amountIn,quotedAmountOut:q.out});
   poolPolicy.assertFresh();poolPolicy.assertValue(amountIn,q.minimum);
@@ -227,7 +227,7 @@ export function createEngine(pool,{balancePool=pool,clock=Date.now,monotonic=()=
    }
    entry.rawSnapshot=snapshot;
    const block=snapshot.block,read=pinned(snapshotReader(snapshot,request,{nodeId,signal}),block),config=await measurePhase('config',()=>readConfig(read,{block}));assertRunning(signal);
-   const staged=['2.0.0','2.1.0'].includes(config.version);
+   const staged=['2.0.0','2.1.0','2.2.0'].includes(config.version);
    const policy=await measurePhase('policy',()=>readPolicy(read,{tokenIn:input.tokenIn,tokenOut:input.tokenOut,config,v3Mode:staged?'all':'legacy',extraTokens:staged?[config.defaultFeeToken]:[],block,nodeId,clock,deferCanonical:true,skipIneligibleDepth:staged,measure:measurePhase}));assertRunning(signal);
    const originalFresh=policy.assertFresh;
    policy.checkedAt=Math.min(policy.checkedAt,snapshot.capturedAt);

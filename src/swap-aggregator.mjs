@@ -326,7 +326,7 @@ export async function readSwapConfig(request, { tokens = SWAP_TOKENS, adapters =
     defaultFeeToken: readEntry(4 + adapterList.length * 2, "defaultFeeToken")[0],
     feeConfigVersion: readEntry(5 + adapterList.length * 2, "feeConfigVersion")[0],
   } : {};
-  if (swapV10Ready() && contractVersion !== (["2.0.0","2.1.0"].includes(V10_CONFIG.version) ? V10_CONFIG.version : "1.11")) throw error("SWAP_CONFIG", "聚合路由收费版本不匹配");
+  if (swapV10Ready() && contractVersion !== (["2.0.0","2.1.0","2.2.0"].includes(V10_CONFIG.version) ? V10_CONFIG.version : "1.11")) throw error("SWAP_CONFIG", "聚合路由收费版本不匹配");
   const config = { platformFeeBps: Number(fee), feeReceiver: receiver, wbnb, adaptersOff: off, version: contractVersion, ...feeConfig };
   if (factoryIface) {
     const entry = entries[calls.length - 1];

@@ -6,7 +6,7 @@ const address=(value,allowZero=false)=>{
  return value.toLowerCase();
 };
 function snapshot(config){
- if(!config||!['2.0.0','2.1.0'].includes(config.version)||typeof config.feeConfigVersion!=='bigint'||config.feeConfigVersion<=0n||!Number.isInteger(config.platformFeeBps)||config.platformFeeBps<0||config.platformFeeBps>100||!Array.isArray(config.adaptersOff))throw invalid();
+ if(!config||!['2.0.0','2.1.0','2.2.0'].includes(config.version)||typeof config.feeConfigVersion!=='bigint'||config.feeConfigVersion<=0n||!Number.isInteger(config.platformFeeBps)||config.platformFeeBps<0||config.platformFeeBps>100||!Array.isArray(config.adaptersOff))throw invalid();
  const off=[...config.adaptersOff];
  if(off.some(key=>!['fst','pancake','v3'].includes(key))||new Set(off).size!==off.length)throw invalid();
  return {version:config.version,feeConfigVersion:config.feeConfigVersion,platformFeeBps:config.platformFeeBps,
@@ -15,7 +15,7 @@ function snapshot(config){
 const stamp=config=>JSON.stringify(snapshot(config),(_,v)=>typeof v==='bigint'?v.toString():v);
 export async function recheckSwapQuote({quote,readConfig,readPolicy}) {
  let config,policy;
- if(quote?.kind==='fstswap'&&['2.0.0','2.1.0'].includes(quote.serviceMeta?.config?.version)){
+ if(quote?.kind==='fstswap'&&['2.0.0','2.1.0','2.2.0'].includes(quote.serviceMeta?.config?.version)){
   const provisional=snapshot(quote.serviceMeta.config),expected=stamp(provisional);
   [config,policy]=await Promise.all([readConfig(),readPolicy(provisional)]);
   if(stamp(config)!==expected)throw invalid();

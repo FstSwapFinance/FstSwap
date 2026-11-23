@@ -1,7 +1,7 @@
 import {FSTSWAP_CONFIG} from './fstswap-config.mjs?v=mainnet-20261113-50';
 import {swapFeePolicy,swapBuyBudget,SWAP_TOKENS} from './swap-aggregator.mjs?v=mainnet-20261113-50';
 import {transferModelsFromWire,transferTaxBps,transferNet} from './swap-transfer-tax.mjs';
-import {fstRequiresLinearV2} from './swap-fstswap.mjs?v=mainnet-20261113-50';
+import {fstSupportsTopology} from './swap-fstswap.mjs?v=mainnet-20261113-50';
 import {createServiceClock,serviceMonotonic,SERVICE_TIME_NONCE_HEADER} from './swap-service-clock.mjs?v=mainnet-20261113-50';
 // Read-only API acceleration. Wallet requests and final transaction preflight stay local.
 const ZERO='0x'+'00'.repeat(20),ADDRESS=/^0x[0-9a-f]{40}$/i,HASH=/^0x[0-9a-f]{64}$/i;
@@ -46,8 +46,8 @@ function validateFstServiceQuote(q,c,input,adapters,blockNumber){
  // Old settlement-only DTOs can coexist during a rolling release. Any asset
  // requiring a transfer model must carry a validated, block-bound profile.
  const routeTokens=[from,to,...q.stages.flatMap(stage=>[stage?.tokenIn,stage?.tokenOut,...(Array.isArray(stage?.branches)?stage.branches.flatMap(branch=>branch?.kind===1?[branch.v3Path?.slice(0,42),'0x'+branch.v3Path?.slice(48)]:Array.isArray(branch?.path)?branch.path:[]):[])])].filter(addr);
- const models=transferModelsFromWire(net?q.taxProfiles:[],{tokens:routeTokens,blockNumber});
- if([...models.values()].some(model=>model.kind==='pair')&&c.version!=='2.1.0')throw Object.assign(Error('Transfer-tax quote requires the direct V2 execution graph'),{code:'TAX_UNVERIFIED'});
+ const models=transferModelsFromWire(net?q.taxProfiles:[],{tokens:routeTokens,blockNumber,version:c.version});
+ if([...models.values()].some(model=>model.kind==='pair')&&!['2.1.0','2.2.0'].includes(c.version))throw Object.assign(Error('Transfer-tax quote requires the direct V2 execution graph'),{code:'TAX_UNVERIFIED'});
  const taxRates=(l,stageIndex,stage,stages)=>{
   const next=stages[stageIndex+1],prefunded=stageIndex>0&&stage.legs.length===1&&stages[stageIndex-1].legs.length===1&&l.kind==='v2'&&stages[stageIndex-1].legs[0].kind==='v2';
   const destination=next?.legs?.length===1&&stage.legs.length===1&&l.kind==='v2'&&next.legs[0].kind==='v2'?next.legs[0].poolIds[0]:ZERO;
@@ -121,8 +121,7 @@ function validateFstServiceQuote(q,c,input,adapters,blockNumber){
    check(same(branch.adapter,want.adapter)&&branch.kind===want.kind&&branch.weightBps===want.weightBps&&Array.isArray(branch.path)&&branch.path.length===want.path.length&&branch.path.every((a,k)=>same(a,want.path[k]))&&typeof branch.v3Path==='string'&&branch.v3Path.toLowerCase()===want.v3Path.toLowerCase());
   }
  }
- const tokens=[q.tokenIn,q.tokenOut,...q.stages.flatMap(s=>[s.tokenIn,s.tokenOut,...s.branches.flatMap(b=>b.kind===1?[b.v3Path.slice(0,42),'0x'+b.v3Path.slice(48)]:b.path)])];
- if(fstRequiresLinearV2(c.version,tokens,adapters,c.adaptersOff))check(q.stages.every(s=>s.branches.length===1&&s.branches[0].kind===0));
+ check(fstSupportsTopology(q.stages,c,adapters));
  const rate=BigInt(c.platformFeeBps),first=q.segments[0],last=q.segments.at(-1),base=mode==='input'?q.amountIn:first.out;
  check(q.lpFee===base*rate/BPS);
  check(first.amountIn===(mode==='input'?q.amountIn-q.lpFee:q.amountIn));
@@ -137,13 +136,13 @@ export function validateServiceQuote(data,input,{router,adapters,clock=Date.now,
  const q=data.quote,c=data.config,bounds=timeBounds?timeBounds():null,now=bounds?.upper??clock(),earliest=bounds?.lower??now;
  check(Number.isFinite(now)&&Number.isFinite(earliest)&&earliest<=now);
  check(Number.isFinite(data.quotedAt)&&Number.isFinite(data.expiresAt)&&data.quotedAt<=earliest+2000&&data.expiresAt>now&&data.expiresAt-data.quotedAt<=15000);
- check(['1.11','2.0.0','2.1.0'].includes(c?.version)&&Number.isInteger(c.platformFeeBps)&&c.platformFeeBps>=0&&c.platformFeeBps<=100&&addr(c.feeReceiver)&&addr(c.wbnb)&&addr(c.defaultFeeToken)&&typeof c.feeConfigVersion==='bigint'&&Array.isArray(c.adaptersOff));
+ check(['1.11','2.0.0','2.1.0','2.2.0'].includes(c?.version)&&Number.isInteger(c.platformFeeBps)&&c.platformFeeBps>=0&&c.platformFeeBps<=100&&addr(c.feeReceiver)&&addr(c.wbnb)&&addr(c.defaultFeeToken)&&typeof c.feeConfigVersion==='bigint'&&Array.isArray(c.adaptersOff));
  if(expectedVersion!==undefined)check(c.version===expectedVersion);
  check(c.adaptersOff.every(key=>['fst','pancake','v3'].includes(key))&&new Set(c.adaptersOff).size===c.adaptersOff.length);
  check(q&&typeof q.amountIn==='bigint'&&q.amountIn===BigInt(input.amountIn)&&typeof q.out==='bigint'&&q.out>0n&&typeof q.lpFee==='bigint'&&q.lpFee>=0n&&addr(q.feeToken)&&Number.isFinite(q.impact)&&q.impact>=0);
  check(q.poolCheckedAt+15000===data.expiresAt);
  check(q.maxIn==null&&!q.exactOut);
- if(['2.0.0','2.1.0'].includes(c.version)){check(data.quotedAt<data.expiresAt);validateFstServiceQuote(q,c,input,adapters,data.blockNumber);return data;}
+ if(['2.0.0','2.1.0','2.2.0'].includes(c.version)){check(data.quotedAt<data.expiresAt);validateFstServiceQuote(q,c,input,adapters,data.blockNumber);return data;}
  const entries=Object.entries(adapters).filter(([key])=>['fst','pancake','v3'].includes(key)),empty=l=>l&&lower(l.adapter)===ZERO&&Array.isArray(l.path)&&l.path.length===0;
  const leg=l=>{
   const entry=entries.find(([,a])=>lower(a.adapter)===lower(l?.adapter));check(entry&&!c.adaptersOff.includes(entry[0]));

@@ -13,6 +13,6 @@ export const FSTSWAP_CONFIG = Object.freeze({
 });
 export function fstSwapReady(config=FSTSWAP_CONFIG) {
   const address=value=>/^0x[0-9a-f]{40}$/i.test(value||'')&&!/^0x0{40}$/i.test(value);
-  return config.status==='verified-mainnet'&&config.chainId===56&&['2.0.0','2.1.0'].includes(config.version)
+  return config.status==='verified-mainnet'&&config.chainId===56&&['2.0.0','2.1.0','2.2.0'].includes(config.version)
     &&address(config.router)&&['fst','pancake','v3'].every(k=>address(config.adapters?.[k]));
 }

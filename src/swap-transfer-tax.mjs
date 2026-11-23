@@ -10,6 +10,16 @@ const FSTSI_PAIR='0xec6abc1cbaef40878069245c2568401e56c949f1';
 // Exact 6,647-byte mainnet PGToken runtime. SHA256 hashes raw bytecode bytes.
 // Its compiled frozen source matches after masking constructor immutables.
 const FSTSI_CODE_SHA256='7e4601dda4099afdcb91e338cca52a15a77112046876aaf4f13917a8b52693ed';
+// The verified OZ BeaconProxy binds its beacon immutably. The issuer can
+// upgrade the implementation, so pin all three runtimes and the beacon result.
+export const BNCB='0x4902c5ebc598265ed2212b559b042de8a5eeec3f';
+export const BNCB_BEACON='0x156d6dce9a4f6139a3406f1f021f1a4880de93a3';
+export const BNCB_IMPLEMENTATION='0xcfed6c4679297ea4889f8183bc057b4a86c64e46';
+const BNCB_RUNTIME_HASHES=Object.freeze({
+ codeHash:'cab8def0d66267b06413aa602595cddeef26d118e1aa3ce8795139a4b518aa7d',
+ beaconCodeHash:'8fcfd53bedda9ff9f8b672da979fc5b8b563a3b61dcf9b32c5c075390000312f',
+ implementationCodeHash:'814fc45a704716dbda5b91791b69b7780924f66ae604606d670bded136bc339c',
+});
 const SETTLEMENTS=new Set([ZERO,
  '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c',
  '0x0efb5fd2402a0967b92551d6af54de148504a115',
@@ -28,7 +38,11 @@ function pairModel(entry,blockNumber){
  if(entry.token!==FSTSI||entry.kind!=='pair'||entry.pair!==FSTSI_PAIR||entry.codeHash!==FSTSI_CODE_SHA256||entry.blockNumber!==blockNumber||!validRate(entry.buyBps)||!validRate(entry.sellBps))throw fail();
  return Object.freeze({kind:'pair',pair:FSTSI_PAIR,buyBps:entry.buyBps,sellBps:entry.sellBps,codeHash:FSTSI_CODE_SHA256,blockNumber});
 }
-export function transferModelsFromWire(entries,{tokens,blockNumber}){
+function bncbModel(entry,blockNumber,version){
+ if(version!=='2.2.0'||entry.token!==BNCB||entry.blockNumber!==blockNumber||Object.entries(BNCB_RUNTIME_HASHES).some(([field,hash])=>entry[field]!==hash))throw fail();
+ return Object.freeze({kind:'verified-erc20',...BNCB_RUNTIME_HASHES,blockNumber});
+}
+export function transferModelsFromWire(entries,{tokens,blockNumber,version}){
  const required=tokensFor(tokens,blockNumber),models=new Map(required.filter(token=>SETTLEMENTS.has(token)).map(token=>[token,Object.freeze({kind:'none'})]));
  if(!Array.isArray(entries)||entries.length>64)throw fail();
  const seen=new Set();
@@ -38,6 +52,9 @@ export function transferModelsFromWire(entries,{tokens,blockNumber}){
   if(entry.kind==='none'){
    if(Object.keys(entry).some(key=>!['token','kind'].includes(key))||!SETTLEMENTS.has(token))throw fail();
    models.set(token,Object.freeze({kind:'none'}));
+  }else if(entry.kind==='verified-erc20'){
+   if(Object.keys(entry).some(key=>!['token','kind','blockNumber',...Object.keys(BNCB_RUNTIME_HASHES)].includes(key)))throw fail();
+   models.set(token,bncbModel({...entry,token},blockNumber,version));
   }else{
    if(Object.keys(entry).some(key=>!['token','kind','pair','buyBps','sellBps','codeHash','blockNumber'].includes(key)))throw fail();
    models.set(token,pairModel({...entry,token,pair:address(entry.pair)?lower(entry.pair):entry.pair},blockNumber));
@@ -48,7 +65,7 @@ export function transferModelsFromWire(entries,{tokens,blockNumber}){
 }
 export function transferTaxBps(model,from,to){
  if(!model||!address(from)||!address(to))throw fail();
- if(model.kind==='none')return 0n;
+ if(model.kind==='none'||model.kind==='verified-erc20')return 0n;
  if(model.kind!=='pair'||!address(model.pair)||!validRate(model.buyBps)||!validRate(model.sellBps))throw fail();
  return lower(from)===lower(model.pair)?model.buyBps:lower(to)===lower(model.pair)?model.sellBps:0n;
 }
@@ -63,11 +80,24 @@ async function runtimeHash(code){
  for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(code.slice(2+i*2,4+i*2),16);
  return [...new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes))].map(n=>n.toString(16).padStart(2,'0')).join('');
 }
-export async function readTransferTaxes(request,{tokens,blockNumber,timestamp}){
+async function readBncbModel(request,blockNumber){
+ const expected='0x'+BNCB_IMPLEMENTATION.slice(2).padStart(64,'0');
+ const [codeHash,beaconCodeHash,implementationCodeHash,implementation]=await Promise.all([
+  ...[BNCB,BNCB_BEACON,BNCB_IMPLEMENTATION].map(token=>request({method:'eth_getCode',params:[token,blockNumber]}).then(runtimeHash)),
+  request({method:'eth_call',params:[{to:BNCB_BEACON,data:'0x5c60da1b'},blockNumber]}),
+ ]);
+ if(typeof implementation!=='string'||lower(implementation)!==expected)throw fail();
+ return {token:BNCB,kind:'verified-erc20',blockNumber,codeHash,beaconCodeHash,implementationCodeHash};
+}
+export async function readTransferTaxes(request,{tokens,blockNumber,timestamp,version}){
  const required=tokensFor(tokens,blockNumber);
  if(typeof request!=='function'||required.includes(FSTSI)&&(!Number.isSafeInteger(timestamp)||timestamp<=0))throw fail();
- if(required.some(token=>!SETTLEMENTS.has(token)&&token!==FSTSI))throw fail();
+ if(required.some(token=>!SETTLEMENTS.has(token)&&token!==FSTSI&&!(version==='2.2.0'&&token===BNCB)))throw fail();
  const entries=[];
+ if(required.includes(BNCB)){
+  try{entries.push(await readBncbModel(request,blockNumber));}
+  catch(error){if(error?.name==='AbortError')throw error;throw fail();}
+ }
  if(required.includes(FSTSI)){
   try{
    const I=globalThis.ethers.Interface;
@@ -86,5 +116,5 @@ export async function readTransferTaxes(request,{tokens,blockNumber,timestamp}){
    entries.push({token:FSTSI,kind:'pair',pair:lower(pair),buyBps,sellBps,codeHash,blockNumber});
   }catch(error){if(error?.name==='AbortError')throw error;throw fail();}
  }
- return transferModelsFromWire(entries,{tokens:required,blockNumber});
+ return transferModelsFromWire(entries,{tokens:required,blockNumber,version});
 }
