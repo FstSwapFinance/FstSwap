@@ -91,13 +91,13 @@ async function readAnchoredTokenBalances(request,account,tokens,{signal}={}){
  if(canonical?.hash!==header.hash)throw new Error('STALE_BLOCK');
  return result;
 }
-async function fetchBalances(request,account,tokens,signal){
+async function fetchBalances(request,account,tokens,signal,fresh){
  checkSignal(signal);
  const serviceAbort=new AbortController(),publicAbort=new AbortController();
  const onCallerAbort=()=>{serviceAbort.abort(signal.reason);publicAbort.abort(signal.reason);};
  signal?.addEventListener('abort',onCallerAbort,{once:true});
  const serviceSignal=serviceAbort.signal,publicSignal=signal?AbortSignal.any([signal,publicAbort.signal]):publicAbort.signal;
- const remoteTask=untilAborted(swapService.balances(account,tokens,{signal:serviceSignal}),serviceSignal).then(value=>({source:'service',ok:true,value}),error=>({source:'service',ok:false,error}));
+ const remoteTask=untilAborted(swapService.balances(account,tokens,{signal:serviceSignal,fresh}),serviceSignal).then(value=>({source:'service',ok:true,value}),error=>({source:'service',ok:false,error}));
  remoteTask.catch(()=>{});
  let publicStarted=false,markPublic=()=>{};
  const publicReady=new Promise(resolve=>{markPublic=resolve;});
@@ -128,13 +128,13 @@ async function fetchBalances(request,account,tokens,signal){
   if(!publicStarted)markPublic({source:'public',ok:false,skipped:true});
  }
 }
-function startBatch(request,account,tokens,identity,clock,monotonic){
+function startBatch(request,account,tokens,identity,clock,monotonic,fresh){
  const batch={controller:new AbortController(),epoch:balanceEpoch,consumers:new Set(),entries:[],settled:false};
  for(const token of tokens){
   const entry={key:identity(token),token,pending:true,batch};batch.entries.push(entry);remember(entry.key,entry);
  }
  balanceBatches.add(batch);
- batch.promise=Promise.resolve().then(()=>{checkBatch(batch);return fetchBalances(request,account,tokens,batch.controller.signal);}).then(result=>{
+ batch.promise=Promise.resolve().then(()=>{checkBatch(batch);return fetchBalances(request,account,tokens,batch.controller.signal,fresh);}).then(result=>{
   checkBatch(batch);
   const completedAt=clock(),completedMono=monotonic();checkBatch(batch);
   if(!batch.consumers.size)throw abortError();
@@ -187,7 +187,7 @@ export async function readWalletBalances(request,account,tokens,{fresh=false,clo
   if(entry&&(entry.pending&&!entry.batch.controller.signal.aborted||!entry.pending&&age>=0&&age<DISPLAY_TTL_MS&&monoAge>=0&&monoAge<DISPLAY_TTL_MS))selected.set(key,entry);
   else missing.push(token);
  }
- if(missing.length)for(const entry of startBatch(request,account,missing,identity,clock,monotonic))selected.set(entry.key,entry);
+ if(missing.length)for(const entry of startBatch(request,account,missing,identity,clock,monotonic,fresh))selected.set(entry.key,entry);
  const values=await Promise.all(wanted.map(token=>subscribeBalance(selected.get(identity(token)),signal,epoch)));
  checkSignal(signal);if(epoch!==balanceEpoch)throw abortError();
  return{balances:Object.fromEntries(wanted.flatMap((t,n)=>values[n]!=null?[[t.key,values[n]]]:[])),failed:wanted.filter((t,n)=>values[n]==null).map(t=>t.key)};

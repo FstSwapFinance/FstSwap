@@ -8,8 +8,8 @@ const USDT='0x55d398326f99059ff775485246999027b3197955',FIST='0xc9882def23bc42d5
 const deferred=()=>{let resolve;return{promise:new Promise(r=>resolve=r),resolve:value=>resolve(value)};};
 let browser;
 before(async()=>{browser=await chromium.launch({headless:true});});after(async()=>browser?.close());
-async function fixture(t,{legacy=false,switchAccount=false}={}){
- const context=await browser.newContext({viewport:{width:430,height:932},locale:'en-US'}),page=await context.newPage(),vendor=deferred(),oldBalance=deferred();
+async function fixture(t,{legacy=false,switchAccount=false,width=430,failedOutput=false}={}){
+ const context=await browser.newContext({viewport:{width,height:932},locale:'en-US'}),page=await context.newPage(),vendor=deferred(),oldBalance=deferred();
  const posts=[],rpc=[],errors=[];let vendorReleased=false;
  t.after(async()=>{vendor.resolve();oldBalance.resolve();await context.close();});page.on('pageerror',error=>errors.push(error.message));
  await page.addInitScript(({legacy,A})=>{
@@ -32,7 +32,8 @@ async function fixture(t,{legacy=false,switchAccount=false}={}){
    if(switchAccount&&body.account===A)await oldBalance.promise;
    const now=Date.now();headers['x-fstswap-server-time']=String(now);
    const values=body.account===B?{[USDT]:'12000000000000000000',[FIST]:'7000000',[ZERO]:'20000000000000000'}:{[USDT]:'111000000000000000000',[FIST]:'3000000',[ZERO]:'10000000000000000'};
-   return route.fulfill({status:200,headers,json:{schema:1,chainId:56,account:body.account,blockNumber:'0x100',blockHash:'0x'+'ab'.repeat(32),readAt:now,balances:Object.fromEntries(body.tokens.map(token=>[token,values[token]||'0'])),failedTokens:[]}}).catch(()=>{});
+   const failedTokens=failedOutput&&body.tokens.includes(FIST)?[FIST]:[];
+   return route.fulfill({status:200,headers,json:{schema:1,chainId:56,account:body.account,blockNumber:'0x100',blockHash:'0x'+'ab'.repeat(32),readAt:now,balances:Object.fromEntries(body.tokens.filter(token=>!failedTokens.includes(token)).map(token=>[token,values[token]||'0'])),failedTokens}}).catch(()=>{});
   }
   if(url.origin!==origin){
    let body;try{body=request.postDataJSON();}catch{}
@@ -76,5 +77,20 @@ test('wallet B starts its own early holdings and an ignored late A response neve
  f.releaseOld();await f.page.evaluate(()=>Promise.resolve());
  assert.match(await f.page.locator('#swap-currency-input .css-djrxae').textContent(),/12 USDT/);assert.doesNotMatch(await f.page.locator('#swap-currency-input .css-djrxae').textContent(),/111 USDT/);
  assert.equal(f.posts.filter(post=>post.action==='balances'&&post.body.account===B&&JSON.stringify([...post.body.tokens].sort())===JSON.stringify(three)).length,1);assert.deepEqual(f.errors,[]);
+ assert.deepEqual(await f.page.evaluate(()=>window.__wallet.calls.filter(call=>/send|sign|requestAccounts/i.test(call.method))),[]);
+});
+
+for (const width of [390,1440]) test(`Swap at ${width}px displays a known paying balance alongside an unavailable output balance`,async t=>{
+ const f=await fixture(t,{width,failedOutput:true});f.release();
+ const paying=f.page.locator('#swap-currency-input .css-djrxae'),receiving=f.page.locator('#swap-currency-output .css-djrxae');
+ await f.page.waitForFunction(()=>document.querySelector('#swap-currency-input .css-djrxae')?.dataset.balanceState==='ready'&&document.querySelector('#swap-currency-output .css-djrxae')?.dataset.balanceState==='error');
+ assert.match(await paying.textContent(),/111 USDT/);assert.match(await receiving.textContent(),/Unavailable/);
+ const actions=f.page.locator('#swap-currency-input .fst-balance-actions');
+ assert.deepEqual(await actions.locator('button').allTextContents(),['25%','50%','75%','Max']);
+ const frame=await actions.boundingBox();assert.ok(frame&&frame.x>=0&&frame.x+frame.width<=width);
+ assert.equal(await f.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await actions.getByRole('button',{name:'100% available balance USDT'}).click();
+ assert.match(await f.page.locator('#swap-currency-input input').inputValue(),/^111(?:\.0{1,4})?$/);
+ assert.deepEqual(f.errors,[]);
  assert.deepEqual(await f.page.evaluate(()=>window.__wallet.calls.filter(call=>/send|sign|requestAccounts/i.test(call.method))),[]);
 });

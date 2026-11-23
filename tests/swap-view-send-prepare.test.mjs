@@ -282,7 +282,7 @@ test('an expired real oracle rejects warmed policy even inside the two-second co
 function installBalanceScheduling(f,readBalances){
  Object.assign(f.context,{createIdleRead,previewController:null,page:{inKey:'usdt',outKey:'fist'},ORDER:['usdt','fist','other'],TOKENS:{usdt:{key:'usdt',address:tokenIn},fist:{key:'fist',address:tokenOut},other:{key:'other',address:router}},balanceRequests:new Map(),balanceRequestId:0,balanceRequest:f.context.transactionRead,readWalletBalances:readBalances});
  Object.assign(f.state,{balanceEpoch:0,balances:{},balanceErrors:{},seq:0});f.context.quoteFlow.running=()=>false;f.context.quoteFlow.schedule=()=>{};
- const load=source.slice(source.indexOf('  async function loadBalances('),source.indexOf('  async function loadAllBalances('));
+ const load=source.slice(source.indexOf('  let balanceRequestId ='),source.indexOf('  async function loadAllBalances('));
  const idle=source.slice(source.indexOf('  const otherBalances = createIdleRead('),source.indexOf('  function resumeIdleReads()'));
  const schedule=source.slice(source.indexOf('  function scheduleQuote('),source.indexOf('  function onAmountInput('));
  vm.runInContext(load+idle+schedule,f.context);return vm.runInContext('otherBalances',f.context);

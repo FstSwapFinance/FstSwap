@@ -2,57 +2,57 @@
   "schema": 1,
   "esbuildVersion": "0.28.2",
   "entries": {
-    "boot": "src/fst-runtime-boot-NWVLAFSL.mjs",
-    "app": "src/fst-runtime-app-FAI56WFQ.mjs"
+    "boot": "src/fst-runtime-boot-MKWCCQ4Y.mjs",
+    "app": "src/fst-runtime-app-SHIXGBN7.mjs"
   },
   "files": [
     {
-      "path": "src/fst-runtime-app-FAI56WFQ.mjs",
-      "sha256": "31d2118a249d013c8b158fa57557f42eec44c1743a0b154bbec49b76a37db295",
+      "path": "src/fst-runtime-app-SHIXGBN7.mjs",
+      "sha256": "5d61553c9199b06e5141cd9c7bdce476acd7f9a0da76f4371b68ec9642c96545",
       "bytes": 2388,
       "imports": [
         {
-          "path": "src/fst-runtime-chunk-3V7QK2QM.mjs",
+          "path": "src/fst-runtime-chunk-LUB46JJC.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-LOULMBI6.mjs",
+          "path": "src/fst-runtime-chunk-C42SNE5S.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-RC7DV2YJ.mjs",
+          "path": "src/fst-runtime-chunk-T4Z564JW.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-EVWLZCYX.mjs",
+          "path": "src/fst-runtime-chunk-ZUL4SC3U.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-I2VXFHU4.mjs",
+          "path": "src/fst-runtime-chunk-BRNL46H2.mjs",
           "kind": "dynamic-import",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-IPDJHZOJ.mjs",
+          "path": "src/fst-runtime-chunk-Y4OEBOJE.mjs",
           "kind": "dynamic-import",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-I5ZEKE2V.mjs",
+          "path": "src/fst-runtime-chunk-CYNJKFEG.mjs",
           "kind": "dynamic-import",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-I5ZEKE2V.mjs",
+          "path": "src/fst-runtime-chunk-CYNJKFEG.mjs",
           "kind": "dynamic-import",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-ZD6XLRUB.mjs",
+          "path": "src/fst-runtime-chunk-4EKI6X6S.mjs",
           "kind": "dynamic-import",
           "external": false
         }
@@ -63,22 +63,22 @@
       "entryPoint": "src/app.js"
     },
     {
-      "path": "src/fst-runtime-boot-NWVLAFSL.mjs",
-      "sha256": "ed7de4cf65ecb7e4d5d790f2793fa85b5eeb34ae4945605c7dfe3efddab6db86",
+      "path": "src/fst-runtime-boot-MKWCCQ4Y.mjs",
+      "sha256": "001b29aa3483606f92ada6dfe387d55ced71d25f3cac5281ee6086a122a4a163",
       "bytes": 987,
       "imports": [
         {
-          "path": "src/fst-runtime-chunk-3V7QK2QM.mjs",
+          "path": "src/fst-runtime-chunk-LUB46JJC.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-RC7DV2YJ.mjs",
+          "path": "src/fst-runtime-chunk-T4Z564JW.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-EVWLZCYX.mjs",
+          "path": "src/fst-runtime-chunk-ZUL4SC3U.mjs",
           "kind": "import-statement",
           "external": false
         }
@@ -89,65 +89,41 @@
       "entryPoint": "src/swap-boot.mjs"
     },
     {
-      "path": "src/fst-runtime-chunk-3V7QK2QM.mjs",
-      "sha256": "b1a372c3b91f660eca9ae1f3ed62f2eadc4cb2f2f5d7b401d1769d2b419d02dd",
-      "bytes": 1772,
+      "path": "src/fst-runtime-chunk-4EKI6X6S.mjs",
+      "sha256": "d31a4df987dd08055c08c2b96579df631df89bb06e2b0ff55ce60c64e0f1a1af",
+      "bytes": 175,
       "imports": [
         {
-          "path": "src/fst-runtime-chunk-RC7DV2YJ.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-EVWLZCYX.mjs",
+          "path": "src/fst-runtime-chunk-ZUL4SC3U.mjs",
           "kind": "import-statement",
           "external": false
         }
       ],
-      "inputs": [
-        "src/swap-startup.mjs?v=mainnet-20261113-50"
-      ]
+      "inputs": [],
+      "entryPoint": "src/swap-service-client.mjs?v=mainnet-20261113-50"
     },
     {
-      "path": "src/fst-runtime-chunk-EVWLZCYX.mjs",
-      "sha256": "f1306ea7214022c8cec8cad102fe3ba34ceda3cddf1b8bfd84a3bf24433f3803",
-      "bytes": 92607,
-      "imports": [],
-      "inputs": [
-        "src/fstswap-config.mjs?v=mainnet-20261113-50",
-        "src/swap-aggregator.mjs?v=mainnet-20261113-50",
-        "src/swap-fstswap.mjs?v=mainnet-20261113-50",
-        "src/swap-liquidity.mjs?v=mainnet-20261113-50",
-        "src/swap-read-codec.mjs?v=mainnet-20261113-50",
-        "src/swap-receipt.mjs?v=mainnet-20261113-50",
-        "src/swap-rpc-work.mjs?v=mainnet-20261113-50",
-        "src/swap-service-client.mjs?v=mainnet-20261113-50",
-        "src/swap-service-clock.mjs?v=mainnet-20261113-50",
-        "src/swap-transfer-tax.mjs"
-      ]
-    },
-    {
-      "path": "src/fst-runtime-chunk-I2VXFHU4.mjs",
-      "sha256": "01e6c8f7095137e9f36293937ccd567284039dd43522fa81356e76d3a3373421",
+      "path": "src/fst-runtime-chunk-BRNL46H2.mjs",
+      "sha256": "a4293b9f9c5f3be036cf2173b03a00d6506c51639ae174fc18580094fa645611",
       "bytes": 368,
       "imports": [
         {
-          "path": "src/fst-runtime-chunk-OONSRUYY.mjs",
+          "path": "src/fst-runtime-chunk-W4MLU7ST.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-LOULMBI6.mjs",
+          "path": "src/fst-runtime-chunk-C42SNE5S.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-RC7DV2YJ.mjs",
+          "path": "src/fst-runtime-chunk-T4Z564JW.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-EVWLZCYX.mjs",
+          "path": "src/fst-runtime-chunk-ZUL4SC3U.mjs",
           "kind": "import-statement",
           "external": false
         }
@@ -156,91 +132,17 @@
       "entryPoint": "src/swap-view.mjs?v=mainnet-20261113-50"
     },
     {
-      "path": "src/fst-runtime-chunk-I5ZEKE2V.mjs",
-      "sha256": "51a6e9fc9d97e75d91469c93d6c8ca1618e7f924f6f33b512a556ad0c49ca7da",
-      "bytes": 20558,
-      "imports": [
-        {
-          "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-LOULMBI6.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-RC7DV2YJ.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-EVWLZCYX.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "../assets/official/vendor/lightweight-charts.esm.production.js",
-          "kind": "dynamic-import",
-          "external": true
-        }
-      ],
-      "inputs": [
-        "src/swap-analysis-data.mjs?v=mainnet-20261113-50",
-        "src/swap-market-data.mjs?v=review-20261110-3",
-        "src/swap-pages.mjs?v=mainnet-20261113-50"
-      ],
-      "entryPoint": "src/swap-pages.mjs?v=mainnet-20261113-50"
-    },
-    {
-      "path": "src/fst-runtime-chunk-IPDJHZOJ.mjs",
-      "sha256": "2b105b54cbab35f2e50759a8d9f8f51b57b83b446d636732a7b7a10eaf513deb",
-      "bytes": 30486,
-      "imports": [
-        {
-          "path": "src/fst-runtime-chunk-OONSRUYY.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-LOULMBI6.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-RC7DV2YJ.mjs",
-          "kind": "import-statement",
-          "external": false
-        },
-        {
-          "path": "src/fst-runtime-chunk-EVWLZCYX.mjs",
-          "kind": "import-statement",
-          "external": false
-        }
-      ],
-      "inputs": [
-        "src/swap-pool.mjs?v=mainnet-20261113-50"
-      ],
-      "entryPoint": "src/swap-pool.mjs?v=mainnet-20261113-50"
-    },
-    {
-      "path": "src/fst-runtime-chunk-LOULMBI6.mjs",
-      "sha256": "84f803c0fab65ce48b5008e190df5dbd5299368f167614286055dd5f22acdf21",
+      "path": "src/fst-runtime-chunk-C42SNE5S.mjs",
+      "sha256": "66edb05cd64ea5e0b7e9dfd3fc3e07d703b6e76d7e4d708ea836ca9a41a06ce9",
       "bytes": 225681,
       "imports": [
         {
-          "path": "src/fst-runtime-chunk-RC7DV2YJ.mjs",
+          "path": "src/fst-runtime-chunk-T4Z564JW.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-EVWLZCYX.mjs",
+          "path": "src/fst-runtime-chunk-ZUL4SC3U.mjs",
           "kind": "import-statement",
           "external": false
         },
@@ -271,22 +173,104 @@
       ]
     },
     {
-      "path": "src/fst-runtime-chunk-OONSRUYY.mjs",
-      "sha256": "b87aa5ef686e85b2ec524fd7b2cadc0646e17f39749a1ab120c51698ab5faf51",
-      "bytes": 83896,
+      "path": "src/fst-runtime-chunk-CYNJKFEG.mjs",
+      "sha256": "e19917fc81abd7dcc5ddc427b73791b817c3a24842711961c0ed0d30f4e848ab",
+      "bytes": 20558,
       "imports": [
         {
-          "path": "src/fst-runtime-chunk-LOULMBI6.mjs",
+          "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-RC7DV2YJ.mjs",
+          "path": "src/fst-runtime-chunk-C42SNE5S.mjs",
           "kind": "import-statement",
           "external": false
         },
         {
-          "path": "src/fst-runtime-chunk-EVWLZCYX.mjs",
+          "path": "src/fst-runtime-chunk-T4Z564JW.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-ZUL4SC3U.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "../assets/official/vendor/lightweight-charts.esm.production.js",
+          "kind": "dynamic-import",
+          "external": true
+        }
+      ],
+      "inputs": [
+        "src/swap-analysis-data.mjs?v=mainnet-20261113-50",
+        "src/swap-market-data.mjs?v=review-20261110-3",
+        "src/swap-pages.mjs?v=mainnet-20261113-50"
+      ],
+      "entryPoint": "src/swap-pages.mjs?v=mainnet-20261113-50"
+    },
+    {
+      "path": "src/fst-runtime-chunk-LUB46JJC.mjs",
+      "sha256": "172acc805ce46378e6c67236e133465cde08778b2987f806bf46935cacd34379",
+      "bytes": 1772,
+      "imports": [
+        {
+          "path": "src/fst-runtime-chunk-T4Z564JW.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-ZUL4SC3U.mjs",
+          "kind": "import-statement",
+          "external": false
+        }
+      ],
+      "inputs": [
+        "src/swap-startup.mjs?v=mainnet-20261113-50"
+      ]
+    },
+    {
+      "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
+      "sha256": "ed55af36405c9a04a2c2e001ca9ebae8d7903b63657f9c6c6eedbb4f9e46b5a5",
+      "bytes": 1203,
+      "imports": [],
+      "inputs": [
+        "src/swap-pool-data.mjs"
+      ]
+    },
+    {
+      "path": "src/fst-runtime-chunk-T4Z564JW.mjs",
+      "sha256": "319cdb70994c22c8dca3e121898a426d49a44f0c02200c480d3a578a1b0b7e96",
+      "bytes": 6036,
+      "imports": [
+        {
+          "path": "src/fst-runtime-chunk-ZUL4SC3U.mjs",
+          "kind": "import-statement",
+          "external": false
+        }
+      ],
+      "inputs": [
+        "src/swap-balances.mjs?v=mainnet-20261113-50"
+      ]
+    },
+    {
+      "path": "src/fst-runtime-chunk-W4MLU7ST.mjs",
+      "sha256": "cf870194b9b8db20737961c1d0c0fbd9c714545caef3705ea2cff6d7e73dd260",
+      "bytes": 86158,
+      "imports": [
+        {
+          "path": "src/fst-runtime-chunk-C42SNE5S.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-T4Z564JW.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-ZUL4SC3U.mjs",
           "kind": "import-statement",
           "external": false
         }
@@ -310,42 +294,58 @@
       ]
     },
     {
-      "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
-      "sha256": "ed55af36405c9a04a2c2e001ca9ebae8d7903b63657f9c6c6eedbb4f9e46b5a5",
-      "bytes": 1203,
+      "path": "src/fst-runtime-chunk-Y4OEBOJE.mjs",
+      "sha256": "aaa40a859ff1a8934b971f744cc1b4c314d203bcb4768ad50df77fffff8ccaa9",
+      "bytes": 30676,
+      "imports": [
+        {
+          "path": "src/fst-runtime-chunk-W4MLU7ST.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-POGXVOZ4.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-C42SNE5S.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-T4Z564JW.mjs",
+          "kind": "import-statement",
+          "external": false
+        },
+        {
+          "path": "src/fst-runtime-chunk-ZUL4SC3U.mjs",
+          "kind": "import-statement",
+          "external": false
+        }
+      ],
+      "inputs": [
+        "src/swap-pool.mjs?v=mainnet-20261113-50"
+      ],
+      "entryPoint": "src/swap-pool.mjs?v=mainnet-20261113-50"
+    },
+    {
+      "path": "src/fst-runtime-chunk-ZUL4SC3U.mjs",
+      "sha256": "ccdac14d13da44b71a51bbf494bcaad68dd8d511fb47c2fea68846543b0bf80f",
+      "bytes": 94141,
       "imports": [],
       "inputs": [
-        "src/swap-pool-data.mjs"
+        "src/fstswap-config.mjs?v=mainnet-20261113-50",
+        "src/swap-aggregator.mjs?v=mainnet-20261113-50",
+        "src/swap-fstswap.mjs?v=mainnet-20261113-50",
+        "src/swap-liquidity.mjs?v=mainnet-20261113-50",
+        "src/swap-read-codec.mjs?v=mainnet-20261113-50",
+        "src/swap-receipt.mjs?v=mainnet-20261113-50",
+        "src/swap-rpc-work.mjs?v=mainnet-20261113-50",
+        "src/swap-service-client.mjs?v=mainnet-20261113-50",
+        "src/swap-service-clock.mjs?v=mainnet-20261113-50",
+        "src/swap-transfer-tax.mjs"
       ]
-    },
-    {
-      "path": "src/fst-runtime-chunk-RC7DV2YJ.mjs",
-      "sha256": "6130aa81f0ece5052d97f3796af96386b3b49f70771d4ec2972fda9ed42e56cc",
-      "bytes": 6020,
-      "imports": [
-        {
-          "path": "src/fst-runtime-chunk-EVWLZCYX.mjs",
-          "kind": "import-statement",
-          "external": false
-        }
-      ],
-      "inputs": [
-        "src/swap-balances.mjs?v=mainnet-20261113-50"
-      ]
-    },
-    {
-      "path": "src/fst-runtime-chunk-ZD6XLRUB.mjs",
-      "sha256": "fb6a616eaefce24a24da5c8829bb78d8830ff71a24bea83ac2a098d5686d407b",
-      "bytes": 175,
-      "imports": [
-        {
-          "path": "src/fst-runtime-chunk-EVWLZCYX.mjs",
-          "kind": "import-statement",
-          "external": false
-        }
-      ],
-      "inputs": [],
-      "entryPoint": "src/swap-service-client.mjs?v=mainnet-20261113-50"
     }
   ],
   "cacheAssets": [
@@ -381,9 +381,9 @@
     },
     {
       "source": "src/swap-ui.css",
-      "path": "src/fst-style-ui-364A0CC26AEEF259.css",
-      "sha256": "364a0cc26aeef25944245fe64fb2892d18232daa8caa7201bdb8d1524e759dea",
-      "bytes": 10257
+      "path": "src/fst-style-ui-690FD771A639484B.css",
+      "sha256": "690fd771a639484b84b0f16852a4c5e9edfad71725e6fd7d8a6786f2b4b1f0ed",
+      "bytes": 15084
     }
   ],
   "mutableAssets": [
@@ -419,80 +419,80 @@
   ],
   "routePreloads": {
     "swap": [
-      "src/fst-runtime-chunk-EVWLZCYX.mjs",
-      "src/fst-runtime-chunk-RC7DV2YJ.mjs",
-      "src/fst-runtime-chunk-3V7QK2QM.mjs",
-      "src/fst-runtime-boot-NWVLAFSL.mjs",
-      "src/fst-runtime-chunk-LOULMBI6.mjs",
-      "src/fst-runtime-app-FAI56WFQ.mjs",
-      "src/fst-runtime-chunk-ZD6XLRUB.mjs",
-      "src/fst-runtime-chunk-OONSRUYY.mjs",
-      "src/fst-runtime-chunk-I2VXFHU4.mjs"
+      "src/fst-runtime-chunk-ZUL4SC3U.mjs",
+      "src/fst-runtime-chunk-T4Z564JW.mjs",
+      "src/fst-runtime-chunk-LUB46JJC.mjs",
+      "src/fst-runtime-boot-MKWCCQ4Y.mjs",
+      "src/fst-runtime-chunk-C42SNE5S.mjs",
+      "src/fst-runtime-app-SHIXGBN7.mjs",
+      "src/fst-runtime-chunk-4EKI6X6S.mjs",
+      "src/fst-runtime-chunk-W4MLU7ST.mjs",
+      "src/fst-runtime-chunk-BRNL46H2.mjs"
     ],
     "analysis": [
-      "src/fst-runtime-chunk-EVWLZCYX.mjs",
-      "src/fst-runtime-chunk-RC7DV2YJ.mjs",
-      "src/fst-runtime-chunk-3V7QK2QM.mjs",
-      "src/fst-runtime-boot-NWVLAFSL.mjs",
-      "src/fst-runtime-chunk-LOULMBI6.mjs",
-      "src/fst-runtime-app-FAI56WFQ.mjs",
-      "src/fst-runtime-chunk-ZD6XLRUB.mjs",
+      "src/fst-runtime-chunk-ZUL4SC3U.mjs",
+      "src/fst-runtime-chunk-T4Z564JW.mjs",
+      "src/fst-runtime-chunk-LUB46JJC.mjs",
+      "src/fst-runtime-boot-MKWCCQ4Y.mjs",
+      "src/fst-runtime-chunk-C42SNE5S.mjs",
+      "src/fst-runtime-app-SHIXGBN7.mjs",
+      "src/fst-runtime-chunk-4EKI6X6S.mjs",
       "src/fst-runtime-chunk-POGXVOZ4.mjs",
-      "src/fst-runtime-chunk-I5ZEKE2V.mjs"
+      "src/fst-runtime-chunk-CYNJKFEG.mjs"
     ],
     "my": [
-      "src/fst-runtime-chunk-EVWLZCYX.mjs",
-      "src/fst-runtime-chunk-RC7DV2YJ.mjs",
-      "src/fst-runtime-chunk-3V7QK2QM.mjs",
-      "src/fst-runtime-boot-NWVLAFSL.mjs",
-      "src/fst-runtime-chunk-LOULMBI6.mjs",
-      "src/fst-runtime-app-FAI56WFQ.mjs",
-      "src/fst-runtime-chunk-ZD6XLRUB.mjs",
+      "src/fst-runtime-chunk-ZUL4SC3U.mjs",
+      "src/fst-runtime-chunk-T4Z564JW.mjs",
+      "src/fst-runtime-chunk-LUB46JJC.mjs",
+      "src/fst-runtime-boot-MKWCCQ4Y.mjs",
+      "src/fst-runtime-chunk-C42SNE5S.mjs",
+      "src/fst-runtime-app-SHIXGBN7.mjs",
+      "src/fst-runtime-chunk-4EKI6X6S.mjs",
       "src/fst-runtime-chunk-POGXVOZ4.mjs",
-      "src/fst-runtime-chunk-I5ZEKE2V.mjs"
+      "src/fst-runtime-chunk-CYNJKFEG.mjs"
     ],
     "pool": [
-      "src/fst-runtime-chunk-EVWLZCYX.mjs",
-      "src/fst-runtime-chunk-RC7DV2YJ.mjs",
-      "src/fst-runtime-chunk-3V7QK2QM.mjs",
-      "src/fst-runtime-boot-NWVLAFSL.mjs",
-      "src/fst-runtime-chunk-LOULMBI6.mjs",
-      "src/fst-runtime-app-FAI56WFQ.mjs",
-      "src/fst-runtime-chunk-ZD6XLRUB.mjs",
-      "src/fst-runtime-chunk-OONSRUYY.mjs",
+      "src/fst-runtime-chunk-ZUL4SC3U.mjs",
+      "src/fst-runtime-chunk-T4Z564JW.mjs",
+      "src/fst-runtime-chunk-LUB46JJC.mjs",
+      "src/fst-runtime-boot-MKWCCQ4Y.mjs",
+      "src/fst-runtime-chunk-C42SNE5S.mjs",
+      "src/fst-runtime-app-SHIXGBN7.mjs",
+      "src/fst-runtime-chunk-4EKI6X6S.mjs",
+      "src/fst-runtime-chunk-W4MLU7ST.mjs",
       "src/fst-runtime-chunk-POGXVOZ4.mjs",
-      "src/fst-runtime-chunk-IPDJHZOJ.mjs"
+      "src/fst-runtime-chunk-Y4OEBOJE.mjs"
     ],
     "add": [
-      "src/fst-runtime-chunk-EVWLZCYX.mjs",
-      "src/fst-runtime-chunk-RC7DV2YJ.mjs",
-      "src/fst-runtime-chunk-3V7QK2QM.mjs",
-      "src/fst-runtime-boot-NWVLAFSL.mjs",
-      "src/fst-runtime-chunk-LOULMBI6.mjs",
-      "src/fst-runtime-app-FAI56WFQ.mjs",
-      "src/fst-runtime-chunk-ZD6XLRUB.mjs",
-      "src/fst-runtime-chunk-OONSRUYY.mjs",
+      "src/fst-runtime-chunk-ZUL4SC3U.mjs",
+      "src/fst-runtime-chunk-T4Z564JW.mjs",
+      "src/fst-runtime-chunk-LUB46JJC.mjs",
+      "src/fst-runtime-boot-MKWCCQ4Y.mjs",
+      "src/fst-runtime-chunk-C42SNE5S.mjs",
+      "src/fst-runtime-app-SHIXGBN7.mjs",
+      "src/fst-runtime-chunk-4EKI6X6S.mjs",
+      "src/fst-runtime-chunk-W4MLU7ST.mjs",
       "src/fst-runtime-chunk-POGXVOZ4.mjs",
-      "src/fst-runtime-chunk-IPDJHZOJ.mjs"
+      "src/fst-runtime-chunk-Y4OEBOJE.mjs"
     ],
     "remove": [
-      "src/fst-runtime-chunk-EVWLZCYX.mjs",
-      "src/fst-runtime-chunk-RC7DV2YJ.mjs",
-      "src/fst-runtime-chunk-3V7QK2QM.mjs",
-      "src/fst-runtime-boot-NWVLAFSL.mjs",
-      "src/fst-runtime-chunk-LOULMBI6.mjs",
-      "src/fst-runtime-app-FAI56WFQ.mjs",
-      "src/fst-runtime-chunk-ZD6XLRUB.mjs",
-      "src/fst-runtime-chunk-OONSRUYY.mjs",
+      "src/fst-runtime-chunk-ZUL4SC3U.mjs",
+      "src/fst-runtime-chunk-T4Z564JW.mjs",
+      "src/fst-runtime-chunk-LUB46JJC.mjs",
+      "src/fst-runtime-boot-MKWCCQ4Y.mjs",
+      "src/fst-runtime-chunk-C42SNE5S.mjs",
+      "src/fst-runtime-app-SHIXGBN7.mjs",
+      "src/fst-runtime-chunk-4EKI6X6S.mjs",
+      "src/fst-runtime-chunk-W4MLU7ST.mjs",
       "src/fst-runtime-chunk-POGXVOZ4.mjs",
-      "src/fst-runtime-chunk-IPDJHZOJ.mjs"
+      "src/fst-runtime-chunk-Y4OEBOJE.mjs"
     ]
   },
   "preloadPriority": [
-    "src/fst-runtime-chunk-EVWLZCYX.mjs",
-    "src/fst-runtime-chunk-RC7DV2YJ.mjs",
-    "src/fst-runtime-chunk-3V7QK2QM.mjs",
-    "src/fst-runtime-boot-NWVLAFSL.mjs"
+    "src/fst-runtime-chunk-ZUL4SC3U.mjs",
+    "src/fst-runtime-chunk-T4Z564JW.mjs",
+    "src/fst-runtime-chunk-LUB46JJC.mjs",
+    "src/fst-runtime-boot-MKWCCQ4Y.mjs"
   ],
   "compatibility": {
     "release": "50",
@@ -852,7 +852,7 @@
     },
     {
       "path": "src/swap-amount.mjs",
-      "sha256": "9b1ee23cfe9884c9dff62aa5d6a01f55b036cea1b197f2097954ac5debd2fbe8"
+      "sha256": "57e9a82a2a8eba2b75dbb60bdaccf8a2f7bc32049748e0cad6ed3d4ef7fc5ac3"
     },
     {
       "path": "src/swap-analysis-data.mjs",
@@ -864,7 +864,7 @@
     },
     {
       "path": "src/swap-balances.mjs",
-      "sha256": "67c24a5826c4d664de6682e375d132e096caa51b1e3ff7d5dd95aae25230fd60"
+      "sha256": "19e91ddc6d9a391d8590267560cb93a8fcd48e8d6a0422651711e0ca80454fbd"
     },
     {
       "path": "src/swap-boot.mjs",
@@ -884,7 +884,7 @@
     },
     {
       "path": "src/swap-fstswap.mjs",
-      "sha256": "58599953b643164deaa6b29625a0f1c10bfda390307309527664869637af4af8"
+      "sha256": "37318ed08ee3d102fdc8ab0f45543637aef23037022955c79061d659d216a1d9"
     },
     {
       "path": "src/swap-idle-read.mjs",
@@ -896,7 +896,7 @@
     },
     {
       "path": "src/swap-liquidity.mjs",
-      "sha256": "524da69ee013e5e46ea1f5d2f8b32051ac80c16733d46c9865a8f7619c6d723d"
+      "sha256": "3d696559d0a3a85bc1cbc4ca51948c54aa4182c27d51d5bad0d34e2f7a57ece9"
     },
     {
       "path": "src/swap-manage-tpl.mjs",
@@ -936,7 +936,7 @@
     },
     {
       "path": "src/swap-pool.mjs",
-      "sha256": "d2a8c593c45ed7b1000a2b091b68f45e74a8fb2b6fedced143473f08b4557340"
+      "sha256": "b7765162f90b0e66f48c579c257c492c0e6f7a7314cb0b34ef96bc10fffb05f4"
     },
     {
       "path": "src/swap-preflight.mjs",
@@ -972,7 +972,7 @@
     },
     {
       "path": "src/swap-service-client.mjs",
-      "sha256": "dd1002acde86a9ba74d55032eb1d1d081bc6726f35c1e0a22fb1513158633e40"
+      "sha256": "44f78c5eb8a8fc1d7cfa87e76d4296d07a425fbd4e354ada49fcc7b857f04e4b"
     },
     {
       "path": "src/swap-service-clock.mjs",
@@ -1008,7 +1008,7 @@
     },
     {
       "path": "src/swap-ui.css",
-      "sha256": "364a0cc26aeef25944245fe64fb2892d18232daa8caa7201bdb8d1524e759dea"
+      "sha256": "690fd771a639484b84b0f16852a4c5e9edfad71725e6fd7d8a6786f2b4b1f0ed"
     },
     {
       "path": "src/swap-ui.mjs",
@@ -1016,7 +1016,7 @@
     },
     {
       "path": "src/swap-view.mjs",
-      "sha256": "4fdeeca98764e4830b82c57f039b8805a1c35c6e3dc59bb4713fcccbf018ca40"
+      "sha256": "465858e2740de3bed701728424c5fdf1a9ff28aea762ea91ea8a6cb65a622044"
     },
     {
       "path": "src/swap-wallet-timing.mjs",

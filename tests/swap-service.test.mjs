@@ -193,10 +193,13 @@ function separatePools({hold}={}){
  let release,started;const gate=new Promise(r=>release=r),entered=new Promise(r=>started=r);
  const calls=[],block={number:'0x20',hash:'0x'+'ab'.repeat(32),timestamp:'0xc8'};let value=6n,reorg=false,wrongChain=false;
  const pool=role=>createReadPool(['https://'+role+'.invalid'],{clock:()=>200000,fetchImpl:async(url,o)=>{
-  const p=JSON.parse(o.body);calls.push({role,method:p.method,params:p.params});
-  if(p.method===hold){started();await gate;}
-  const result=p.method==='eth_chainId'?(role==='balance'&&wrongChain?'0x61':'0x38'):p.method==='eth_getBlockByNumber'?{...block,hash:role==='balance'&&reorg&&p.params[0]!=='latest'?'0x'+'cd'.repeat(32):block.hash}:p.method==='eth_getBalance'?ethersQuantity(++value):'0x';
-  return new Response(JSON.stringify({jsonrpc:'2.0',id:p.id,result}));
+  const body=JSON.parse(o.body),reply=async p=>{
+   calls.push({role,method:p.method,params:p.params});
+   if(hold&&p.method===hold){started();await gate;}
+   const result=p.method==='eth_chainId'?(role==='balance'&&wrongChain?'0x61':'0x38'):p.method==='eth_getBlockByNumber'?{...block,hash:role==='balance'&&reorg&&p.params[0]!=='latest'?'0x'+'cd'.repeat(32):block.hash}:p.method==='eth_getBalance'?ethersQuantity(++value):'0x';
+   return{jsonrpc:'2.0',id:p.id,result};
+  };
+  return new Response(JSON.stringify(Array.isArray(body)?await Promise.all(body.map(reply)):await reply(body)));
  }});
  const quotePool=pool('quote'),balancePool=pool('balance');
  const engine=createEngine(quotePool,{balancePool,clock:()=>200000,readConfig:async r=>{await r({method:'eth_call',params:[{to:a},'latest']});return{version:'1.11'};},

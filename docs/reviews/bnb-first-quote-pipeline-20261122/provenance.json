@@ -1,0 +1,22 @@
+{
+  "paired-public.json.gz": {
+    "sha256": "d8f58a1caa71f9ad6c57c3cf9338f693f2eb6e1cb8f4d3cc5bebfc379525f5d5",
+    "bytes": 3487341
+  },
+  "candidate-warm-smoke.json.gz": {
+    "sha256": "7d8d358318b32fe70ebb81e571defcfda1d03fa30c644e01aa86305884af74fc",
+    "bytes": 428001
+  },
+  "public-capability-probe.json.gz": {
+    "sha256": "1a1a0f839e66b45b1b28581db547e4dbf809ce7eb87c86a72c4b4425c6b606f8",
+    "bytes": 22704
+  },
+  "full-test.log.gz": {
+    "sha256": "975238b7d116ad8bbf20a130a28f94c067899411155d8e342d3715ad052767a4",
+    "bytes": 94892
+  },
+  "evm-test.log.gz": {
+    "sha256": "f591a76ef88ffe75d913a2a1021290fdeb6c7050de0243c3bd3178b601d5aeee",
+    "bytes": 3412
+  }
+}

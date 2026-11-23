@@ -8,7 +8,7 @@ const turn=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(account='0x'+'11'.repeat(20)){
  const calls=[],listeners=new Set(),events=new EventTarget(),msg={textContent:''};
  const holder={querySelector:()=>msg,cloneNode:()=>({}),replaceWith(){}};
- const main={isConnected:true,querySelector:()=>holder,querySelectorAll:()=>[]};
+ const main={isConnected:true,classList:{add(){}},querySelector:()=>holder,querySelectorAll:()=>[]};
  const wallet={account,subscribe(fn){listeners.add(fn);if(this.account)fn();return()=>listeners.delete(fn);},notify(){for(const fn of listeners)fn();}};
  const codec=new ethers.Interface(['function getReserves() view returns(uint112,uint112,uint32)','function totalSupply() view returns(uint256)','function balanceOf(address) view returns(uint256)']);
  const request=async payload=>{const parsed=codec.parseTransaction({data:payload.params[0].data});calls.push({method:parsed.name,to:payload.params[0].to});return codec.encodeFunctionResult(parsed.name,parsed.name==='getReserves'?[100n,200n,1]:[parsed.name==='totalSupply'?100n:0n]);};

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ethers} from 'ethers';
-import {createEngine} from '../server/fstswap-service.mjs';
+import {createEngine,createReadPool} from '../server/fstswap-service.mjs';
 import {swapActiveRouter} from '../src/swap-aggregator.mjs?v=mainnet-20261113-47';
 
 const MULTICALL='0xcA11bde05977b3631167028862bE2a173976CA11';
@@ -12,6 +12,25 @@ const abi=new ethers.Interface([
  'function getAmountsOutVia(address,uint256,address[]) view returns(uint256[])',
 ]);
 const input={chainId:56,tokenIn:A,tokenOut:B,amountIn:'100',slippageBps:50,singleHop:false};
+test('cold quote pins the batched header from initial observation and still rechecks canonical after calculation',async()=>{
+ let now=1800000000000;
+ const observed=now,block={number:'0x100',hash:'0x'+'ab'.repeat(32),timestamp:ethers.toQuantity(now/1000)},requests=[];
+ const pool=createReadPool(['https://fixture.invalid'],{clock:()=>now,fetchImpl:async(_url,{body})=>{
+  const payload=JSON.parse(body),rows=Array.isArray(payload)?payload:[payload];
+  requests.push(rows.map(row=>row.method==='eth_getBlockByNumber'?row.params[0]:row.method));
+  now+=350;
+  const replies=rows.map(row=>({id:row.id,result:row.method==='eth_chainId'?'0x38':block}));
+  return Response.json(Array.isArray(payload)?replies:replies[0]);
+ }});
+ const engine=createEngine(pool,{clock:()=>now,warmup:{enabled:false},readConfig:async()=>({version:'2.1.0'}),
+  readPolicy:async()=>({checkedAt:now,assertFresh(){}}),calculate:async()=>{requests.push(['calculated']);return{out:200n};}});
+ const first=await engine.quote(input);
+ assert.deepEqual(requests,[['eth_chainId','latest'],['calculated'],['0x100']]);
+ assert.equal(first.blockHash,block.hash);assert.equal(first.expiresAt,observed+15000);
+ requests.length=0;
+ await engine.quote({...input,amountIn:'101'});
+ assert.deepEqual(requests,[['calculated'],['0x100']]);
+});
 function fixture({oracleExpiry=Infinity}={}){
  let now=1800000000000,node='one',hash='0x'+'ab'.repeat(32),reorg=false;
  const calls=[],configs=[],policies=[];

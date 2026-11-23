@@ -16,8 +16,8 @@ const U=SWAP_TOKENS.usdt.address.toLowerCase(),F=SWAP_TOKENS.fist.address.toLowe
 const W=SWAP_ADAPTERS.pancake.weth.toLowerCase(),base=new Set([U,C,...Object.values(SWAP_ADAPTERS).map(x=>x.weth.toLowerCase()),B,ETH]);
 const E=new ethers.Interface([...SWAP_ABI,'function tryAggregate(bool,(address target,bytes callData)[]) view returns((bool success,bytes returnData)[])','function latestRoundData() view returns(uint80,int256,uint256,uint256,uint80)','function decimals() view returns(uint8)','function factory() view returns(address)','function getPool(address,address,uint24) view returns(address)','function slot0() view returns(uint160,int24,uint16,uint16,uint16,uint32,bool)','function liquidity() view returns(uint128)','function token0() view returns(address)','function token1() view returns(address)','function balanceOf(address) view returns(uint256)','function quoteExactInputSingle((address tokenIn,address tokenOut,uint256 amountIn,uint24 fee,uint160 sqrtPriceLimitX96)) returns(uint256,uint160,uint32,uint256)','function quoteExactIn(bytes,uint256) returns(uint256)']);
 const S=10n**18n;
-function fixture({altPool=false,tieAltPools=false}={}){
- const now=1800000000000,block={number:'0x100',hash:'0x'+'ab'.repeat(32),timestamp:ethers.toQuantity(now/1000)},stateCalls=[],pools=new Map();
+function fixture({altPool=false,tieAltPools=false,coreDepthBoundary=false}={}){
+ const now=1800000000000,block={number:'0x100',hash:'0x'+'ab'.repeat(32),timestamp:ethers.toQuantity(now/1000)},stateCalls=[],depthCalls=[],pools=new Map();
  const request=async p=>{
   if(p.method==='eth_getBlockByNumber')return block;
   const calls=E.decodeFunctionData('tryAggregate',p.params[0].data)[1],names=calls.map(c=>E.parseTransaction({data:c.callData}).name);
@@ -37,20 +37,45 @@ function fixture({altPool=false,tieAltPools=false}={}){
     // 8 FIST pools. An optional alt pool tests insertion after that base.
     const exists=tokens.every(x=>[U,C,W,B,ETH].includes(x))||tokens.includes(F)&&(tokens.includes(U)||tokens.includes(W)&&fee!==100||tokens.includes(B)&&fee===10000)||altPool&&tokens.includes(ALT)&&tokens.includes(U)&&fee===500||tieAltPools&&tokens.includes(ALT)&&tokens.includes(C)&&fee===500;
     const address=exists?ethers.getAddress('0x'+ethers.keccak256(ethers.toUtf8Bytes(tokens.join(':')+':'+fee)).slice(-40)):Z;
-    if(exists)pools.set(address.toLowerCase(),tokens);value=[address];
-   }else if(parsed.name==='slot0')value=[2n**96n,0,0,0,0,0,true];
-   else if(parsed.name==='liquidity')value=[1000000n*S];
+    if(exists)pools.set(address.toLowerCase(),Object.assign(tokens,{fee}));value=[address];
+   }else if(parsed.name==='slot0')value=[(2n**96n)*(coreDepthBoundary&&pools.get(c.target.toLowerCase()).fee===10000?2n:1n),0,0,0,0,0,true];
+   else if(parsed.name==='liquidity'){
+    const pool=pools.get(c.target.toLowerCase());
+    value=[coreDepthBoundary&&pool.every(t=>base.has(t))&&pool.fee===100?50000n*S:1000000n*S];
+   }
    else if(parsed.name==='balanceOf')value=[(c.target.toLowerCase()===U||tieAltPools&&c.target.toLowerCase()===C?400000n:700000n)*S];
    else if(parsed.name==='token0'||parsed.name==='token1')value=[pools.get(c.target.toLowerCase())[parsed.name==='token0'?0:1]];
-   else if(parsed.name==='quoteExactInputSingle')value=[a[0][2]*BigInt(1000000-Number(a[0][3]))/1000000n,2n**96n,0,0];
+   else if(parsed.name==='quoteExactInputSingle'){
+    depthCalls.push([a[0][0].toLowerCase(),a[0][1].toLowerCase(),Number(a[0][3])]);
+    value=[a[0][2]*BigInt(1000000-Number(a[0][3]))/1000000n,2n**96n,0,0];
+   }
    else if(parsed.name==='getAmountsOutVia')value=[[a[1],a[1]*9975n/10000n]];
    else if(parsed.name==='quoteExactIn')value=[a[1]*(1000000n-BigInt('0x'+a[0].slice(42,48)))/1000000n];
    else throw Error(names[n]);
    return[true,E.encodeFunctionResult(parsed.name,value)];
   })]);
  };
- return{request,stateCalls,options:{clock:()=>now}};
+ return{request,stateCalls,depthCalls,options:{clock:()=>now}};
 }
+test('mainstream depth probes omit only pools already rejected by the unchanged admission rules',async()=>{
+ const before=fixture({coreDepthBoundary:true}),after=fixture({coreDepthBoundary:true});
+ const input={tokenIn:Z,tokenOut:U};
+ const old=await readPoolPolicy(before.request,{...input,...before.options});
+ const current=await readPoolPolicy(after.request,{...input,...after.options,skipIneligibleDepth:true});
+ assert.equal(before.depthCalls.length,80);
+ assert.deepEqual(after.depthCalls,before.depthCalls.filter(([, ,fee])=>fee===500||fee===2500));
+ assert.deepEqual(after.stateCalls,before.stateCalls);
+ assert.deepEqual([...current.pools.keys()],[...old.pools.keys()]);
+ for(const pool of old.pools.values()){
+  const leg={kind:'v3',adapter:pool.adapter,path:pool.token0+pool.fee.toString(16).padStart(6,'0')+pool.token1.slice(2)};
+  if(pool.fee===100)assert.equal(pool.usd,100000n*S,'exercise the exact minimum-liquidity boundary');
+  assert.equal(current.allowsRoute([leg]),old.allowsRoute([leg]));
+ }
+ const alt=fixture({altPool:true,coreDepthBoundary:true});
+ await readPoolPolicy(alt.request,{tokenIn:ALT,tokenOut:U,...alt.options,skipIneligibleDepth:true});
+ assert.ok(alt.depthCalls.some(([a,b])=>a===ALT||b===ALT));
+ assert.ok(alt.depthCalls.some(([, ,fee])=>fee===100),'mixed token graph keeps original depth trace');
+});
 test('default warm state batches are exactly reusable for a new mainstream pair and keep every base pool',async()=>{
  const warm=fixture();const initial=await readPoolPolicy(warm.request,{tokenIn:U,tokenOut:F,...warm.options});
  assert.equal(warm.stateCalls.length,4);assert.equal([...initial.pools.values()].filter(p=>p.kind==='v3').length,48);

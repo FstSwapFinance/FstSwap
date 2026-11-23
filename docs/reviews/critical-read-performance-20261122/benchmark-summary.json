@@ -1,0 +1,1695 @@
+{
+  "createdAt": "2026-11-21T19:16:38.404Z",
+  "paths": {
+    "synthetic": "/tmp/fstswap-perf-final.json",
+    "public": "/tmp/fstswap-perf-public-final.json",
+    "additional": "/tmp/fstswap-perf-bnbchain-balances-final.json"
+  },
+  "candidateSourceHashes": {
+    "server/fstswap-service.mjs": "882ec30e5ef178e509c68bdba01a5422d3146fca98322618538aa3074a55aef1",
+    "server/swap-read-pool.mjs": "346447d81ba2d95f4b3e2396b3078829c7ad72f63ff928504865992076136dfb",
+    "server/swap-snapshot-cache.mjs": "2b5313e5f63dc05d91c9dde91f762daadf4a2cb6019b64d0d881a72fc2ba69e9",
+    "server/swap-balance-header.mjs": "a499e59321206086c4630d0a1fd1b6499980c9f7c3f18bcda9bcead59325f781",
+    "server/swap-timing.mjs": "2e6f777c862d74268e09e5fe8582f3a5e45ccb00f0f97ec0c134cf40ca60fffa",
+    "src/swap-aggregator.mjs": "cf6580279980ae305ed68f7caf29e1375fce3915e59cc8ee4f3768c65d5cb726",
+    "src/swap-fstswap.mjs": "eba115b2b7b41c95ad60bff0fa363f82674f09523697699d9fd74b06136968cf",
+    "src/swap-liquidity.mjs": "fbf51980f24825f781274eaf0dce0910f5e692ea74c292806622f5feb0d9d8f6",
+    "src/swap-balances.mjs": "19e91ddc6d9a391d8590267560cb93a8fcd48e8d6a0422651711e0ca80454fbd",
+    "src/swap-transfer-tax.mjs": "c558d876e3bb44843149d875d132155dc466d8098f5381e19b87a8602a985373",
+    "src/swap-read-codec.mjs": "8e8c397b744866960b3f9f7d2c8627ec4fc8aa6e1bb54256ac84c491158754c0",
+    "src/swap-service-client.mjs": "44f78c5eb8a8fc1d7cfa87e76d4296d07a425fbd4e354ada49fcc7b857f04e4b"
+  },
+  "sourceUnchanged": true,
+  "sameSources": true,
+  "valid": {
+    "synthetic": 96,
+    "public": 96,
+    "additional": 18,
+    "lane": 12
+  },
+  "firstAttemptPublicAnchorFailures": [
+    {
+      "network": "public",
+      "sample": 0,
+      "scenario": "balances-anchor",
+      "ok": false,
+      "error": {
+        "message": "The operation was aborted due to timeout"
+      }
+    },
+    {
+      "network": "public",
+      "sample": 0,
+      "scenario": "quotes-anchor",
+      "ok": false,
+      "error": {
+        "message": "fetch failed"
+      }
+    },
+    {
+      "network": "public",
+      "sample": 0,
+      "scenario": "warm-anchor",
+      "ok": false,
+      "error": {
+        "message": "fetch failed"
+      }
+    },
+    {
+      "network": "public",
+      "sample": 1,
+      "scenario": "balances-anchor",
+      "ok": false,
+      "error": {
+        "message": "fetch failed"
+      }
+    },
+    {
+      "network": "public",
+      "sample": 1,
+      "scenario": "quotes-anchor",
+      "ok": false,
+      "error": {
+        "message": "fetch failed"
+      }
+    },
+    {
+      "network": "public",
+      "sample": 1,
+      "scenario": "warm-anchor",
+      "ok": false,
+      "error": {
+        "message": "fetch failed"
+      }
+    },
+    {
+      "network": "public",
+      "sample": 2,
+      "scenario": "balances-anchor",
+      "ok": false,
+      "error": {
+        "message": "fetch failed"
+      }
+    },
+    {
+      "network": "public",
+      "sample": 2,
+      "scenario": "quotes-anchor",
+      "ok": false,
+      "error": {
+        "message": "fetch failed"
+      }
+    },
+    {
+      "network": "public",
+      "sample": 2,
+      "scenario": "warm-anchor",
+      "ok": false,
+      "error": {
+        "message": "fetch failed"
+      }
+    }
+  ],
+  "comparisonFailures": [],
+  "minimumChecks": {
+    "count": 144,
+    "passed": true
+  },
+  "feeChecks": {
+    "count": 72,
+    "passed": true
+  },
+  "headerHits": {
+    "synthetic": [
+      1,
+      1,
+      1
+    ],
+    "public": [
+      0,
+      0,
+      0
+    ],
+    "additional": [
+      0,
+      0,
+      0
+    ]
+  },
+  "minimumPublicRemainingTtlMs": 752,
+  "physicalStages": [
+    {
+      "phase": "config",
+      "baseline": {
+        "http": 1,
+        "inner": 13,
+        "durationSumMedianMs": 392.59
+      },
+      "candidate": {
+        "http": 1,
+        "inner": 13,
+        "durationSumMedianMs": 360.15
+      }
+    },
+    {
+      "phase": "oracle",
+      "baseline": {
+        "http": 1,
+        "inner": 10,
+        "durationSumMedianMs": 404.36
+      },
+      "candidate": {
+        "http": 1,
+        "inner": 10,
+        "durationSumMedianMs": 419.67
+      }
+    },
+    {
+      "phase": "v2",
+      "baseline": {
+        "http": 1,
+        "inner": 42,
+        "durationSumMedianMs": 411.76
+      },
+      "candidate": {
+        "http": 1,
+        "inner": 42,
+        "durationSumMedianMs": 431.76
+      }
+    },
+    {
+      "phase": "v3_discovery",
+      "baseline": {
+        "http": 2,
+        "inner": 84,
+        "durationSumMedianMs": 1437.99
+      },
+      "candidate": {
+        "http": 2,
+        "inner": 84,
+        "durationSumMedianMs": 1101.43
+      }
+    },
+    {
+      "phase": "v3_state",
+      "baseline": {
+        "http": 4,
+        "inner": 288,
+        "durationSumMedianMs": 1632.72
+      },
+      "candidate": {
+        "http": 4,
+        "inner": 288,
+        "durationSumMedianMs": 1734.76
+      }
+    },
+    {
+      "phase": "v3_depth",
+      "baseline": {
+        "http": 2,
+        "inner": 82,
+        "durationSumMedianMs": 1052.55
+      },
+      "candidate": {
+        "http": 2,
+        "inner": 82,
+        "durationSumMedianMs": 770.03
+      }
+    },
+    {
+      "phase": "route",
+      "baseline": {
+        "http": 1,
+        "inner": 1,
+        "durationSumMedianMs": 360.33
+      },
+      "candidate": {
+        "http": 1,
+        "inner": 1,
+        "durationSumMedianMs": 357.33
+      }
+    },
+    {
+      "phase": "canonical",
+      "baseline": {
+        "http": 1,
+        "inner": 0,
+        "durationSumMedianMs": 364.38
+      },
+      "candidate": {
+        "http": 1,
+        "inner": 0,
+        "durationSumMedianMs": 353.62
+      }
+    }
+  ],
+  "publicSummary": [
+    {
+      "key": "public|baseline|balance-cold",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 1070.67,
+      "p95Ms": 3111.78,
+      "http": [
+        3,
+        3,
+        3
+      ],
+      "rpc": [
+        4,
+        4,
+        4
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|balance-hot",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 722.21,
+      "p95Ms": 1046.01,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        3,
+        3,
+        3
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|balance-fresh",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 713.41,
+      "p95Ms": 724.34,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        3,
+        3,
+        3
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|balance-cold",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 1079.32,
+      "p95Ms": 2667.23,
+      "http": [
+        3,
+        3,
+        3
+      ],
+      "rpc": [
+        4,
+        4,
+        4
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|balance-hot",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 719,
+      "p95Ms": 1130.62,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        3,
+        3,
+        3
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|balance-fresh",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 728.34,
+      "p95Ms": 735.18,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        3,
+        3,
+        3
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|quote-usdt-fist-cold",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 4966.68,
+      "p95Ms": 9962.84,
+      "http": [
+        16,
+        16,
+        16
+      ],
+      "rpc": [
+        16,
+        16,
+        16
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|quote-usdt-fist-completed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 353.86,
+      "p95Ms": 1340.8,
+      "http": [
+        1,
+        1,
+        1
+      ],
+      "rpc": [
+        1,
+        1,
+        1
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|quote-usdt-fist-new-amount",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 778.07,
+      "p95Ms": 2897.45,
+      "http": [
+        2,
+        2,
+        4
+      ],
+      "rpc": [
+        2,
+        2,
+        4
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|quote-usdt-fist-fresh",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 368.93,
+      "p95Ms": 736.25,
+      "http": [
+        2,
+        1,
+        1
+      ],
+      "rpc": [
+        2,
+        1,
+        1
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|quote-bnb-usdt-cold",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 6732.1,
+      "p95Ms": 10513.62,
+      "http": [
+        15,
+        15,
+        15
+      ],
+      "rpc": [
+        15,
+        15,
+        15
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|quote-bnb-usdt-completed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 359.49,
+      "p95Ms": 1443.19,
+      "http": [
+        2,
+        1,
+        1
+      ],
+      "rpc": [
+        2,
+        1,
+        1
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|quote-bnb-usdt-new-amount",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 2037.75,
+      "p95Ms": 6312.37,
+      "http": [
+        14,
+        4,
+        4
+      ],
+      "rpc": [
+        14,
+        4,
+        4
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|quote-bnb-usdt-fresh",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 3348.78,
+      "p95Ms": 6989.53,
+      "http": [
+        4,
+        6,
+        6
+      ],
+      "rpc": [
+        4,
+        6,
+        6
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|quote-usdt-bnb-reverse",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 4741.4,
+      "p95Ms": 8497.1,
+      "http": [
+        15,
+        15,
+        15
+      ],
+      "rpc": [
+        15,
+        15,
+        15
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|quote-usdt-fist-cold",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 3627.37,
+      "p95Ms": 3789.04,
+      "http": [
+        16,
+        16,
+        16
+      ],
+      "rpc": [
+        16,
+        16,
+        16
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|quote-usdt-fist-completed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 356.38,
+      "p95Ms": 359.95,
+      "http": [
+        1,
+        1,
+        1
+      ],
+      "rpc": [
+        1,
+        1,
+        1
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|quote-usdt-fist-new-amount",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 728.72,
+      "p95Ms": 734.13,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        2,
+        2,
+        2
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|quote-usdt-fist-fresh",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 403.8,
+      "p95Ms": 610.81,
+      "http": [
+        1,
+        1,
+        1
+      ],
+      "rpc": [
+        1,
+        1,
+        1
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|quote-bnb-usdt-cold",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 4482.87,
+      "p95Ms": 12855.7,
+      "http": [
+        15,
+        15,
+        15
+      ],
+      "rpc": [
+        15,
+        15,
+        15
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|quote-bnb-usdt-completed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 351.88,
+      "p95Ms": 1739.06,
+      "http": [
+        2,
+        1,
+        1
+      ],
+      "rpc": [
+        2,
+        1,
+        1
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|quote-bnb-usdt-new-amount",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 1510.4,
+      "p95Ms": 3908.23,
+      "http": [
+        14,
+        4,
+        4
+      ],
+      "rpc": [
+        14,
+        4,
+        4
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|quote-bnb-usdt-fresh",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 2656.26,
+      "p95Ms": 2716.95,
+      "http": [
+        4,
+        6,
+        6
+      ],
+      "rpc": [
+        4,
+        6,
+        6
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|quote-usdt-bnb-reverse",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 2707.37,
+      "p95Ms": 12028.94,
+      "http": [
+        6,
+        6,
+        14
+      ],
+      "rpc": [
+        6,
+        6,
+        14
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|warm-three-configured-pairs",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 10073.39,
+      "p95Ms": 11622.07,
+      "http": [
+        37,
+        37,
+        37
+      ],
+      "rpc": [
+        37,
+        37,
+        37
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|quote-usdt-fist-prewarmed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 3919.81,
+      "p95Ms": 3968.65,
+      "http": [
+        8,
+        2,
+        9
+      ],
+      "rpc": [
+        8,
+        2,
+        9
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|quote-bnb-usdt-prewarmed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 3658.8,
+      "p95Ms": 4045.35,
+      "http": [
+        15,
+        4,
+        14
+      ],
+      "rpc": [
+        15,
+        4,
+        14
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|quote-usdt-bnb-prewarmed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 2288.75,
+      "p95Ms": 2586.38,
+      "http": [
+        6,
+        5,
+        6
+      ],
+      "rpc": [
+        6,
+        5,
+        6
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|warm-three-configured-pairs",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 5639.39,
+      "p95Ms": 5751.35,
+      "http": [
+        21,
+        21,
+        21
+      ],
+      "rpc": [
+        21,
+        21,
+        21
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|quote-usdt-fist-prewarmed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 728.63,
+      "p95Ms": 731.94,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        2,
+        2,
+        2
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|quote-bnb-usdt-prewarmed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 1508.23,
+      "p95Ms": 1548.74,
+      "http": [
+        4,
+        4,
+        4
+      ],
+      "rpc": [
+        4,
+        4,
+        4
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|quote-usdt-bnb-prewarmed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 1856.25,
+      "p95Ms": 4708.44,
+      "http": [
+        4,
+        4,
+        4
+      ],
+      "rpc": [
+        4,
+        4,
+        4
+      ],
+      "errors": []
+    }
+  ],
+  "syntheticSummary": [
+    {
+      "key": "synthetic|baseline|balance-cold",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 134.73,
+      "p95Ms": 135,
+      "http": [
+        3,
+        3,
+        3
+      ],
+      "rpc": [
+        4,
+        4,
+        4
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|balance-hot",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 84.03,
+      "p95Ms": 90.62,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        3,
+        3,
+        3
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|balance-fresh",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 85.5,
+      "p95Ms": 92.62,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        3,
+        3,
+        3
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|balance-cold",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 129.12,
+      "p95Ms": 132.26,
+      "http": [
+        3,
+        3,
+        3
+      ],
+      "rpc": [
+        4,
+        4,
+        4
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|balance-hot",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 47.48,
+      "p95Ms": 47.8,
+      "http": [
+        1,
+        1,
+        1
+      ],
+      "rpc": [
+        2,
+        2,
+        2
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|balance-fresh",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 90.4,
+      "p95Ms": 92.58,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        3,
+        3,
+        3
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|quote-usdt-fist-cold",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 379.26,
+      "p95Ms": 409.78,
+      "http": [
+        10,
+        10,
+        10
+      ],
+      "rpc": [
+        10,
+        10,
+        10
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|quote-usdt-fist-completed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 41.63,
+      "p95Ms": 42.08,
+      "http": [
+        1,
+        1,
+        1
+      ],
+      "rpc": [
+        1,
+        1,
+        1
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|quote-usdt-fist-new-amount",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 86.19,
+      "p95Ms": 88.47,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        2,
+        2,
+        2
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|quote-usdt-fist-fresh",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 44.67,
+      "p95Ms": 46.76,
+      "http": [
+        1,
+        1,
+        1
+      ],
+      "rpc": [
+        1,
+        1,
+        1
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|quote-bnb-usdt-cold",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 344.46,
+      "p95Ms": 363.91,
+      "http": [
+        9,
+        9,
+        9
+      ],
+      "rpc": [
+        9,
+        9,
+        9
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|quote-bnb-usdt-completed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 41.48,
+      "p95Ms": 41.5,
+      "http": [
+        1,
+        1,
+        1
+      ],
+      "rpc": [
+        1,
+        1,
+        1
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|quote-bnb-usdt-new-amount",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 87.95,
+      "p95Ms": 89.69,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        2,
+        2,
+        2
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|quote-bnb-usdt-fresh",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 47.36,
+      "p95Ms": 47.82,
+      "http": [
+        1,
+        1,
+        1
+      ],
+      "rpc": [
+        1,
+        1,
+        1
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|quote-usdt-bnb-reverse",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 148.59,
+      "p95Ms": 149.8,
+      "http": [
+        3,
+        3,
+        3
+      ],
+      "rpc": [
+        3,
+        3,
+        3
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|quote-usdt-fist-cold",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 380.9,
+      "p95Ms": 402.89,
+      "http": [
+        10,
+        10,
+        10
+      ],
+      "rpc": [
+        10,
+        10,
+        10
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|quote-usdt-fist-completed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 41.64,
+      "p95Ms": 41.67,
+      "http": [
+        1,
+        1,
+        1
+      ],
+      "rpc": [
+        1,
+        1,
+        1
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|quote-usdt-fist-new-amount",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 88.79,
+      "p95Ms": 89.22,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        2,
+        2,
+        2
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|quote-usdt-fist-fresh",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 44.4,
+      "p95Ms": 47.09,
+      "http": [
+        1,
+        1,
+        1
+      ],
+      "rpc": [
+        1,
+        1,
+        1
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|quote-bnb-usdt-cold",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 349.46,
+      "p95Ms": 367.56,
+      "http": [
+        9,
+        9,
+        9
+      ],
+      "rpc": [
+        9,
+        9,
+        9
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|quote-bnb-usdt-completed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 41.57,
+      "p95Ms": 41.62,
+      "http": [
+        1,
+        1,
+        1
+      ],
+      "rpc": [
+        1,
+        1,
+        1
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|quote-bnb-usdt-new-amount",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 88.87,
+      "p95Ms": 88.98,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        2,
+        2,
+        2
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|quote-bnb-usdt-fresh",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 47.57,
+      "p95Ms": 48.62,
+      "http": [
+        1,
+        1,
+        1
+      ],
+      "rpc": [
+        1,
+        1,
+        1
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|quote-usdt-bnb-reverse",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 148.52,
+      "p95Ms": 159.35,
+      "http": [
+        3,
+        3,
+        3
+      ],
+      "rpc": [
+        3,
+        3,
+        3
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|warm-three-configured-pairs",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 827.07,
+      "p95Ms": 833.17,
+      "http": [
+        23,
+        23,
+        23
+      ],
+      "rpc": [
+        23,
+        23,
+        23
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|quote-usdt-fist-prewarmed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 87.1,
+      "p95Ms": 87.35,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        2,
+        2,
+        2
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|quote-bnb-usdt-prewarmed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 88.91,
+      "p95Ms": 89.36,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        2,
+        2,
+        2
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|baseline|quote-usdt-bnb-prewarmed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 93.01,
+      "p95Ms": 93.1,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        2,
+        2,
+        2
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|warm-three-configured-pairs",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 517.01,
+      "p95Ms": 528.59,
+      "http": [
+        13,
+        13,
+        13
+      ],
+      "rpc": [
+        13,
+        13,
+        13
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|quote-usdt-fist-prewarmed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 85.9,
+      "p95Ms": 87.99,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        2,
+        2,
+        2
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|quote-bnb-usdt-prewarmed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 85.79,
+      "p95Ms": 86.12,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        2,
+        2,
+        2
+      ],
+      "errors": []
+    },
+    {
+      "key": "synthetic|candidate|quote-usdt-bnb-prewarmed",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 86.61,
+      "p95Ms": 87.78,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        2,
+        2,
+        2
+      ],
+      "errors": []
+    }
+  ],
+  "additionalSummary": [
+    {
+      "key": "public|baseline|balance-cold",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 1174.78,
+      "p95Ms": 3282.42,
+      "http": [
+        3,
+        3,
+        3
+      ],
+      "rpc": [
+        4,
+        4,
+        4
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|balance-hot",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 981.86,
+      "p95Ms": 1304.12,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        3,
+        3,
+        3
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|baseline|balance-fresh",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 710.56,
+      "p95Ms": 889.86,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        3,
+        3,
+        3
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|balance-cold",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 1063.68,
+      "p95Ms": 1083.31,
+      "http": [
+        3,
+        3,
+        3
+      ],
+      "rpc": [
+        4,
+        4,
+        4
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|balance-hot",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 705.49,
+      "p95Ms": 741.95,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        3,
+        3,
+        3
+      ],
+      "errors": []
+    },
+    {
+      "key": "public|candidate|balance-fresh",
+      "valid": 3,
+      "attempts": 3,
+      "medianMs": 706.43,
+      "p95Ms": 715.75,
+      "http": [
+        2,
+        2,
+        2
+      ],
+      "rpc": [
+        3,
+        3,
+        3
+      ],
+      "errors": []
+    }
+  ],
+  "laneRuns": [
+    {
+      "side": "baseline",
+      "sample": 0,
+      "kind": "gate",
+      "ok": true,
+      "elapsedMs": 260.03,
+      "error": null,
+      "http": 9,
+      "innerCalls": 510,
+      "maxActiveQuoteBatches": 1,
+      "gateReleaseRounds": 9,
+      "candidates": 170,
+      "candidateHash": "15341ba3158edb61a712b8ebac9344e1f0dcb97fe5c9bbf8a0d4f393ae62d30c",
+      "out": "30170"
+    },
+    {
+      "side": "candidate",
+      "sample": 0,
+      "kind": "gate",
+      "ok": true,
+      "elapsedMs": 246.6,
+      "error": null,
+      "http": 9,
+      "innerCalls": 510,
+      "maxActiveQuoteBatches": 2,
+      "gateReleaseRounds": 6,
+      "candidates": 170,
+      "candidateHash": "15341ba3158edb61a712b8ebac9344e1f0dcb97fe5c9bbf8a0d4f393ae62d30c",
+      "out": "30170"
+    },
+    {
+      "side": "baseline",
+      "sample": 0,
+      "kind": "delay",
+      "ok": true,
+      "elapsedMs": 630.16,
+      "error": null,
+      "http": 9,
+      "innerCalls": 510,
+      "maxActiveQuoteBatches": 1,
+      "gateReleaseRounds": null,
+      "candidates": 170,
+      "candidateHash": "15341ba3158edb61a712b8ebac9344e1f0dcb97fe5c9bbf8a0d4f393ae62d30c",
+      "out": "30170"
+    },
+    {
+      "side": "candidate",
+      "sample": 0,
+      "kind": "delay",
+      "ok": true,
+      "elapsedMs": 466.82,
+      "error": null,
+      "http": 9,
+      "innerCalls": 510,
+      "maxActiveQuoteBatches": 2,
+      "gateReleaseRounds": null,
+      "candidates": 170,
+      "candidateHash": "15341ba3158edb61a712b8ebac9344e1f0dcb97fe5c9bbf8a0d4f393ae62d30c",
+      "out": "30170"
+    },
+    {
+      "side": "candidate",
+      "sample": 1,
+      "kind": "gate",
+      "ok": true,
+      "elapsedMs": 274.45,
+      "error": null,
+      "http": 9,
+      "innerCalls": 510,
+      "maxActiveQuoteBatches": 2,
+      "gateReleaseRounds": 6,
+      "candidates": 170,
+      "candidateHash": "15341ba3158edb61a712b8ebac9344e1f0dcb97fe5c9bbf8a0d4f393ae62d30c",
+      "out": "30170"
+    },
+    {
+      "side": "baseline",
+      "sample": 1,
+      "kind": "gate",
+      "ok": true,
+      "elapsedMs": 239.26,
+      "error": null,
+      "http": 9,
+      "innerCalls": 510,
+      "maxActiveQuoteBatches": 1,
+      "gateReleaseRounds": 9,
+      "candidates": 170,
+      "candidateHash": "15341ba3158edb61a712b8ebac9344e1f0dcb97fe5c9bbf8a0d4f393ae62d30c",
+      "out": "30170"
+    },
+    {
+      "side": "candidate",
+      "sample": 1,
+      "kind": "delay",
+      "ok": true,
+      "elapsedMs": 464.48,
+      "error": null,
+      "http": 9,
+      "innerCalls": 510,
+      "maxActiveQuoteBatches": 2,
+      "gateReleaseRounds": null,
+      "candidates": 170,
+      "candidateHash": "15341ba3158edb61a712b8ebac9344e1f0dcb97fe5c9bbf8a0d4f393ae62d30c",
+      "out": "30170"
+    },
+    {
+      "side": "baseline",
+      "sample": 1,
+      "kind": "delay",
+      "ok": true,
+      "elapsedMs": 614.08,
+      "error": null,
+      "http": 9,
+      "innerCalls": 510,
+      "maxActiveQuoteBatches": 1,
+      "gateReleaseRounds": null,
+      "candidates": 170,
+      "candidateHash": "15341ba3158edb61a712b8ebac9344e1f0dcb97fe5c9bbf8a0d4f393ae62d30c",
+      "out": "30170"
+    },
+    {
+      "side": "baseline",
+      "sample": 2,
+      "kind": "gate",
+      "ok": true,
+      "elapsedMs": 259.6,
+      "error": null,
+      "http": 9,
+      "innerCalls": 510,
+      "maxActiveQuoteBatches": 1,
+      "gateReleaseRounds": 9,
+      "candidates": 170,
+      "candidateHash": "15341ba3158edb61a712b8ebac9344e1f0dcb97fe5c9bbf8a0d4f393ae62d30c",
+      "out": "30170"
+    },
+    {
+      "side": "candidate",
+      "sample": 2,
+      "kind": "gate",
+      "ok": true,
+      "elapsedMs": 247.71,
+      "error": null,
+      "http": 9,
+      "innerCalls": 510,
+      "maxActiveQuoteBatches": 2,
+      "gateReleaseRounds": 6,
+      "candidates": 170,
+      "candidateHash": "15341ba3158edb61a712b8ebac9344e1f0dcb97fe5c9bbf8a0d4f393ae62d30c",
+      "out": "30170"
+    },
+    {
+      "side": "baseline",
+      "sample": 2,
+      "kind": "delay",
+      "ok": true,
+      "elapsedMs": 616.07,
+      "error": null,
+      "http": 9,
+      "innerCalls": 510,
+      "maxActiveQuoteBatches": 1,
+      "gateReleaseRounds": null,
+      "candidates": 170,
+      "candidateHash": "15341ba3158edb61a712b8ebac9344e1f0dcb97fe5c9bbf8a0d4f393ae62d30c",
+      "out": "30170"
+    },
+    {
+      "side": "candidate",
+      "sample": 2,
+      "kind": "delay",
+      "ok": true,
+      "elapsedMs": 470.04,
+      "error": null,
+      "http": 9,
+      "innerCalls": 510,
+      "maxActiveQuoteBatches": 2,
+      "gateReleaseRounds": null,
+      "candidates": 170,
+      "candidateHash": "15341ba3158edb61a712b8ebac9344e1f0dcb97fe5c9bbf8a0d4f393ae62d30c",
+      "out": "30170"
+    }
+  ],
+  "diagnosticClassification": "Original main public JSON is unchanged. Its initial diagnostic codec omitted V3 slot/token selectors; policy phase balanceOf+unknown batches are labeled v3_state in this summary. No timings/counts/results/errors/blocks changed. The committed benchmark codec is now complete."
+}

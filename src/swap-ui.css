@@ -66,11 +66,6 @@
 .fst-common-token:disabled { opacity: .45; cursor: default; }
 .fst-common-token:not(:disabled):hover { background: var(--ui-raised); }
 .fst-common-token:focus-visible, .fst-token-results [role="button"]:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
-@media (max-width: 480px) {
-  .fst-token-dialog .kcbEdf { padding: 16px; gap: 12px; }
-  .fst-token-dialog .eDdLkf { padding: 16px; }
-  .fst-common-token { font-size: 12px; gap: 4px; }
-}
 .fst-pool-status { padding: 8px 16px; }
 .fst-pool-status p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ui-subtle); }
 
@@ -148,11 +143,6 @@
 .fst-balance-actions .fst-balance-action:disabled { opacity: 0.45; cursor: default; }
 .fst-swap-card #swap-page .hDVbXn { margin-top: 8px; margin-bottom: 8px; }
 .fst-swap-card #swap-page .open-currency-select-button:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 3px; }
-@media (max-width: 360px) {
-  .fst-swap-card #swap-page .buISKp { padding: 12px; gap: 8px; }
-  .fst-swap-card #swap-page .open-currency-select-button { font-size: 18px; }
-  .fst-swap-card #swap-page .token-amount-input { font-size: 22px; }
-}
 
 /* The live block link sits above the mobile navigation, including its safe area. */
 @media (max-width: 960px) {
@@ -190,6 +180,61 @@
 .fst-token-dialog.fst-keyboard-open .fst-keyboard-dismiss{display:block}
 .fst-keyboard-dismiss{display:none;border:0;background:none;color:var(--ui-accent);padding:4px 8px;cursor:pointer;font:inherit}
 
+/* Fit the existing cards and shared token picker to the phone viewport. */
+@media (max-width: 720px) {
+  :is(.fst-swap-card, .fst-liquidity-page).fQDkfy {
+    width: calc(100% - 24px);
+    margin-inline: 12px;
+    margin-top: clamp(76px, 12vh, 112px);
+  }
+  .fst-swap-card #swap-page .buISKp {
+    gap: clamp(6px, 2vw, 12px);
+    padding: clamp(8px, 3vw, 16px);
+  }
+  .fst-swap-card #swap-page .open-currency-select-button {
+    min-height: 44px;
+    max-width: 51%;
+    font-size: clamp(16px, 4.8vw, 20px);
+  }
+  .fst-swap-card #swap-page .cFosER { gap: 6px; }
+  .fst-swap-card #swap-page .token-amount-input {
+    font-size: clamp(18px, 5.6vw, 24px);
+  }
+  .fst-swap-card #swap-page .fst-balance-row { gap: 4px 6px; }
+  .fst-swap-card #swap-page .fst-balance-row > .css-djrxae { flex-basis: 90px; }
+  .fst-swap-card #swap-page .fst-balance-row .fst-balance-action {
+    min-height: 32px;
+    padding-inline: 5px;
+  }
+  .fst-swap-card #swap-page .hDVbXn { margin-block: 2px; }
+  .fst-swap-card .cKJcLm > div { gap: 8px; }
+  .fst-swap-card .cKJcLm .css-16sxy43 {
+    min-width: 0;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+  .fst-swap-card .cKJcLm .css-q0g5a7 { flex-wrap: wrap; justify-content: flex-end; }
+
+  .fst-token-dialog[data-reach-dialog-content] { width: min(420px, calc(100% - 24px)); }
+  .fst-token-dialog .kcbEdf { padding: clamp(12px, 3.8vw, 20px); gap: 10px; }
+  .fst-token-dialog #token-search-input { min-height: 44px; padding: 10px 12px; font-size: 16px; }
+  .fst-token-dialog .eDdLkf { padding: 8px clamp(12px, 3.8vw, 20px); }
+  .fst-token-dialog .list-token-manage-button { min-height: 40px; }
+  .fst-common-tokens { gap: 4px; }
+  .fst-common-token { min-height: 38px; padding-inline: 3px; font-size: 12px; gap: 4px; }
+  .fst-token-results :is(.hkWdsr, .hhKaCX, .LPcFh) {
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 26%);
+    gap: clamp(8px, 2.5vw, 16px);
+    min-height: 50px;
+    padding-inline: clamp(12px, 3.8vw, 20px);
+  }
+  .fst-token-results :is(.hkWdsr, .hhKaCX, .LPcFh) > span:empty { display: none; }
+  .fst-token-results .hpHOqm { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .fst-token-dialog.fst-keyboard-open .kcbEdf { padding-block: 6px; gap: 4px; }
+  .fst-token-dialog.fst-keyboard-open .fst-token-results [role="button"] { min-height: 44px; }
+  .fst-token-dialog.fst-keyboard-open .eDdLkf { padding-block: 4px; }
+}
+
 /* Center the original desktop navigation in the page viewport, even beside a wallet panel. */
 @media (min-width: 961px) {
   .boqFeG, .gJyWFR {
@@ -203,4 +248,117 @@
   .hbURQO .falNtq { padding-left: 8px; padding-right: 4px; }
   .hbURQO .fzBwMs { padding-inline: 6px; }
   .hbURQO .gmWIYM { margin-left: 2px; margin-right: 6px; }
+}
+
+/* Keep liquidity controls within the existing card on narrow screens. */
+@media (max-width: 720px) {
+  .fst-liquidity-page .dbEdQm {
+    padding-inline: clamp(12px, 4vw, 20px);
+  }
+  .fst-liquidity-page .dbEdQm > :is(.dcfoEc, .dcfnNF) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fst-liquidity-page .buISKp,
+  .fst-liquidity-page .fNKPVt {
+    padding-inline: clamp(8px, 3vw, 16px);
+  }
+  .fst-liquidity-page .open-currency-select-button {
+    min-height: 44px;
+    max-width: 56%;
+    margin-right: 8px;
+  }
+  .fst-liquidity-page .open-currency-select-button.hZyjaL {
+    max-width: 64%;
+  }
+  .fst-liquidity-page .open-currency-select-button .iWJdVe {
+    min-width: 0;
+  }
+  .fst-liquidity-page .open-currency-select-button :is(img, svg) {
+    flex-shrink: 0;
+  }
+  .fst-liquidity-page .token-symbol-container {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: clamp(14px, 4vw, 18px);
+  }
+  .fst-liquidity-page .token-amount-input {
+    min-width: 0;
+    font-size: clamp(20px, 5vw, 24px);
+  }
+  .fst-liquidity-page .fst-balance-actions {
+    gap: 4px;
+    max-width: 100%;
+  }
+  .fst-liquidity-page .fst-balance-actions .fst-balance-action {
+    min-height: 32px;
+    padding-inline: 5px;
+  }
+  .fst-liquidity-page .gplWWU .dmuRTh,
+  .fst-liquidity-page .bTkpzO,
+  .fst-liquidity-page .bWHOHv .css-1mkknq7 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .fst-liquidity-page .gOauOq > .jmNfaf > div:first-child {
+    min-width: 0;
+  }
+  .fst-liquidity-page .gOauOq :is(img, svg) {
+    flex-shrink: 0;
+  }
+  .fst-liquidity-page .gOauOq .css-6dfm9t {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .fst-liquidity-page .dDFCFi {
+    margin-inline: 0;
+  }
+  .fst-liquidity-page .GhknT {
+    min-height: 36px;
+    margin-inline: 0;
+  }
+  .fst-liquidity-page .exvWjX .dcfoDv > .jmNfaf {
+    gap: 8px;
+  }
+  .fst-liquidity-page .exvWjX .css-1kwqs79 {
+    overflow-wrap: anywhere;
+    font-size: clamp(18px, 5vw, 24px);
+  }
+  .fst-liquidity-page .exvWjX .dcfoDv .iWJdVe {
+    width: auto;
+    max-width: 55%;
+    flex-shrink: 0;
+  }
+  .fst-liquidity-page .exvWjX .dcfoDv .iWJdVe :is(img, svg) {
+    flex-shrink: 0;
+  }
+  .fst-liquidity-page .exvWjX .dcfoDv .iWJdVe .css-1kwqs79 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .fst-liquidity-page .fst-liquidity-rate .jmNfaf {
+    gap: 8px;
+  }
+  .fst-liquidity-page .fst-liquidity-rate .jmNfaf > div:last-child {
+    min-width: 0;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .fst-liquidity-page .llqzho {
+    min-width: 0;
+    width: min(18.125rem, calc(100vw - 40px));
+  }
+  .fst-liquidity-page .llqzho .bPPnFe > .jmNfaf {
+    gap: 4px;
+  }
+  .fst-liquidity-page .llqzho .bPPnFe > .jmNfaf > .bRgAhW:not([tabindex]) {
+    min-width: 0;
+    margin-right: 0;
+  }
 }
